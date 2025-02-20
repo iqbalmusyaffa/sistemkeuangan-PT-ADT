@@ -24,14 +24,6 @@
                     <div class="mt-3">
                         <p class="text-muted">Don't have an account? <a href="/register">Sign up</a></p>
                     </div>
-                    <!-- Error Message -->
-                    <div v-if="error" class="mt-3 alert alert-danger" role="alert">
-                        {{ error }}
-                    </div>
-                    <!-- Success Message -->
-                    <div v-if="success" class="mt-3 alert alert-success" role="alert">
-                        {{ success }}
-                    </div>
                 </div>
             </div>
         </div>
@@ -39,23 +31,19 @@
 </template>
 
 <script>
+import Swal from 'sweetalert2';
+
 export default {
     data() {
         return {
             email: '',
             password: '',
-            error: null,
-            success: null, // Menambahkan state untuk pesan keberhasilan
         };
     },
     methods: {
         async login() {
-            // console.log('Login function started');
-            this.error = null; // Reset error message
-            this.success = null; // Reset success message
-            // console.log('Error and success messages reset');
             try {
-                // console.log('Attempting to fetch /api/login');
+                console.log('Attempting to fetch /api/login');
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
@@ -67,7 +55,7 @@ export default {
                     }),
                 });
 
-                // console.log('Fetch response:', response);
+                console.log('Fetch response:', response);
 
                 if (!response.ok) {
                     console.log('Response not OK, checking for error data');
@@ -78,25 +66,40 @@ export default {
 
                 console.log('Response OK, parsing JSON');
                 const data = await response.json();
-                // console.log('Parsed JSON data:', data);
+                console.log('Parsed JSON data:', data);
                 const token = data.access_token;
 
                 if (token) {
-                    // console.log('Token found:', token);
+                    console.log('Token found:', token);
                     localStorage.setItem('token', token);
                     console.log('Token stored in localStorage');
-                    this.success = 'Login successful! Redirecting to dashboard...'; // Set pesan keberhasilan
+                    // Redirect to dashboard or home page
                     console.log('Redirecting to /dashboard');
                     this.$router.push('/dashboard');
+
+                    // Show success message using SweetAlert
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: 'Login successful!',
+                    });
                 } else {
                     console.error('Token not found in response:', data);
-                    this.error = 'Login failed: Token not found in response.';
-                    console.log('Error message set:', this.error);
+                    // Show error message using SweetAlert
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Oops...',
+                        text: 'Login failed: Token not found in response.',
+                    });
                 }
             } catch (error) {
                 console.error('Login failed:', error);
-                this.error = `Login failed: ${error.message}`;
-                console.log('Error message set:', this.error);
+                // Show error message using SweetAlert
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Oops...',
+                    text: `Login failed: ${error.message}`,
+                });
             }
         },
     },
