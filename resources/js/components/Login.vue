@@ -28,6 +28,10 @@
                     <div v-if="error" class="mt-3 alert alert-danger" role="alert">
                         {{ error }}
                     </div>
+                    <!-- Success Message -->
+                    <div v-if="success" class="mt-3 alert alert-success" role="alert">
+                        {{ success }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -35,54 +39,64 @@
 </template>
 
 <script>
-import axios from 'axios';
-
 export default {
     data() {
         return {
             email: '',
             password: '',
             error: null,
+            success: null, // Menambahkan state untuk pesan keberhasilan
         };
     },
     methods: {
         async login() {
+            // console.log('Login function started');
+            this.error = null; // Reset error message
+            this.success = null; // Reset success message
+            // console.log('Error and success messages reset');
             try {
-                // console.log('Attempting login with:', { email: this.email, password: this.password });
-
-                const response = await axios.post('/api/login', {
-                    email: this.email,
-                    password: this.password,
+                // console.log('Attempting to fetch /api/login');
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: this.email,
+                        password: this.password,
+                    }),
                 });
 
-                // console.log('API Response:', response);
+                // console.log('Fetch response:', response);
 
-                if (response.data && response.data.access_token) {
-                    const token = response.data.access_token;
-                    // console.log('Token received:', token);
+                if (!response.ok) {
+                    console.log('Response not OK, checking for error data');
+                    const errorData = await response.json();
+                    console.error('Error data from response:', errorData);
+                    throw new Error(errorData.message || 'Login failed');
+                }
 
-                    // Store the token in localStorage
+                console.log('Response OK, parsing JSON');
+                const data = await response.json();
+                // console.log('Parsed JSON data:', data);
+                const token = data.access_token;
+
+                if (token) {
+                    // console.log('Token found:', token);
                     localStorage.setItem('token', token);
-
-                    // Set the Authorization header for future requests
-                    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-                    // Redirect to dashboard or home page
-                    console.log('Login successful, redirecting to dashboard');
+                    console.log('Token stored in localStorage');
+                    this.success = 'Login successful! Redirecting to dashboard...'; // Set pesan keberhasilan
+                    console.log('Redirecting to /dashboard');
                     this.$router.push('/dashboard');
                 } else {
-                    console.error('Token not found in response:', response.data);
+                    console.error('Token not found in response:', data);
                     this.error = 'Login failed: Token not found in response.';
+                    console.log('Error message set:', this.error);
                 }
             } catch (error) {
                 console.error('Login failed:', error);
-
-                if (error.response && error.response.data) {
-                    console.error('Error Response Data:', error.response.data);
-                    this.error = `Login failed: ${error.response.data.message || 'An error occurred.'}`;
-                } else {
-                    this.error = 'Login failed: An unexpected error occurred.';
-                }
+                this.error = `Login failed: ${error.message}`;
+                console.log('Error message set:', this.error);
             }
         },
     },
