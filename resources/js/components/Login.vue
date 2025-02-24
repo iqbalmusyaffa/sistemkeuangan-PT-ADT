@@ -5,7 +5,7 @@
             <div class="col-lg-6 col-md-8 col-11 mx-auto">
                 <div class="card shadow-lg border-0 rounded-4 p-4">
                     <h5 class="text-primary">Login</h5>
-                    <h2 class="fw-bold">Hi, welcome back! 👋👋</h2>
+                    <h2 class="fw-bold">Hi, welcome back!</h2>
                     <p class="text-muted">Please enter your credentials to access your account.</p>
                     <form @submit.prevent="login">
                         <div class="mb-3">
