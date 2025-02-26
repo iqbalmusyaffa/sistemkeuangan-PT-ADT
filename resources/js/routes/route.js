@@ -2,7 +2,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../components/auth/Login.vue';
 import Register from '../components/auth/Register.vue';
-
+import Dashboard from '../dashboard/components/Dashboard.vue';
 const routes = [
   {
     path: '/login',
@@ -18,6 +18,11 @@ const routes = [
 //     path: '/',
 //     redirect: '/login', // Redirect to login page by default
 //   },
+{
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: Dashboard,
+  },
 {
     path: '/',
     redirect: '/login', // Redirect to login page by default
