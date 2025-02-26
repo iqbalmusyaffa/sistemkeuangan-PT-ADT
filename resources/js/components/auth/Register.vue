@@ -28,7 +28,7 @@
                             <label for="profile_picture" class="form-label">Profile Picture</label>
                             <input type="file" class="form-control" id="profile_picture" @change="onFileChange" />
                         </div>
-                        <div class="mb-3">
+                        <!-- <div class="mb-3">
                             <label for="role" class="form-label">Role</label>
                             <select class="form-select" id="role" v-model="role">
                                 <option value="user">User</option>
@@ -36,7 +36,7 @@
                                 <option value="stafkeuangan">Staf Keuangan</option>
                                 <option value="owner">Owner</option>
                             </select>
-                        </div>
+                        </div> -->
                         <button type="submit" class="btn btn-primary">Register</button>
                     </form>
                 </div>
