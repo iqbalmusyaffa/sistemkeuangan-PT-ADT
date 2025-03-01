@@ -2,7 +2,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import Login from '../components/auth/Login.vue';
 import Register from '../components/auth/Register.vue';
-import Dashboard from '../dashboard/components/Dashboard.vue';
+// Lazy load Dashboard App
+const DashboardApp = () => import('../dashboard/App.vue')
 const routes = [
   {
     path: '/login',
@@ -19,10 +20,10 @@ const routes = [
 //     redirect: '/login', // Redirect to login page by default
 //   },
 {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: Dashboard,
-  },
+    path: '/dashboard/:pathMatch(.*)*',  // Semua /dashboard/* diarahkan ke dashboard app
+    name: 'DashboardApp',
+    component: DashboardApp,
+},
 {
     path: '/',
     redirect: '/login', // Redirect to login page by default

@@ -1,0 +1,42 @@
+@use "sass:math";
+
+// 1️⃣ Import bootstrap functions & variables
+@use "bootstrap/scss/functions";
+@use "bootstrap/scss/variables";
+
+// 2️⃣ Import CoreUI (dengan disable deprecation message biar gak banyak warning)
+@use "@coreui/coreui/scss/coreui" as * with (
+  $enable-deprecation-messages: false
+);
+
+// 3️⃣ Optional: CoreUI ChartJS & plugins
+@use "@coreui/chartjs/scss/coreui-chartjs";
+@use "vendors/simplebar";
+
+// 4️⃣ Import semua Bootstrap kalau mau lengkap
+@use "bootstrap/scss/bootstrap";
+
+// 5️⃣ Contoh styling tambahan
+body {
+  background-color: var(--cui-tertiary-bg);
+}
+
+.wrapper {
+  width: 100%;
+  padding-inline: var(--cui-sidebar-occupy-start, 0) var(--cui-sidebar-occupy-end, 0);
+  will-change: auto;
+  @include transition(padding .15s);
+}
+
+.footer {
+  min-height: calc(3rem + 1px);
+}
+
+@include color-mode(dark) {
+  body {
+    background-color: var(--cui-dark-bg-subtle);
+  }
+  .footer {
+    --cui-footer-bg: var(--cui-body-bg);
+  }
+}
