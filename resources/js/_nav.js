@@ -15,44 +15,44 @@ export default [
   },
   {
     component: 'CNavItem',
-    name: 'Colors',
+    name: 'Kategori',
     to: '/theme/colors',
     icon: 'cil-drop',
   },
-  {
-    component: 'CNavItem',
-    name: 'Typography',
-    to: '/theme/typography',
-    icon: 'cil-pencil',
-  },
+//   {
+//     component: 'CNavItem',
+//     name: 'Typography',
+//     to: '/theme/typography',
+//     icon: 'cil-pencil',
+//   },
   {
     component: 'CNavTitle',
     name: 'Components',
   },
   {
     component: 'CNavGroup',
-    name: 'Base',
+    name: 'Master Data',
     to: '/base',
     icon: 'cil-puzzle',
     items: [
       {
         component: 'CNavItem',
-        name: 'Accordion',
+        name: 'Pencatatan Pemasukan',
         to: '/base/accordion',
       },
       {
         component: 'CNavItem',
-        name: 'Breadcrumbs',
+        name: 'Pencatatan Pengeluaran',
         to: '/base/breadcrumbs',
       },
       {
         component: 'CNavItem',
-        name: 'Cards',
+        name: 'Pencatatan Piutang',
         to: '/base/cards',
       },
       {
         component: 'CNavItem',
-        name: 'Calendar',
+        name: 'Kasbon',
         href: 'https://coreui.io/vue/docs/components/calendar.html',
         external: true,
         badge: {

@@ -21,6 +21,8 @@ Route::post('/login', [UserController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
     });
     Route::post('/logout', [UserController::class, 'logout']);
 });
