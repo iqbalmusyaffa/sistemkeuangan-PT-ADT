@@ -1,7 +1,30 @@
 <script setup>
+import { useRouter } from 'vue-router'
+import axios from 'axios'
 import avatar from '@/assets/images/avatars/8.jpg'
 
+const router = useRouter()
 const itemsCount = 42
+
+const logout = async () => {
+  try {
+    const token = localStorage.getItem('token')
+
+    if (token) {
+      await axios.post('http://localhost:8000/api/logout', {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      })
+    }
+
+    localStorage.removeItem('token')
+    router.push('/login')
+  } catch (error) {
+    console.error('Logout gagal:', error)
+    localStorage.removeItem('token')
+    router.push('/login')
+  }
+}
 </script>
 
 <template>
@@ -50,7 +73,9 @@ const itemsCount = 42
       </CDropdownItem>
       <CDropdownDivider />
       <CDropdownItem> <CIcon icon="cil-shield-alt" /> Lock Account </CDropdownItem>
-      <CDropdownItem> <CIcon icon="cil-lock-locked" /> Logout </CDropdownItem>
+      <CDropdownItem @click="logout">
+        <CIcon icon="cil-lock-locked" /> Logout
+      </CDropdownItem>
     </CDropdownMenu>
   </CDropdown>
 </template>
