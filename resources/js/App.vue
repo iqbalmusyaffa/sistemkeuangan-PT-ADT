@@ -1,20 +1,50 @@
-<template>
-    <div>
-      <!-- <header class="bg-light p-3">
-        <h1 class="text-center">Welcome to My Application</h1>
-      </header> -->
+<script setup>
+import { onBeforeMount } from 'vue'
+import { useColorModes } from '@coreui/vue'
+import { useThemeStore } from '@/stores/theme.js'
 
-      <main>
-        <router-view /> <!-- This will render the current route's component -->
-      </main>
-    </div>
-  </template>
+const { isColorModeSet, setColorMode } = useColorModes(
+  'coreui-free-vue-admin-template-theme',
+)
+const currentTheme = useThemeStore()
 
-  <script setup>
-  </script>
+onBeforeMount(() => {
+  const urlParams = new URLSearchParams(window.location.href.split('?')[1])
+  let theme = urlParams.get('theme')
 
-  <style>
-  body {
-    background-color: #f8f9fa;
+  if (theme !== null && theme.match(/^[A-Za-z0-9\s]+/)) {
+    theme = theme.match(/^[A-Za-z0-9\s]+/)[0]
   }
-  </style>
+
+  if (theme) {
+    setColorMode(theme)
+    return
+  }
+
+  if (isColorModeSet()) {
+    return
+  }
+
+  setColorMode(currentTheme.theme)
+})
+</script>
+
+<template>
+  <div>
+
+    <main>
+      <router-view /> <!-- This will render the current route's component -->
+    </main>
+  </div>
+</template>
+
+<style lang="scss">
+// Import Main styles for this application
+@use 'styles/style';
+// We use those styles to show code examples, you should remove them in your application.
+@use 'styles/examples';
+
+body {
+  background-color: #f8f9fa;
+}
+</style>
