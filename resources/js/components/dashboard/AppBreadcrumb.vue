@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import router from '@/router'
+import router from '@/routes/route'
+import { CBreadcrumb, CBreadcrumbItem } from '@coreui/vue'
 
 const breadcrumbs = ref()
 
