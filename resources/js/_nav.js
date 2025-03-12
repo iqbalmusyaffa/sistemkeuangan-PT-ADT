@@ -16,7 +16,7 @@ export default [
   {
     component: 'CNavItem',
     name: 'Kategori',
-    to: '/theme/colors',
+    to: '/kategori',
     icon: 'cil-drop',
   },
 //   {
