@@ -37,6 +37,7 @@
         "datatables.net": "^2.2.2",
         "datatables.net-dt": "^2.2.2",
         "datatables.net-responsive": "^3.0.4",
+        "datatables.net-vue3": "^3.0.4",
         "jquery": "^3.7.1",
         "pinia": "^3.0.1",
         "simplebar-vue": "^2.4.0",

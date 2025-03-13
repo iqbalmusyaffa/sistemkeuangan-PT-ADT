@@ -4,13 +4,19 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Kategori;
+use Yajra\DataTables\Facades\DataTables;
+
 class KategoriTransaksiController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        if ($request->ajax()) {
+            $data = Kategori::select(['id', 'nama_kategori', 'jenis', 'deskripsi']);
+            return DataTables::of($data)->make(true);
+        }
         return response()->json(Kategori::all());
     }
 
@@ -19,15 +25,18 @@ class KategoriTransaksiController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'nama_kategori' => 'required|unique:kategori_transaksi',
-            'jenis' => 'required|in:pemasukan,pengeluaran',
+        $validatedData = $request->validate([
+            'nama_kategori' => 'required|string|max:255',
+            'jenis' => 'required|string',
             'deskripsi' => 'nullable|string',
         ]);
 
-        $kategori = Kategori::create($request->all());
-
-        return response()->json($kategori, 201);
+        try {
+            $kategori = Kategori::create($validatedData);
+            return response()->json($kategori, 201);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Gagal menambahkan kategori. Silakan coba lagi nanti.'], 500);
+        }
     }
 
     /**
@@ -35,6 +44,7 @@ class KategoriTransaksiController extends Controller
      */
     public function show(string $id)
     {
+        $kategori = Kategori::findOrFail($id);
         return response()->json($kategori);
     }
 
@@ -43,8 +53,10 @@ class KategoriTransaksiController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $kategori = Kategori::findOrFail($id);
+
         $request->validate([
-            'nama_kategori' => 'required|unique:kategori_transaksi,nama_kategori,' . $kategori->id,
+            'nama_kategori' => 'required|unique:kategoris,nama_kategori,' . $id,
             'jenis' => 'required|in:pemasukan,pengeluaran',
             'deskripsi' => 'nullable|string',
         ]);
@@ -59,6 +71,7 @@ class KategoriTransaksiController extends Controller
      */
     public function destroy(string $id)
     {
+        $kategori = Kategori::findOrFail($id);
         $kategori->delete();
         return response()->json(null, 204);
     }
