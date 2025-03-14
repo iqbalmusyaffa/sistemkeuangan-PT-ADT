@@ -30,9 +30,10 @@ const routes = [
         meta: { requiresAuth: true }, // Proteksi halaman dashboard
       },
       {
-        path: '/theme/colors',
-        name: 'Colors',
-        component: () => import('@/views/theme/Colors.vue'),
+        path: '/kategori',
+        name: 'Kategori',
+        component: () => import('@/views/kategori/Kategori.vue'),
+        // component: () => import('@/views/theme/Colors.vue'),
         meta: { requiresAuth: true },
       },
       {

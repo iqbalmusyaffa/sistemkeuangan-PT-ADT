@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\KategoriTransaksiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,12 +18,21 @@ use App\Http\Controllers\UserController;
 
 Route::post('/register', [UserController::class, 'register']);
 Route::post('/login', [UserController::class, 'login']);
+Route::get('/categories', [KategoriTransaksiController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
+    });
+
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
-    });
+    // Category routes
+    Route::post('/categories', [KategoriTransaksiController::class, 'store']);
+    Route::get('/categories/{id}', [KategoriTransaksiController::class, 'show']);
+    Route::put('/categories/{id}', [KategoriTransaksiController::class, 'update']);
+    Route::delete('/categories/{id}', [KategoriTransaksiController::class, 'destroy']);
+
     Route::post('/logout', [UserController::class, 'logout']);
 });
+Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

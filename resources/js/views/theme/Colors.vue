@@ -6,9 +6,9 @@ import ColorTheme from './ColorTheme.vue'
   <CRow>
     <CCol>
       <CCard>
-        <CCardHeader> <CIcon icon="cil-drop" /> Theme colors </CCardHeader>
+        <CCardHeader> <CIcon icon="cil-drop" /> Kategori </CCardHeader>
         <CCardBody>
-          <CRow>
+          <!-- <CRow>
             <ColorTheme color="bg-primary">
               <h6>Brand Primary Color</h6>
             </ColorTheme>
@@ -19,7 +19,7 @@ import ColorTheme from './ColorTheme.vue'
             <ColorTheme color="bg-info"><h6>Brand Info Color</h6></ColorTheme>
             <ColorTheme color="bg-light"><h6>Brand Light Color</h6></ColorTheme>
             <ColorTheme color="bg-dark"><h6>Brand Dark Color</h6></ColorTheme>
-          </CRow>
+          </CRow> -->
         </CCardBody>
       </CCard>
     </CCol>

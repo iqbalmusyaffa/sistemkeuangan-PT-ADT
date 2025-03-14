@@ -9,14 +9,14 @@
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.2.1",
         "autoprefixer": "^10.4.20",
-        "axios": "^1.7.4",
+        "axios": "^1.8.3",
         "concurrently": "^9.0.1",
+        "eslint": "^9.20.1",
+        "eslint-plugin-vue": "^9.32.0",
         "globals": "^15.15.0",
         "laravel-vite-plugin": "^1.2.0",
         "postcss": "^8.4.47",
         "sass": "^1.85.1",
-        "eslint": "^9.20.1",
-        "eslint-plugin-vue": "^9.32.0",
         "tailwindcss": "^3.4.13",
         "vite": "^6.0.11"
     },
@@ -34,10 +34,16 @@
         "bootstrap-vue": "^2.23.1",
         "bootstrap-vue-next": "^0.26.26",
         "chart.js": "^4.4.7",
+        "datatables.net": "^2.2.2",
+        "datatables.net-dt": "^2.2.2",
+        "datatables.net-responsive": "^3.0.4",
+        "datatables.net-vue3": "^3.0.4",
+        "jquery": "^3.7.1",
         "pinia": "^3.0.1",
         "simplebar-vue": "^2.4.0",
         "sweetalert2": "^11.17.2",
         "vue": "^3.5.13",
-        "vue-router": "^4.5.0"
+        "vue-router": "^4.5.0",
+        "vue3-table": "^1.0.0"
     }
 }
