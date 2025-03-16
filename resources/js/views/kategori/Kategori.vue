@@ -122,7 +122,6 @@
         },
       ],
       responsive: true, // Aktifkan fitur responsif
-      autoWidth: false, // Nonaktifkan penyesuaian lebar otomatiss
       scrollX: true,    // Aktifkan scroll horizontal
       destroy: true,    // Pastikan instance lama dihancurkan
     });
