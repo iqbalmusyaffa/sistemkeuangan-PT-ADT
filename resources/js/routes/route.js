@@ -37,6 +37,20 @@ const routes = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/Profile.vue'),
+        // component: () => import('@/views/theme/Colors.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/user',
+        name: 'User',
+        component: () => import('@/views/user/User.vue'),
+        // component: () => import('@/views/theme/Colors.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/theme/typography',
         name: 'Typography',
         component: () => import('@/views/theme/Typography.vue'),
