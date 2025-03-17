@@ -53,9 +53,19 @@
                 </CFormSelect>
               </CCol>
               <CCol md="6">
-                <CFormLabel for="profile_picture">Profile Picture URL</CFormLabel>
-                <CFormInput v-model="profile_picture" id="profile_picture" />
-              </CCol>
+              <CFormLabel for="profile_picture">Profile Picture</CFormLabel>
+              <div v-if="modalMode === 'edit' && currentProfilePicture" class="mb-2">
+                <img :src="currentProfilePicture" width="80" class="img-thumbnail" />
+              </div>
+              <CFormInput
+                type="file"
+                id="profile_picture"
+                @change="handleFileUpload"
+                accept="image/*"
+                :required="modalMode === 'tambah'"
+              />
+              <small class="text-muted">Max size 2MB (JPEG, PNG, JPG)</small>
+            </CCol>
             </CRow>
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
@@ -75,20 +85,21 @@
   import "datatables.net-buttons-dt";
 
   const dataTableRef = ref(null);
-  const name = ref("");
-  const email = ref("");
-  const username = ref("");
-  const password = ref("");
-  const role = ref("user");
-  const profile_picture = ref("");
-  const users = ref([]);
-  const error = ref("");
-  const loading = ref(false);
-  const showModal = ref(false);
-  const modalTitle = ref("Tambah User");
-  const modalButtonText = ref("Simpan");
-  const modalMode = ref("tambah"); // 'tambah' or 'edit'
-  const editingId = ref(null);
+const name = ref("");
+const email = ref("");
+const username = ref("");
+const password = ref("");
+const role = ref("user");
+const users = ref([]);
+const error = ref("");
+const loading = ref(false);
+const showModal = ref(false);
+const modalTitle = ref("Tambah User");
+const modalButtonText = ref("Simpan");
+const modalMode = ref("tambah");
+const editingId = ref(null);
+const profilePictureFile = ref(null);
+const currentProfilePicture = ref("");
 
   const fetchUsers = async () => {
     loading.value = true;
@@ -113,41 +124,37 @@
   };
 
   const initDataTable = () => {
-    if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
-      $(dataTableRef.value).DataTable().destroy(); // Hapus instance DataTables yang lama
-    }
+  if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
+    $(dataTableRef.value).DataTable().destroy();
+  }
 
-    $(dataTableRef.value).DataTable({
-      data: users.value,
-      columns: [
-        {
-          title: "No",
-          data: null,
-          orderable: false,
-          render: function (data, type, row, meta) {
-            return meta.row + 1; // Nomor urut dimulai dari 1
-          },
+  $(dataTableRef.value).DataTable({
+    data: users.value,
+    columns: [
+      { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
+      { title: "Name", data: "name" },
+      { title: "Email", data: "email" },
+      { title: "Username", data: "username" },
+      { title: "Role", data: "role" },
+      {
+        title: "Profile Picture",
+        data: "profile_picture",
+        render: (data) => {
+          // Assuming the `profile_picture` field only stores the file name
+          const profileImageUrl = data ? `/storage/profile_pictures/${data}` : '/default-avatar.png'; // Use default image if not available
+          return `<img src="${profileImageUrl}" width="50" height="50" />`;
         },
-        { title: "Name", data: "name" },
-        { title: "Email", data: "email" },
-        { title: "Username", data: "username" },
-        { title: "Role", data: "role" },
-        {
-          title: "Aksi",
-          data: null,
-          orderable: false,
-          render: function (data, type, row) {
-            return `
-              <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
-              <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
-            `;
-          },
-        },
-      ],
-      responsive: true,
-      scrollX: true,
-      destroy: true,
-    });
+      },
+      {
+        title: "Aksi",
+        data: null,
+        render: (data, type, row) => `<button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button> <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>`,
+      },
+    ],
+    responsive: true,
+    scrollX: true,
+    destroy: true,
+  });
 
     // Event listener for edit button
     $(dataTableRef.value).on("click", ".edit-btn", function () {
@@ -163,119 +170,162 @@
     });
   };
 
-  const openModal = (mode, user = null) => {
-    modalMode.value = mode;
-    if (mode === 'edit' && user) {
-      // Editing an existing user
-      name.value = user.name;
-      email.value = user.email;
-      username.value = user.username;
-      role.value = user.role;
-      profile_picture.value = user.profile_picture;
-      editingId.value = user.id;
-      modalTitle.value = "Edit User";
-      modalButtonText.value = "Update";
-    } else {
-      // Adding a new user
-      name.value = "";
-      email.value = "";
-      username.value = "";
-      password.value = "";
-      role.value = "user";
-      profile_picture.value = "";
-      editingId.value = null;
-      modalTitle.value = "Tambah User";
-      modalButtonText.value = "Simpan";
-    }
-    showModal.value = true;
-  };
+  const handleFileUpload = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
 
-  const closeModal = () => {
-    showModal.value = false;
-  };
+  if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Format file tidak valid',
+      text: 'Hanya file JPEG, PNG, atau JPG yang diizinkan',
+    });
+    event.target.value = '';
+    return;
+  }
 
-  const handleSubmit = async () => {
-    loading.value = true;
-    error.value = "";
+  if (file.size > 2 * 1024 * 1024) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Ukuran file terlalu besar',
+      text: 'Maksimal ukuran file 2MB',
+    });
+    event.target.value = '';
+    return;
+  }
 
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-        name: name.value,
-        email: email.value,
-        username: username.value,
-        role: role.value,
-        profile_picture: profile_picture.value,
-      };
+  profilePictureFile.value = file;
+  currentProfilePicture.value = URL.createObjectURL(file);
+};
 
-      if (modalMode.value === 'edit') {
-        if (password.value) payload.password = password.value; // Only send password if editing
-        await axios.put(`/api/users/${editingId.value}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'User berhasil diperbarui.',
-        });
-      } else {
-        payload.password = password.value; // Send password for new user
-        await axios.post("/api/users", payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'User berhasil ditambahkan.',
-        });
+const openModal = (mode, user = null) => {
+  modalMode.value = mode;
+  profilePictureFile.value = null;
+  if (mode === 'edit' && user) {
+    name.value = user.name;
+    email.value = user.email;
+    username.value = user.username;
+    role.value = user.role;
+    currentProfilePicture.value = user.profile_picture
+      ? `/storage/profile_pictures/${user.profile_picture}`
+      : '/default-avatar.png';
+    editingId.value = user.id;
+    modalTitle.value = "Edit User";
+    modalButtonText.value = "Update";
+  } else {
+    resetForm();
+    modalTitle.value = "Tambah User";
+    modalButtonText.value = "Simpan";
+  }
+  showModal.value = true;
+};
+
+const resetForm = () => {
+  name.value = "";
+  email.value = "";
+  username.value = "";
+  password.value = "";
+  role.value = "user";
+  currentProfilePicture.value = "";
+  editingId.value = null;
+  if (document.getElementById('profile_picture')) {
+    document.getElementById('profile_picture').value = '';
+  }
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  resetForm();
+};
+
+const handleSubmit = async () => {
+  loading.value = true;
+  try {
+    const token = localStorage.getItem("token");
+    const formData = new FormData();
+
+    formData.append('name', name.value);
+    formData.append('email', email.value);
+    formData.append('username', username.value);
+    formData.append('role', role.value);
+
+    if (modalMode.value === 'tambah') {
+      formData.append('password', password.value);
+      if (!profilePictureFile.value) {
+        throw new Error('Foto profil wajib diisi');
       }
-      showModal.value = false;
-      await fetchUsers();
-      initDataTable(); // Reinitialize DataTables after data changes
-    } catch (err) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: 'Terjadi kesalahan, silakan coba lagi.',
-      });
-    } finally {
-      loading.value = false;
     }
-  };
 
-  const deleteUser = async (id) => {
-    const result = await Swal.fire({
-      title: 'Apakah Anda yakin?',
-      text: "Anda tidak dapat mengembalikan data ini!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Ya, hapus!',
-      cancelButtonText: 'Batal',
+    if (password.value) {
+      formData.append('password', password.value);
+    }
+
+    if (profilePictureFile.value) {
+      formData.append('profile_picture', profilePictureFile.value);
+    }
+
+    const config = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    };
+
+    if (modalMode.value === 'edit') {
+      await axios.put(`/api/users/${editingId.value}`, formData, config);
+    } else {
+      await axios.post("/api/users", formData, config);
+    }
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Berhasil!',
+      text: `User berhasil ${modalMode.value === 'edit' ? 'diperbarui' : 'ditambahkan'}`,
     });
 
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem("token");
-        await axios.delete(`/api/users/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'User berhasil dihapus.',
-        });
-        fetchUsers();
-      } catch (err) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Oops...',
-          text: 'Gagal menghapus user.',
-        });
-      }
+    closeModal();
+    await fetchUsers();
+  } catch (err) {
+    handleError(`Gagal ${modalMode.value === 'edit' ? 'mengupdate' : 'menambahkan'} user`, err);
+  } finally {
+    loading.value = false;
+  }
+};
+
+const deleteUser = async (id) => {
+  const result = await Swal.fire({
+    title: 'Apakah Anda yakin?',
+    text: "Data yang dihapus tidak dapat dikembalikan!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#3085d6',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Ya, hapus!'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`/api/users/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      Swal.fire('Berhasil!', 'User telah dihapus.', 'success');
+      fetchUsers();
+    } catch (err) {
+      handleError('Gagal menghapus user', err);
     }
-  };
+  }
+};
+
+const handleError = (message, error) => {
+  console.error(error);
+  const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan';
+  Swal.fire({
+    icon: 'error',
+    title: 'Oops...',
+    text: `${message}: ${errorMessage}`,
+  });
+};
 
   onMounted(fetchUsers);
   </script>

@@ -45,7 +45,7 @@ class UserController extends Controller
         if ($request->hasFile('profile_picture')) {
             $file = $request->file('profile_picture');
             $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('profile_pictures', $filename, 'private');
+            $file->storeAs('profile_pictures', $filename, 'public');
             $data['profile_picture'] = $filename;
         }
 
@@ -97,7 +97,7 @@ class UserController extends Controller
         if ($request->hasFile('profile_picture')) {
             $file = $request->file('profile_picture');
             $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('profile_pictures', $filename, 'private');
+            $file->storeAs('profile_pictures', $filename, 'public');
             $data['profile_picture'] = $filename;
         }
 
