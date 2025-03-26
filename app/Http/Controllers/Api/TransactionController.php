@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use App\Models\Kategori;
+use App\Models\User;
 
 class TransactionController extends Controller
 {
@@ -14,8 +17,16 @@ class TransactionController extends Controller
      */
     public function index()
     {
-        $transactions = Transaction::with('user', 'category')->orderBy('transaction_date', 'desc')->get();
-        return response()->json($transactions);
+        // Hanya tampilkan transaksi milik user yang login
+        $transactions = Transaction::with('user', 'category')
+            ->where('user_id', Auth::id())
+            ->orderBy('transaction_date', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $transactions
+        ]);
     }
 
     /**
@@ -24,9 +35,8 @@ class TransactionController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'transaction_code' => 'required|unique:transactions',
-            'user_id' => 'required|exists:users,id',
-            'category_id' => 'required|exists:categories,id',
+            // 'kode_transaksi' DIHAPUS karena auto-generated
+            'category_id' => 'required|exists:kategoris,id', // Sesuaikan dengan nama tabel
             'type' => 'required|in:income,expense',
             'amount' => 'required|numeric|min:0',
             'transaction_date' => 'required|date',
@@ -35,12 +45,23 @@ class TransactionController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        $transaction = Transaction::create($request->all());
+        // Auto-set user_id dari user yang login
+        $transactionData = $request->all();
+        $transactionData['user_id'] = Auth::id();
 
-        return response()->json(['message' => 'Transaksi berhasil ditambahkan', 'data' => $transaction], 201);
+        $transaction = Transaction::create($transactionData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaksi berhasil dibuat',
+            'data' => $transaction->load('category')
+        ], 201);
     }
 
     /**
@@ -48,13 +69,21 @@ class TransactionController extends Controller
      */
     public function show(string $id)
     {
-        $transaction = Transaction::with('user', 'category')->find($id);
+        $transaction = Transaction::with('user', 'category')
+        ->where('user_id', Auth::id())
+        ->find($id);
 
-        if (!$transaction) {
-            return response()->json(['message' => 'Transaksi tidak ditemukan'], 404);
-        }
+    if (!$transaction) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Transaksi tidak ditemukan'
+        ], 404);
+    }
 
-        return response()->json($transaction);
+    return response()->json([
+        'success' => true,
+        'data' => $transaction
+    ]);
     }
 
     /**
@@ -62,16 +91,18 @@ class TransactionController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $transaction = Transaction::find($id);
+        $transaction = Transaction::where('user_id', Auth::id())
+            ->find($id);
 
         if (!$transaction) {
-            return response()->json(['message' => 'Transaksi tidak ditemukan'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Transaksi tidak ditemukan'
+            ], 404);
         }
 
         $validator = Validator::make($request->all(), [
-            'transaction_code' => 'required|unique:transactions,transaction_code,' . $id,
-            'user_id' => 'required|exists:users,id',
-            'category_id' => 'required|exists:categories,id',
+            'category_id' => 'required|exists:kategoris,id',
             'type' => 'required|in:income,expense',
             'amount' => 'required|numeric|min:0',
             'transaction_date' => 'required|date',
@@ -80,12 +111,20 @@ class TransactionController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        $transaction->update($request->all());
+        // Update tanpa user_id (tidak boleh diubah)
+        $transaction->update($request->except('user_id'));
 
-        return response()->json(['message' => 'Transaksi berhasil diperbarui', 'data' => $transaction]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaksi berhasil diperbarui',
+            'data' => $transaction->fresh('category')
+        ]);
     }
 
     /**
@@ -93,14 +132,21 @@ class TransactionController extends Controller
      */
     public function destroy(string $id)
     {
-        $transaction = Transaction::find($id);
+        $transaction = Transaction::where('user_id', Auth::id())
+            ->find($id);
 
         if (!$transaction) {
-            return response()->json(['message' => 'Transaksi tidak ditemukan'], 404);
+            return response()->json([
+                'success' => false,
+                'message' => 'Transaksi tidak ditemukan'
+            ], 404);
         }
 
         $transaction->delete();
 
-        return response()->json(['message' => 'Transaksi berhasil dihapus']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Transaksi berhasil dihapus'
+        ]);
     }
 }
