@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\KategoriTransaksiController;
 use App\Http\Controllers\Api\TransactionController;
+use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\IncomeController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -42,6 +44,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
     Route::put('/transactions/{id}', [TransactionController::class, 'update']);
     Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+    // Company routes
+    Route::get('/companies', [CompanyController::class, 'index']);
+    Route::post('/companies', [CompanyController::class, 'store']);
+    Route::get('/companies/{id}', [CompanyController::class, 'show']);
+    Route::put('/companies/{id}', [CompanyController::class, 'update']);
+    // Income routes
+    Route::get('/incomes', [IncomeController::class, 'index']);
+    Route::post('/incomes', [IncomeController::class, 'store']);
+    Route::get('/incomes/{id}', [IncomeController::class, 'show']);
+    Route::put('/incomes/{id}', [IncomeController::class, 'update']);
+    Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
+
     Route::post('/logout', [UserController::class, 'logout']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);
