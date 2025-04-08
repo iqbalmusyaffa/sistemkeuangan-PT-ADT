@@ -33,6 +33,7 @@
                 </select>
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Kategori</CFormLabel>
@@ -44,24 +45,42 @@
                 </select>
               </CCol>
             </CRow>
+
+            <CRow class="mb-3">
+              <CCol>
+                <CFormSwitch
+                  v-model="isManualKode"
+                  label="Input kode transaksi manual?"
+                  class="mb-2"
+                />
+                <div v-if="isManualKode">
+                  <CFormLabel>Kode Transaksi</CFormLabel>
+                  <CFormInput v-model="kodeTransaksi" placeholder="Contoh: 25.04.001" />
+                </div>
+              </CCol>
+            </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Jumlah</CFormLabel>
                 <CFormInput v-model="amount" type="number" required />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Deskripsi</CFormLabel>
                 <CFormTextarea v-model="description" rows="3" />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Tanggal Transaksi</CFormLabel>
                 <CFormInput v-model="transactionDate" type="date" required />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Status</CFormLabel>
@@ -71,6 +90,7 @@
                 </select>
               </CCol>
             </CRow>
+
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
         </CModalBody>
@@ -90,11 +110,14 @@
 
   const router = useRouter()
   const dataTableRef = ref(null)
+
   const companies = ref([])
   const categories = ref([])
   const incomes = ref([])
+
   const error = ref('')
   const loading = ref(false)
+
   const showModal = ref(false)
   const modalTitle = ref('Tambah Pemasukan')
   const modalButtonText = ref('Simpan')
@@ -107,6 +130,9 @@
   const description = ref('')
   const transactionDate = ref('')
   const status = ref(false)
+
+  const isManualKode = ref(false)
+  const kodeTransaksi = ref('')
 
   const fetchData = async () => {
     loading.value = true
@@ -126,6 +152,7 @@
         company_nama: companies.value.find(c => c.id === income.company_id)?.nama_lengkap || 'Unknown',
         category: categories.value.find(c => c.id === income.category_id) || {},
       }))
+
       nextTick(() => initDataTable())
     } catch (e) {
       error.value = 'Gagal memuat data'
@@ -138,6 +165,7 @@
     if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
       $(dataTableRef.value).DataTable().destroy()
     }
+
     $(dataTableRef.value).DataTable({
       data: incomes.value,
       columns: [
@@ -187,7 +215,9 @@
       amount.value = income.amount
       description.value = income.description
       transactionDate.value = income.transaction_date
-      status.value = income.status === 'Lunas'
+      status.value = income.status
+      kodeTransaksi.value = income.kode_transaksi || ''
+      isManualKode.value = !!income.kode_transaksi
       editingId.value = income.id
       modalTitle.value = 'Edit Pemasukan'
       modalButtonText.value = 'Update'
@@ -198,6 +228,8 @@
       description.value = ''
       transactionDate.value = ''
       status.value = false
+      kodeTransaksi.value = ''
+      isManualKode.value = false
       editingId.value = null
       modalTitle.value = 'Tambah Pemasukan'
       modalButtonText.value = 'Simpan'
@@ -211,6 +243,10 @@
 
   const handleSubmit = async () => {
     try {
+      if (isManualKode.value && !kodeTransaksi.value.trim()) {
+        return Swal.fire('Gagal', 'Kode transaksi harus diisi secara manual.', 'warning')
+      }
+
       const token = localStorage.getItem('token')
       const payload = {
         company_id: selectedCompanyId.value,
@@ -219,6 +255,7 @@
         description: description.value,
         transaction_date: transactionDate.value,
         status: status.value,
+        kode_transaksi: isManualKode.value ? kodeTransaksi.value : null,
       }
 
       if (modalMode.value === 'edit') {

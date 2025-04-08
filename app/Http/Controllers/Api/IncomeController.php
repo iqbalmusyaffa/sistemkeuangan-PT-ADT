@@ -31,55 +31,59 @@ class IncomeController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-    {
-        try {
-            \Log::info('Income store request: ' . json_encode($request->all()));
+{
+    try {
+        \Log::info('Income store request: ' . json_encode($request->all()));
 
-            $validated = $request->validate([
-                'company_id' => 'required|exists:companies,id',
-                'category_id' => 'required|exists:kategoris,id',
-                'amount' => 'required|numeric|min:0',
-                'description' => 'nullable|string',
-                'transaction_date' => 'required|date',
-                'status' => 'required|boolean', // status dikirim dalam bentuk true/false
-            ]);
+        $validated = $request->validate([
+            'company_id' => 'required|exists:companies,id',
+            'category_id' => 'required|exists:kategoris,id',
+            'amount' => 'required|numeric|min:0',
+            'description' => 'nullable|string',
+            'transaction_date' => 'required|date',
+            'status' => 'required|boolean',
+            'kode_transaksi' => 'nullable|string|max:255|unique:incomes,kode_transaksi',
+        ]);
 
-            // Generate kode transaksi
+        $kodeTransaksi = $validated['kode_transaksi'] ?? null;
+
+        if (!$kodeTransaksi) {
             $today = now()->format('d.m');
-            $lastIncome = \App\Models\Income::latest()->first();
+            $lastIncome = Income::latest()->first();
             $lastId = $lastIncome ? $lastIncome->id + 1 : 1;
             $kodeTransaksi = $today . '.' . str_pad($lastId, 3, '0', STR_PAD_LEFT);
-
-            // Convert boolean to enum string
-            $status = $request->status ? 'Lunas' : 'Pending';
-
-            $income = \App\Models\Income::create([
-                'user_id' => auth()->id(),
-                'company_id' => $validated['company_id'],
-                'category_id' => $validated['category_id'],
-                'amount' => $validated['amount'],
-                'description' => $validated['description'] ?? null,
-                'transaction_date' => $validated['transaction_date'],
-                'status' => $status,
-                'kode_transaksi' => $kodeTransaksi,
-            ]);
-
-            return response()->json([
-                'message' => 'Income created successfully',
-                'data' => $income
-            ], 201);
-        } catch (\Throwable $e) {
-            \Log::error('Income store exception: ' . json_encode([
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]));
-
-            return response()->json([
-                'message' => 'Failed to create income',
-                'error' => $e->getMessage()
-            ], 500);
         }
+
+        $status = $validated['status'] ? 'Lunas' : 'Pending';
+
+        $income = Income::create([
+            'user_id' => auth()->id(),
+            'company_id' => $validated['company_id'],
+            'category_id' => $validated['category_id'],
+            'amount' => $validated['amount'],
+            'description' => $validated['description'] ?? null,
+            'transaction_date' => $validated['transaction_date'],
+            'status' => $status,
+            'kode_transaksi' => $kodeTransaksi,
+        ]);
+
+        return response()->json([
+            'message' => 'Income created successfully',
+            'data' => $income
+        ], 201);
+    } catch (\Throwable $e) {
+        \Log::error('Income store exception: ' . json_encode([
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]));
+
+        return response()->json([
+            'message' => 'Failed to create income',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
     /**
      * Display the specified resource.
      */
@@ -103,7 +107,7 @@ class IncomeController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            \Log::info('Income update request: ' . json_encode($request->all()));
+            $income = Income::findOrFail($id);
 
             $validated = $request->validate([
                 'company_id' => 'required|exists:companies,id',
@@ -112,9 +116,17 @@ class IncomeController extends Controller
                 'description' => 'nullable|string',
                 'transaction_date' => 'required|date',
                 'status' => 'required|boolean',
+                'kode_transaksi' => 'nullable|string|max:255|unique:incomes,kode_transaksi,' . $id,
             ]);
 
-            $income = \App\Models\Income::findOrFail($id);
+            $kodeTransaksi = $validated['kode_transaksi'] ?? $income->kode_transaksi;
+
+            if (!$kodeTransaksi) {
+                $today = now()->format('d.m');
+                $kodeTransaksi = $today . '.' . str_pad($income->id, 3, '0', STR_PAD_LEFT);
+            }
+
+            $status = $validated['status'] ? 'Lunas' : 'Pending';
 
             $income->update([
                 'company_id' => $validated['company_id'],
@@ -122,13 +134,14 @@ class IncomeController extends Controller
                 'amount' => $validated['amount'],
                 'description' => $validated['description'] ?? null,
                 'transaction_date' => $validated['transaction_date'],
-                'status' => $request->status ? 'Lunas' : 'Pending',
+                'status' => $status,
+                'kode_transaksi' => $kodeTransaksi,
             ]);
 
             return response()->json([
                 'message' => 'Income updated successfully',
                 'data' => $income
-            ], 200);
+            ]);
         } catch (\Throwable $e) {
             \Log::error('Income update exception: ' . json_encode([
                 'message' => $e->getMessage(),

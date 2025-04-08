@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\User;
 use App\Models\Company;
 use App\Models\Kategori;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class Income extends Model
 {
@@ -23,7 +25,14 @@ class Income extends Model
         'status'
     ];
 
-    // Relationships
+    protected $casts = [
+        'status' => 'boolean',
+        'transaction_date' => 'date',
+    ];
+
+    // =====================
+    // == RELATIONSHIPS ===
+    // =====================
     public function user()
     {
         return $this->belongsTo(User::class);
@@ -39,49 +48,69 @@ class Income extends Model
         return $this->belongsTo(Kategori::class);
     }
 
-   /**
-     * Automatically generate the transaction code before creating a new record.
-     */
-   protected static function boot()
-   {
-       parent::boot();
+    // =====================
+    // == CUSTOM ACCESSORS =
+    // =====================
+    public function getFormattedDateAttribute()
+    {
+        return $this->transaction_date ? $this->transaction_date->format('d-m-Y') : null;
+    }
 
-       static::creating(function ($income) {
-           if (empty($income->kode_transaksi)) {  // Ensure kode_transaksi is not already set
-               self::generateKodeTransaksi($income);
-           }
-       });
-   }
+    public function getFormattedAmountAttribute()
+    {
+        return number_format($this->amount, 0, ',', '.');
+    }
 
-   /**
-     * Generate a unique transaction code based on the current date.
-     *
-     * @param Income $income
-     */
-   protected static function generateKodeTransaksi(&$income)
-   {
-       if ($date = \Carbon\Carbon::parse($income->transaction_date)) {  // Parse date safely using Carbon
-           try {
-               // Extract year and month from the date
-               $year = substr($date->format('Y'), -2);
-               $month = str_pad($date->format('m'), 2, "0", STR_PAD_LEFT);
+    // =====================
+    // == SCOPES ===========
+    // =====================
+    public function scopeByMonth($query, $year, $month)
+    {
+        return $query->whereYear('transaction_date', $year)
+                     ->whereMonth('transaction_date', $month);
+    }
 
-               // Retrieve last transaction code for this month/year combination
-               $lastTransaction = self::where('kode_transaksi', 'like', "{$year}.{$month}.%")
-                   ->orderBy('kode_transaksi', 'desc')
-                   ->first();
+    public function scopeActive($query)
+    {
+        return $query->where('status', true);
+    }
 
-               // Determine sequence number; increment last sequence or start at 1 if none exists
-               $sequence = ($lastTransaction) ? intval(explode('.', $lastTransaction->kode_transaksi)[2]) + 1 : 1;
+    // =====================
+    // == AUTO-GENERATE ====
+    // =====================
+    protected static function boot()
+    {
+        parent::boot();
 
-               // Format new kode_transaksi as YY.MM.SSS (e.g., "23.04.001")
-               $income->kode_transaksi = sprintf("%s.%s.%03d", $year, $month, $sequence);
-           } catch (\Exception$e) {
-                \Log::error("Error generating kode transaksi: " . $e->getMessage());
+        static::creating(function ($income) {
+            if (empty($income->kode_transaksi)) {
+                self::generateKodeTransaksi($income);
             }
-       }
-   }
-   protected $casts = [
-    'status' => 'boolean',
-];
+        });
+    }
+
+    protected static function generateKodeTransaksi(&$income)
+    {
+        try {
+            $date = Carbon::parse($income->transaction_date);
+            $year = substr($date->format('Y'), -2);
+            $month = str_pad($date->format('m'), 2, "0", STR_PAD_LEFT);
+
+            $lastTransaction = self::where('kode_transaksi', 'like', "{$year}.{$month}.%")
+                ->orderBy('kode_transaksi', 'desc')
+                ->first();
+
+            $sequence = 1;
+
+            if ($lastTransaction) {
+                $parts = explode('.', $lastTransaction->kode_transaksi);
+                $lastSeq = count($parts) === 3 ? intval($parts[2]) : 0;
+                $sequence = $lastSeq + 1;
+            }
+
+            $income->kode_transaksi = sprintf("%s.%s.%03d", $year, $month, $sequence);
+        } catch (\Exception $e) {
+            Log::error("Error generating kode transaksi: " . $e->getMessage());
+        }
+    }
 }
