@@ -3,9 +3,9 @@
       <CCol>
         <CCard>
           <CCardHeader>
-            <CIcon icon="cil-dollar" /> Data Pemasukan
+            <CIcon icon="cil-dollar" /> Data Pengeluaran
             <CButton color="primary" class="float-end" @click="openModal('tambah')">
-              Tambah Pemasukan
+              Tambah Pengeluaran
             </CButton>
           </CCardHeader>
           <CCardBody>
@@ -33,6 +33,7 @@
                 </select>
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Kategori</CFormLabel>
@@ -44,24 +45,42 @@
                 </select>
               </CCol>
             </CRow>
+
+            <CRow class="mb-3">
+              <CCol>
+                <CFormSwitch
+                  v-model="isManualKode"
+                  label="Input kode transaksi manual?"
+                  class="mb-2"
+                />
+                <div v-if="isManualKode">
+                  <CFormLabel>Kode Transaksi</CFormLabel>
+                  <CFormInput v-model="kodeTransaksi" placeholder="Contoh: 25.04.001" />
+                </div>
+              </CCol>
+            </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Jumlah</CFormLabel>
                 <CFormInput v-model="amount" type="number" required />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Deskripsi</CFormLabel>
                 <CFormTextarea v-model="description" rows="3" />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Tanggal Transaksi</CFormLabel>
                 <CFormInput v-model="transactionDate" type="date" required />
               </CCol>
             </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Status</CFormLabel>
@@ -71,23 +90,9 @@
                 </select>
               </CCol>
             </CRow>
+
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
-        </CModalBody>
-      </CModal>
-
-      <!-- Modal Detail -->
-      <CModal :visible="showDetailModal" @close="closeDetailModal" title="Detail Pemasukan">
-        <CModalBody>
-          <ul class="list-group">
-            <li><strong>Perusahaan:</strong> {{ detailData.company_nama }}</li>
-            <li><strong>Kategori:</strong> {{ detailData.category?.nama_kategori ?? 'N/A' }}</li>
-            <li><strong>Jumlah:</strong> Rp {{ parseFloat(detailData.amount).toLocaleString('id-ID') }}</li>
-            <li><strong>Tanggal Transaksi:</strong> {{ detailData.transaction_date }}</li>
-            <li><strong>Status:</strong> {{ detailData.status }}</li>
-            <li><strong>Deskripsi:</strong> {{ detailData.description || '-' }}</li>
-            <li><strong>Kode Transaksi:</strong> {{ detailData.kode_transaksi }}</li>
-          </ul>
         </CModalBody>
       </CModal>
     </CRow>
@@ -95,6 +100,7 @@
 
   <script setup>
   import { ref, onMounted, nextTick } from 'vue'
+  import { useRouter } from 'vue-router'
   import axios from 'axios'
   import $ from 'jquery'
   import Swal from 'sweetalert2'
@@ -102,19 +108,21 @@
   import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css'
   import 'datatables.net-responsive-dt'
 
+  const router = useRouter()
   const dataTableRef = ref(null)
+
   const companies = ref([])
   const categories = ref([])
-  const incomes = ref([])
+  const expenses = ref([])
+
   const error = ref('')
   const loading = ref(false)
+
   const showModal = ref(false)
-  const showDetailModal = ref(false)
-  const modalTitle = ref('Tambah Pemasukan')
+  const modalTitle = ref('Tambah Pengeluaran')
   const modalButtonText = ref('Simpan')
   const modalMode = ref('tambah')
   const editingId = ref(null)
-  const detailData = ref({})
 
   const selectedCompanyId = ref('')
   const selectedCategoryId = ref('')
@@ -123,24 +131,28 @@
   const transactionDate = ref('')
   const status = ref(false)
 
+  const isManualKode = ref(false)
+  const kodeTransaksi = ref('')
+
   const fetchData = async () => {
     loading.value = true
     try {
       const token = localStorage.getItem('token')
-      const [incomeRes, companyRes, categoryRes] = await Promise.all([
-        axios.get('/api/incomes', { headers: { Authorization: `Bearer ${token}` } }),
+      const [expenseRes, companyRes, categoryRes] = await Promise.all([
+        axios.get('/api/expenses', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/companies', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/categories', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       companies.value = companyRes.data.data || companyRes.data
       categories.value = categoryRes.data.data || categoryRes.data
-      const incomesData = incomeRes.data.data || incomeRes.data
+      const expenseData = expenseRes.data.data || expenseRes.data
 
-      incomes.value = incomesData.map(income => ({
-        ...income,
-        company_nama: companies.value.find(c => c.id === income.company_id)?.nama_lengkap || 'Unknown',
-        category: categories.value.find(c => c.id === income.category_id) || {},
+      expenses.value = expenseData.map(expense => ({
+        ...expense,
+        company_nama: companies.value.find(c => c.id === expense.company_id)?.nama_lengkap || 'Unknown',
+        category: categories.value.find(c => c.id === expense.category_id) || {},
       }))
+
       nextTick(() => initDataTable())
     } catch (e) {
       error.value = 'Gagal memuat data'
@@ -153,8 +165,9 @@
     if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
       $(dataTableRef.value).DataTable().destroy()
     }
+
     $(dataTableRef.value).DataTable({
-      data: incomes.value,
+      data: expenses.value,
       columns: [
         { title: 'No', data: null, render: (data, type, row, meta) => meta.row + 1 },
         {
@@ -184,28 +197,29 @@
 
     $(dataTableRef.value).on('click', '.edit-btn', function () {
       const id = $(this).data('id')
-      const income = incomes.value.find(i => i.id === id)
-      if (income) openModal('edit', income)
+      const expense = expenses.value.find(e => e.id === id)
+      if (expense) openModal('edit', expense)
     })
 
     $(dataTableRef.value).on('click', '.company-detail-btn', function () {
       const id = $(this).data('id')
-      const income = incomes.value.find(i => i.id === id)
-      if (income) openDetailModal(income)
+      router.push(`/base/pengeluaran/${id}`)
     })
   }
 
-  const openModal = (mode, income = null) => {
+  const openModal = (mode, expense = null) => {
     modalMode.value = mode
-    if (mode === 'edit' && income) {
-      selectedCompanyId.value = income.company_id
-      selectedCategoryId.value = income.category_id
-      amount.value = income.amount
-      description.value = income.description
-      transactionDate.value = income.transaction_date
-      status.value = income.status
-      editingId.value = income.id
-      modalTitle.value = 'Edit Pemasukan'
+    if (mode === 'edit' && expense) {
+      selectedCompanyId.value = expense.company_id
+      selectedCategoryId.value = expense.category_id
+      amount.value = expense.amount
+      description.value = expense.description
+      transactionDate.value = expense.transaction_date
+      status.value = expense.status
+      kodeTransaksi.value = expense.kode_transaksi || ''
+      isManualKode.value = !!expense.kode_transaksi
+      editingId.value = expense.id
+      modalTitle.value = 'Edit Pengeluaran'
       modalButtonText.value = 'Update'
     } else {
       selectedCompanyId.value = ''
@@ -214,8 +228,10 @@
       description.value = ''
       transactionDate.value = ''
       status.value = false
+      kodeTransaksi.value = ''
+      isManualKode.value = false
       editingId.value = null
-      modalTitle.value = 'Tambah Pemasukan'
+      modalTitle.value = 'Tambah Pengeluaran'
       modalButtonText.value = 'Simpan'
     }
     showModal.value = true
@@ -225,17 +241,12 @@
     showModal.value = false
   }
 
-  const openDetailModal = (income) => {
-    detailData.value = income
-    showDetailModal.value = true
-  }
-
-  const closeDetailModal = () => {
-    showDetailModal.value = false
-  }
-
   const handleSubmit = async () => {
     try {
+      if (isManualKode.value && !kodeTransaksi.value.trim()) {
+        return Swal.fire('Gagal', 'Kode transaksi harus diisi secara manual.', 'warning')
+      }
+
       const token = localStorage.getItem('token')
       const payload = {
         company_id: selectedCompanyId.value,
@@ -244,15 +255,16 @@
         description: description.value,
         transaction_date: transactionDate.value,
         status: status.value,
+        kode_transaksi: isManualKode.value ? kodeTransaksi.value : null,
       }
 
       if (modalMode.value === 'edit') {
-        await axios.put(`/api/incomes/${editingId.value}`, payload, {
+        await axios.put(`/api/expenses/${editingId.value}`, payload, {
           headers: { Authorization: `Bearer ${token}` },
         })
         Swal.fire('Berhasil', 'Data diperbarui', 'success')
       } else {
-        await axios.post('/api/incomes', payload, {
+        await axios.post('/api/expenses', payload, {
           headers: { Authorization: `Bearer ${token}` },
         })
         Swal.fire('Berhasil', 'Data ditambahkan', 'success')

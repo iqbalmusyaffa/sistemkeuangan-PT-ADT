@@ -7,6 +7,7 @@ use App\Http\Controllers\KategoriTransaksiController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\IncomeController;
+use App\Http\Controllers\Api\ExpenseController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -55,6 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/incomes/{id}', [IncomeController::class, 'show']);
     Route::put('/incomes/{id}', [IncomeController::class, 'update']);
     Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
+// Pengeluaran (Expense)
+Route::get('/expenses', [ExpenseController::class, 'index']);
+Route::get('/expenses/{id}', [ExpenseController::class, 'show']);
+Route::post('/expenses', [ExpenseController::class, 'store']);
+Route::put('/expenses/{id}', [ExpenseController::class, 'update']);
+Route::delete('/expenses/{id}', [ExpenseController::class, 'destroy']);
 
     Route::post('/logout', [UserController::class, 'logout']);
 });

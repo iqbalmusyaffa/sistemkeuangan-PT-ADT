@@ -1,10 +1,9 @@
-import { h, resolveComponent } from 'vue';
-import { createRouter, createWebHistory } from 'vue-router';
-import axios from 'axios';
-
-import DefaultLayout from '@/layouts/DefaultLayout.vue';
-import Login from '@/components/Login.vue';
-import Register from '@/components/Register.vue';
+import { h, resolveComponent } from 'vue'
+import { createRouter, createWebHistory } from 'vue-router'
+import api from '@/utils/axios'
+import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import Login from '@/components/Login.vue'
+import Register from '@/components/Register.vue'
 
 const routes = [
   {
@@ -19,21 +18,32 @@ const routes = [
   },
   {
     path: '/',
-    redirect: '/dashboard', // Redirect default ke dashboard
+    redirect: '/dashboard',
     component: DefaultLayout,
     children: [
       {
         path: '/dashboard',
         name: 'Dashboard',
         component: () =>
-          import(/* webpackChunkName: "dashboard" */ '@/views/dashboard/Dashboard.vue'),
-        meta: { requiresAuth: true }, // Proteksi halaman dashboard
+          import('@/views/dashboard/Dashboard.vue'),
+        meta: { requiresAuth: true },
       },
       {
         path: '/kategori',
         name: 'Kategori',
         component: () => import('@/views/kategori/Kategori.vue'),
-        // component: () => import('@/views/theme/Colors.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/user',
+        name: 'User',
+        component: () => import('@/views/user/User.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/Profile.vue'),
         meta: { requiresAuth: true },
       },
       {
@@ -55,25 +65,29 @@ const routes = [
         meta: { requiresAuth: true },
       },
       {
-        path: '/profile',
-        name: 'Profile',
-        component: () => import('@/views/profile/Profile.vue'),
-        // component: () => import('@/views/theme/Colors.vue'),
+        path: '/base/pengeluaran',
+        name: 'Pengeluaran',
+        component: () => import('@/views/base/pengeluaran/Pengeluaran.vue'),
         meta: { requiresAuth: true },
       },
       {
-        path: '/user',
-        name: 'User',
-        component: () => import('@/views/user/User.vue'),
-        // component: () => import('@/views/theme/Colors.vue'),
+        path: '/base/pengeluaran/:id',
+        name: 'DetailPengeluaran',
+        component: () => import('@/views/base/pengeluaran/DetailPengeluaran.vue'),
         meta: { requiresAuth: true },
       },
-      {
-        path: '/theme/typography',
-        name: 'Typography',
-        component: () => import('@/views/theme/Typography.vue'),
-        meta: { requiresAuth: true },
-      },
+    //   {
+    //     path: '/base/piutang',
+    //     name: 'Piutang',
+    //     component: () => import('@/views/base/piutang/Piutang.vue'),
+    //     meta: { requiresAuth: true },
+    //   },
+    //   {
+    //     path: '/base/kasbon',
+    //     name: 'Kasbon',
+    //     component: () => import('@/views/base/kasbon/Kasbon.vue'),
+    //     meta: { requiresAuth: true },
+    //   },
       {
         path: '/base',
         name: 'Base',
@@ -82,17 +96,17 @@ const routes = [
         meta: { requiresAuth: true },
         children: [
           {
-            path: '/base/accordion',
+            path: 'accordion',
             name: 'Accordion',
             component: () => import('@/views/base/Accordion.vue'),
           },
           {
-            path: '/base/breadcrumbs',
+            path: 'breadcrumbs',
             name: 'Breadcrumbs',
             component: () => import('@/views/base/Breadcrumbs.vue'),
           },
           {
-            path: '/base/cards',
+            path: 'cards',
             name: 'Cards',
             component: () => import('@/views/base/Cards.vue'),
           },
@@ -133,43 +147,41 @@ const routes = [
     path: '/:catchAll(.*)',
     redirect: '/pages/404',
   },
-];
+]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior() {
-    return { top: 0 };
+    return { top: 0 }
   },
-});
+})
 
-// Middleware untuk cek autentikasi sebelum masuk halaman yang butuh login
+// Middleware untuk proteksi halaman dengan token
 router.beforeEach(async (to, from, next) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('token')
 
-  // Redirect ke dashboard jika sudah login dan mencoba ke login atau register
   if (token && (to.path === '/login' || to.path === '/register')) {
-    return next('/dashboard');
+    return next('/dashboard')
   }
 
-  // Cek apakah rute membutuhkan autentikasi
   if (to.matched.some(record => record.meta.requiresAuth)) {
     if (!token) {
-      return next('/login'); // Jika tidak ada token, redirect ke login
+      return next('/login')
     }
+
     try {
-      await axios.get('http://localhost:8000/api/user', {
-        withCredentials: true,
+      await api.get('/user', {
         headers: { Authorization: `Bearer ${token}` },
-      });
-      return next(); // Jika sukses, lanjut ke halaman yang dituju
+      })
+      return next()
     } catch (error) {
-      localStorage.removeItem('token');
-      return next('/login'); // Jika token invalid, redirect ke login
+      localStorage.removeItem('token')
+      return next('/login')
     }
   }
 
-  return next(); // Jika tidak butuh autentikasi, langsung lanjutkan
-});
+  return next()
+})
 
-export default router;
+export default router
