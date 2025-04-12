@@ -21,9 +21,6 @@
                             <a href="#" class="text-muted">Forgot password?</a>
                         </div>
                     </form>
-                    <div class="mt-3">
-                        <p class="text-muted">Don't have an account? <a href="/register">Sign up</a></p>
-                    </div>
                 </div>
             </div>
         </div>
@@ -32,6 +29,7 @@
 
 <script>
 import Swal from 'sweetalert2';
+import axios from 'axios';
 
 export default {
     data() {
@@ -43,38 +41,26 @@ export default {
     methods: {
         async login() {
             try {
-                console.log('Attempting to fetch /api/login');
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: this.email,
-                        password: this.password,
-                    }),
+                console.log('Attempting to login with /api/login');
+
+                // Send login request using axios
+                const response = await axios.post('/api/login', {
+                    email: this.email,
+                    password: this.password,
                 });
 
-                console.log('Fetch response:', response);
+                console.log('Response:', response);
 
-                if (!response.ok) {
-                    console.log('Response not OK, checking for error data');
-                    const errorData = await response.json();
-                    console.error('Error data from response:', errorData);
-                    throw new Error(errorData.message || 'Login failed');
-                }
+                // Check if access_token is present in response
+                if (response.data && response.data.access_token) {
+                    const token = response.data.access_token;
+                    const tokenExpiry = response.data.token_expiry || Date.now() + 3600000; // Default expiry to 1 hour
 
-                console.log('Response OK, parsing JSON');
-                const data = await response.json();
-                console.log('Parsed JSON data:', data);
-                const token = data.access_token;
+                    // Save token and expiry to sessionStorage
+                    sessionStorage.setItem('token', token);
+                    sessionStorage.setItem('token_expiry', tokenExpiry);
 
-                if (token) {
-                    console.log('Token found:', token);
-                    localStorage.setItem('token', token);
-                    console.log('Token stored in localStorage');
-                    // Redirect to dashboard or home page
-                    console.log('Redirecting to /dashboard');
+                    // Redirect to dashboard after successful login
                     this.$router.push('/dashboard');
 
                     // Show success message using SweetAlert
@@ -84,8 +70,7 @@ export default {
                         text: 'Login successful!',
                     });
                 } else {
-                    console.error('Token not found in response:', data);
-                    // Show error message using SweetAlert
+                    // Handle login failure due to missing token in response
                     Swal.fire({
                         icon: 'error',
                         title: 'Oops...',

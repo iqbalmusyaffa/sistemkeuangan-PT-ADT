@@ -1,55 +1,40 @@
 <?php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
+    const ROLE_SUPERADMIN = 'superadmin';
+    const ROLE_ADMIN = 'admin';
+
     protected $fillable = [
         'name',
         'email',
         'username',
         'password',
         'profile_picture',
-        'role', // Added role attribute
+        'role',
         'status',
     ];
 
-    /**
-     * The attributes that should be hidden for arrays.
-     *
-     * @var array
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast to native types.
-     *
-     * @var array
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'status' => 'boolean',
     ];
 
     /**
-     * Get the user's role.
-     *
-     * @return string
+     * Get the role of the user.
      */
     public function getRole()
     {
@@ -57,10 +42,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if the user has a specific role.
-     *
-     * @param string $role
-     * @return bool
+     * Check if the user has the given role.
      */
     public function hasRole($role)
     {
@@ -69,31 +51,50 @@ class User extends Authenticatable
 
     /**
      * Check if the user is an admin.
-     *
-     * @return bool
      */
     public function isAdmin()
     {
-        return $this->hasRole('admin');
+        return $this->hasRole(self::ROLE_ADMIN);
     }
 
     /**
-     * Check if the user is a staff member.
-     *
-     * @return bool
+     * Check if the user is a superadmin.
      */
-    public function isStaffKeuangan()
+    public function isSuperadmin()
     {
-        return $this->hasRole('stafkeuangan');
+        return $this->hasRole(self::ROLE_SUPERADMIN);
     }
 
     /**
-     * Check if the user is an owner.
-     *
-     * @return bool
+     * Check if the user is active.
      */
-    public function isOwner()
+    public function isActive()
     {
-        return $this->hasRole('owner');
+        return $this->status === 'active';
+    }
+
+    /**
+     * Check if the user's token has expired.
+     */
+    public function hasExpiredToken()
+    {
+        $token = $this->tokens->last(); // Get the latest token
+        return $token && $token->expires_at && $token->expires_at->isPast();
+    }
+
+    /**
+     * Get all tokens associated with the user.
+     */
+    public function tokens()
+    {
+        return $this->hasMany(\Laravel\Sanctum\PersonalAccessToken::class);
+    }
+
+    /**
+     * Scope to get active users.
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
     }
 }

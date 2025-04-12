@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Income;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class IncomeController extends Controller
 {
