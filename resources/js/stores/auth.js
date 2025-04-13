@@ -1,55 +1,93 @@
 // src/stores/auth.js
-import { defineStore } from "pinia";
-import axios from "axios";
+import { defineStore } from 'pinia'
+import axios from 'axios'
+import Swal from 'sweetalert2'
 
-export const useAuthStore = defineStore("auth", {
+export const useAuthStore = defineStore('auth', {
   state: () => ({
+    token: sessionStorage.getItem('token') || null,
+    tokenExpiry: sessionStorage.getItem('token_expiry') || null,
     user: null,
-    token: sessionStorage.getItem("token") || null,  // Use sessionStorage for token
   }),
 
   actions: {
-    // Fetch user data from the API
-    async fetchUser() {
-      const expiry = sessionStorage.getItem("token_expiry");  // Use sessionStorage for expiry
-      if (!this.token || !expiry || Date.now() > expiry) {
-        this.logout();
-        return;
+    setToken(token, expiry) {
+      this.token = token
+      this.tokenExpiry = expiry
+
+      sessionStorage.setItem('token', token)
+      sessionStorage.setItem('token_expiry', expiry)
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    },
+
+    async login(email, password) {
+      try {
+        const response = await axios.post('/api/login', { email, password })
+        const token = response.data.access_token
+        const expiry = Date.now() + 1 * 60 * 60 * 1000  // sesi 1jam 
+
+        if (token) {
+          this.setToken(token, expiry)
+          await this.fetchUser()
+          return { success: true }
+        } else {
+          return { success: false, message: 'Token not found in response.' }
+        }
+      } catch (error) {
+        const message = error.response?.data?.message || error.message
+        return { success: false, message }
       }
+    },
+
+    async fetchUser() {
+      if (!this.token) return null
 
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/profile", {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-          },
-        });
-        this.user = response.data;
+        const response = await axios.get('/api/profile', {
+          headers: { Authorization: `Bearer ${this.token}` },
+        })
+
+        if (response.data.status === 'active') {
+          this.user = response.data
+          return this.user
+        } else {
+          this.logout()
+          return null
+        }
       } catch (error) {
-        console.error("Error fetching user:", error);
-        this.logout(); // Token expired or invalid
+        this.logout()
+        return null
       }
     },
 
-    // Set token and expiration in sessionStorage
-    setToken(token, expiry) {
-      this.token = token;
-      sessionStorage.setItem("token", token);  // Save token to sessionStorage
-      const expirationTime = expiry || Date.now() + 3600000; // Default expiry to 1 hour
-      sessionStorage.setItem("token_expiry", expirationTime); // Save expiration time
+    checkTokenExpiry() {
+      const now = Date.now()
+      if (this.tokenExpiry && now > parseInt(this.tokenExpiry)) {
+        this.logout(true)
+        return false
+      }
+      return true
     },
 
-    // Logout and clear token and expiration
-    logout() {
-      this.token = null;
-      this.user = null;
-      sessionStorage.removeItem("token");  // Remove token from sessionStorage
-      sessionStorage.removeItem("token_expiry");  // Remove expiration from sessionStorage
-    },
+    logout(showAlert = false) {
+      this.token = null
+      this.tokenExpiry = null
+      this.user = null
 
-    // Check if the token is still valid
-    isTokenValid() {
-      const expiry = sessionStorage.getItem("token_expiry");
-      return this.token && expiry && Date.now() < expiry;
-    }
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('token_expiry')
+
+      delete axios.defaults.headers.common['Authorization']
+
+      if (showAlert) {
+        Swal.fire({
+          icon: 'info',
+          title: 'Sesi Berakhir',
+          text: 'Sesi login Anda telah berakhir. Silakan login kembali.',
+          confirmButtonText: 'OK',
+        })
+      }
+    },
   },
-});
+})

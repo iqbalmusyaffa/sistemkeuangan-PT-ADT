@@ -22,6 +22,7 @@ return new class extends Migration
             $table->enum('role', ['admin', 'superadmin'])->default('admin');
             $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
             // $table->boolean('is_active')->default(true);
+            $table->softDeletes(); // <-- Pastikan ini ada
             $table->rememberToken();
             $table->timestamps();
         });

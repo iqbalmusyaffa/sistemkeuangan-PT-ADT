@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,10 @@ class User extends Authenticatable
 
     const ROLE_SUPERADMIN = 'superadmin';
     const ROLE_ADMIN = 'admin';
+
+    const STATUS_ACTIVE = 'active';
+    const STATUS_INACTIVE = 'inactive';
+    const STATUS_SUSPENDED = 'suspended';
 
     protected $fillable = [
         'name',
@@ -33,68 +38,41 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    /**
-     * Get the role of the user.
-     */
-    public function getRole()
+    // Hapus method tokens() yang ada di sini
+
+    public function getRole(): string
     {
         return $this->role;
     }
 
-    /**
-     * Check if the user has the given role.
-     */
-    public function hasRole($role)
+    public function hasRole(string $role): bool
     {
         return $this->role === $role;
     }
 
-    /**
-     * Check if the user is an admin.
-     */
-    public function isAdmin()
+    public function isAdmin(): bool
     {
         return $this->hasRole(self::ROLE_ADMIN);
     }
 
-    /**
-     * Check if the user is a superadmin.
-     */
-    public function isSuperadmin()
+    public function isSuperadmin(): bool
     {
         return $this->hasRole(self::ROLE_SUPERADMIN);
     }
 
-    /**
-     * Check if the user is active.
-     */
-    public function isActive()
+    public function isActive(): bool
     {
-        return $this->status === 'active';
+        return $this->status === self::STATUS_ACTIVE;
     }
 
-    /**
-     * Check if the user's token has expired.
-     */
-    public function hasExpiredToken()
+    public function hasExpiredToken(): bool
     {
-        $token = $this->tokens->last(); // Get the latest token
+        $token = $this->currentAccessToken();
         return $token && $token->expires_at && $token->expires_at->isPast();
     }
 
-    /**
-     * Get all tokens associated with the user.
-     */
-    public function tokens()
-    {
-        return $this->hasMany(\Laravel\Sanctum\PersonalAccessToken::class);
-    }
-
-    /**
-     * Scope to get active users.
-     */
     public function scopeActive($query)
     {
-        return $query->where('status', 'active');
+        return $query->where('status', self::STATUS_ACTIVE);
     }
 }
