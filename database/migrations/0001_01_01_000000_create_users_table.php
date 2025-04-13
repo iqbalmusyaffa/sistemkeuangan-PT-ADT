@@ -19,8 +19,10 @@ return new class extends Migration
             $table->string('username')->unique();
             $table->string('password');
             $table->string('profile_picture')->nullable();
-            $table->enum('role', ['user', 'admin', 'stafkeuangan', 'owner'])->default('user');
-            $table->boolean('status')->default(true);
+            $table->enum('role', ['admin', 'superadmin'])->default('admin');
+            $table->enum('status', ['active', 'inactive', 'suspended'])->default('active');
+            // $table->boolean('is_active')->default(true);
+            $table->softDeletes(); // <-- Pastikan ini ada
             $table->rememberToken();
             $table->timestamps();
         });

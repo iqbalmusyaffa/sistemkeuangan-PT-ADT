@@ -21,6 +21,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->date('transaction_date');
             $table->enum('status', ['Pending', 'Lunas'])->default('Pending');
+            $table->string('bukti')->nullable();
             $table->timestamps();
         });
     }

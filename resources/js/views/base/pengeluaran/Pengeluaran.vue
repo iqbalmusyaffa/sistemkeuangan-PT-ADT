@@ -187,7 +187,8 @@
           title: 'Aksi',
           data: null,
           render: (data, type, row) =>
-            `<button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>`
+            `<button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+            <button class="btn btn-sm btn-danger ms-1 delete-btn" data-id="${row.id}">Hapus</button>`
         },
       ],
       responsive: true,
@@ -200,6 +201,11 @@
       const expense = expenses.value.find(e => e.id === id)
       if (expense) openModal('edit', expense)
     })
+    $(dataTableRef.value).on('click', '.delete-btn', function () {
+    const id = $(this).data('id')
+    handleDelete(id)
+    })
+
 
     $(dataTableRef.value).on('click', '.company-detail-btn', function () {
       const id = $(this).data('id')
@@ -276,7 +282,31 @@
       Swal.fire('Gagal', 'Periksa kembali data yang dimasukkan', 'error')
     }
   }
+  const handleDelete = async (id) => {
+  const konfirmasi = await Swal.fire({
+    title: 'Yakin ingin menghapus?',
+    text: 'Data yang dihapus tidak bisa dikembalikan.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#6c757d',
+    confirmButtonText: 'Hapus',
+    cancelButtonText: 'Batal'
+  })
 
+  if (konfirmasi.isConfirmed) {
+    try {
+      const token = localStorage.getItem('token')
+      await axios.delete(`/api/expenses/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      Swal.fire('Berhasil', 'Data berhasil dihapus', 'success')
+      await fetchData()
+    } catch (err) {
+      Swal.fire('Gagal', 'Tidak dapat menghapus data', 'error')
+    }
+  }
+}
   onMounted(fetchData)
   </script>
 

@@ -6,94 +6,73 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
+    const ROLE_SUPERADMIN = 'superadmin';
+    const ROLE_ADMIN = 'admin';
+
+    const STATUS_ACTIVE = 'active';
+    const STATUS_INACTIVE = 'inactive';
+    const STATUS_SUSPENDED = 'suspended';
+
     protected $fillable = [
         'name',
         'email',
         'username',
         'password',
         'profile_picture',
-        'role', // Added role attribute
+        'role',
         'status',
     ];
 
-    /**
-     * The attributes that should be hidden for arrays.
-     *
-     * @var array
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast to native types.
-     *
-     * @var array
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'status' => 'boolean',
     ];
 
-    /**
-     * Get the user's role.
-     *
-     * @return string
-     */
-    public function getRole()
+    // Hapus method tokens() yang ada di sini
+
+    public function getRole(): string
     {
         return $this->role;
     }
 
-    /**
-     * Check if the user has a specific role.
-     *
-     * @param string $role
-     * @return bool
-     */
-    public function hasRole($role)
+    public function hasRole(string $role): bool
     {
         return $this->role === $role;
     }
 
-    /**
-     * Check if the user is an admin.
-     *
-     * @return bool
-     */
-    public function isAdmin()
+    public function isAdmin(): bool
     {
-        return $this->hasRole('admin');
+        return $this->hasRole(self::ROLE_ADMIN);
     }
 
-    /**
-     * Check if the user is a staff member.
-     *
-     * @return bool
-     */
-    public function isStaffKeuangan()
+    public function isSuperadmin(): bool
     {
-        return $this->hasRole('stafkeuangan');
+        return $this->hasRole(self::ROLE_SUPERADMIN);
     }
 
-    /**
-     * Check if the user is an owner.
-     *
-     * @return bool
-     */
-    public function isOwner()
+    public function isActive(): bool
     {
-        return $this->hasRole('owner');
+        return $this->status === self::STATUS_ACTIVE;
+    }
+
+    public function hasExpiredToken(): bool
+    {
+        $token = $this->currentAccessToken();
+        return $token && $token->expires_at && $token->expires_at->isPast();
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
     }
 }

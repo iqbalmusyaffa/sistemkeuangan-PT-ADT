@@ -5,8 +5,9 @@ import { CBreadcrumb, CBreadcrumbItem } from "@coreui/vue";
 import { useAuthStore } from "@/stores/auth"; // Import store auth
 
 const breadcrumbs = ref([]);
-const auth = useAuthStore(); // mengunakan store auth
+const auth = useAuthStore(); // Menggunakan store auth
 
+// Fungsi untuk mendapatkan breadcrumb
 const getBreadcrumbs = () => {
   const crumbs = router.currentRoute.value.matched.map((route) => ({
     active: route.path === router.currentRoute.value.fullPath,
@@ -14,7 +15,7 @@ const getBreadcrumbs = () => {
     path: `${router.options.history.base}${route.path}`,
   }));
 
-  // Tambahkan nama pengguna di breadcrumb
+  // Tambahkan nama pengguna di breadcrumb jika user terautentikasi
   if (auth.user) {
     crumbs.unshift({
       active: false,
@@ -26,10 +27,12 @@ const getBreadcrumbs = () => {
   return crumbs;
 };
 
+// Update breadcrumb setelah rute berubah
 router.afterEach(() => {
   breadcrumbs.value = getBreadcrumbs();
 });
 
+// Ambil data user saat komponen dipasang
 onMounted(async () => {
   await auth.fetchUser(); // Ambil data user saat komponen dipasang
   breadcrumbs.value = getBreadcrumbs();

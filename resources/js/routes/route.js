@@ -3,18 +3,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import api from '@/utils/axios'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import Login from '@/components/Login.vue'
-import Register from '@/components/Register.vue'
 
 const routes = [
   {
     path: '/login',
     name: 'Login',
     component: Login,
-  },
-  {
-    path: '/register',
-    name: 'Register',
-    component: Register,
   },
   {
     path: '/',
@@ -24,8 +18,7 @@ const routes = [
       {
         path: '/dashboard',
         name: 'Dashboard',
-        component: () =>
-          import('@/views/dashboard/Dashboard.vue'),
+        component: () => import('@/views/dashboard/Dashboard.vue'),
         meta: { requiresAuth: true },
       },
       {
@@ -76,18 +69,6 @@ const routes = [
         component: () => import('@/views/base/pengeluaran/DetailPengeluaran.vue'),
         meta: { requiresAuth: true },
       },
-    //   {
-    //     path: '/base/piutang',
-    //     name: 'Piutang',
-    //     component: () => import('@/views/base/piutang/Piutang.vue'),
-    //     meta: { requiresAuth: true },
-    //   },
-    //   {
-    //     path: '/base/kasbon',
-    //     name: 'Kasbon',
-    //     component: () => import('@/views/base/kasbon/Kasbon.vue'),
-    //     meta: { requiresAuth: true },
-    //   },
       {
         path: '/base',
         name: 'Base',
@@ -136,11 +117,6 @@ const routes = [
         name: 'Page404',
         component: () => import('@/views/pages/Page404.vue'),
       },
-      {
-        path: '500',
-        name: 'Page500',
-        component: () => import('@/views/pages/Page500.vue'),
-      },
     ],
   },
   {
@@ -159,29 +135,39 @@ const router = createRouter({
 
 // Middleware untuk proteksi halaman dengan token
 router.beforeEach(async (to, from, next) => {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
-  if (token && (to.path === '/login' || to.path === '/register')) {
+  // Jika sudah login, redirect dari login ke dashboard
+  if (token && (to.path === '/login')) {
     return next('/dashboard')
   }
 
+  // Jika route membutuhkan autentikasi
   if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!token) {
-      return next('/login')
-    }
+    if (!token) return next('/login') // Jika token tidak ada, arahkan ke login
 
     try {
-      await api.get('/user', {
+      // Cek apakah token valid dan apakah user ada di database
+      const response = await api.get('/profile', {
         headers: { Authorization: `Bearer ${token}` },
       })
+
+      // Jika user tidak ada atau tidak aktif, redirect ke login atau halaman lain
+      if (!response.data || response.data.status !== 'active') {
+        sessionStorage.removeItem('token') // Hapus token jika user tidak valid
+        return next('/login')
+      }
+
+      // Jika user valid, lanjutkan ke route yang diminta
       return next()
     } catch (error) {
-      localStorage.removeItem('token')
+      // Jika ada error pada pengecekan profil (misalnya token expired)
+      sessionStorage.removeItem('token')
       return next('/login')
     }
   }
 
-  return next()
+  return next() // Lanjutkan jika tidak perlu autentikasi
 })
 
 export default router
