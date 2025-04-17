@@ -11,8 +11,15 @@
           <CCardBody>
             <div v-if="error" class="alert alert-danger">{{ error }}</div>
             <div v-if="loading" class="alert alert-info">Loading...</div>
+
+            <h5 class="mb-2">Kategori Pemasukan</h5>
+            <div class="w-100 mb-4">
+              <table ref="incomeTableRef" class="display nowrap"></table>
+            </div>
+
+            <h5 class="mb-2">Kategori Pengeluaran</h5>
             <div class="w-100">
-              <table ref="dataTableRef" class="display nowrap"></table>
+              <table ref="expenseTableRef" class="display nowrap"></table>
             </div>
           </CCardBody>
         </CCard>
@@ -48,219 +55,207 @@
     </CRow>
   </template>
 
-  <script setup>
-  import { ref, onMounted, nextTick } from "vue";
-  import axios from "axios";
-  import $ from "jquery";
-  import Swal from 'sweetalert2';
-  import "datatables.net-dt/css/dataTables.dataTables.min.css";
-  import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
-  import "datatables.net-responsive-dt";
-  import "datatables.net-buttons-dt";
 
-  const dataTableRef = ref(null);
-  const kategori = ref("");
-  const jenis = ref("pemasukan");
-  const deskripsi = ref("");
-  const categories = ref([]);
-  const error = ref("");
-  const loading = ref(false);
-  const showModal = ref(false);
-  const modalTitle = ref("Tambah Kategori");
-  const modalButtonText = ref("Simpan");
-  const modalMode = ref("tambah"); // 'tambah' or 'edit'
-  const editingId = ref(null);
+<script setup>
+import { ref, onMounted, nextTick } from "vue";
+import axios from "axios";
+import $ from "jquery";
+import Swal from "sweetalert2";
+import "datatables.net-dt/css/dataTables.dataTables.min.css";
+import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
+import "datatables.net-responsive-dt";
 
-  const fetchCategories = async () => {
-    loading.value = true;
-    error.value = "";
-    try {
-      const response = await axios.get("/api/categories");
-      categories.value = response.data;
-      nextTick(() => initDataTable());
-    } catch (err) {
-      error.value = "Gagal memuat kategori.";
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: 'Gagal memuat kategori.',
+const incomeTableRef = ref(null);
+const expenseTableRef = ref(null);
+const kategori = ref("");
+const jenis = ref("pemasukan");
+const deskripsi = ref("");
+const categories = ref([]);
+const error = ref("");
+const loading = ref(false);
+const showModal = ref(false);
+const modalTitle = ref("Tambah Kategori");
+const modalButtonText = ref("Simpan");
+const modalMode = ref("tambah");
+const editingId = ref(null);
+
+const fetchCategories = async () => {
+  loading.value = true;
+  error.value = "";
+
+  try {
+    const token = sessionStorage.getItem("token");
+
+    const response = await axios.get("/api/categories", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    categories.value = response.data;
+
+    nextTick(() => {
+      initDataTable("pemasukan");
+      initDataTable("pengeluaran");
+    });
+  } catch (err) {
+    error.value = "Gagal memuat kategori.";
+    Swal.fire({
+      icon: "error",
+      title: "Oops...",
+      text: "Gagal memuat kategori.",
+    });
+  } finally {
+    loading.value = false;
+  }
+};
+
+
+const initDataTable = (type) => {
+  const data = categories.value.filter(cat => cat.jenis === type);
+  const ref = type === 'pemasukan' ? incomeTableRef : expenseTableRef;
+
+  if ($.fn.DataTable.isDataTable(ref.value)) {
+    $(ref.value).DataTable().destroy();
+  }
+
+  $(ref.value).DataTable({
+    data,
+    columns: [
+      {
+        title: "No",
+        data: null,
+        orderable: false,
+        render: (data, type, row, meta) => meta.row + 1,
+      },
+      { title: "Nama Kategori", data: "nama_kategori" },
+      { title: "Jenis", data: "jenis" },
+      { title: "Deskripsi", data: "deskripsi" },
+      {
+        title: "Aksi",
+        data: null,
+        orderable: false,
+        render: (data, type, row) => `
+          <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
+          <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+        `,
+      },
+    ],
+    responsive: true,
+    scrollX: true,
+    destroy: true,
+  });
+
+  $(ref.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
+    const id = $(this).data("id");
+    const category = categories.value.find((cat) => cat.id == id);
+    if (category) openModal("edit", category);
+  });
+
+  $(ref.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
+    const id = $(this).data("id");
+    deleteCategory(id);
+  });
+};
+
+const openModal = (mode, category = null) => {
+  modalMode.value = mode;
+  if (mode === "edit" && category) {
+    kategori.value = category.nama_kategori;
+    jenis.value = category.jenis;
+    deskripsi.value = category.deskripsi;
+    editingId.value = category.id;
+    modalTitle.value = "Edit Kategori";
+    modalButtonText.value = "Update";
+  } else {
+    kategori.value = "";
+    jenis.value = "pemasukan";
+    deskripsi.value = "";
+    editingId.value = null;
+    modalTitle.value = "Tambah Kategori";
+    modalButtonText.value = "Simpan";
+  }
+  showModal.value = true;
+};
+
+const closeModal = () => {
+  showModal.value = false;
+};
+
+const handleSubmit = async () => {
+  loading.value = true;
+  error.value = "";
+
+  if (!kategori.value.trim()) {
+    error.value = "Nama kategori wajib diisi!";
+    loading.value = false;
+    return;
+  }
+
+  try {
+    const token = sessionStorage.getItem('token')
+    const payload = { nama_kategori: kategori.value, jenis: jenis.value, deskripsi: deskripsi.value };
+
+    if (modalMode.value === "edit") {
+      await axios.put(`/api/categories/${editingId.value}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-    } finally {
-      loading.value = false;
-    }
-  };
-
-  const initDataTable = () => {
-    if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
-      $(dataTableRef.value).DataTable().destroy(); // Hapus instance DataTables yang lama
-    }
-
-    $(dataTableRef.value).DataTable({
-      data: categories.value,
-      columns: [
-        {
-          title: "No",
-          data: null,
-          orderable: false,
-          render: function (data, type, row, meta) {
-            return meta.row + 1; // Nomor urut dimulai dari 1
-          },
-        },
-        { title: "Nama Kategori", data: "nama_kategori" },
-        { title: "Jenis", data: "jenis" },
-        { title: "Deskripsi", data: "deskripsi" },
-        {
-          title: "Aksi",
-          data: null,
-          orderable: false,
-          render: function (data, type, row) {
-            return `
-              <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
-              <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
-            `;
-          },
-        },
-      ],
-      responsive: true, // Aktifkan fitur responsif
-      scrollX: true,    // Aktifkan scroll horizontal
-      destroy: true,    // Pastikan instance lama dihancurkan
-    });
-
-    // Pasang event listener untuk tombol edit
-    $(dataTableRef.value).on("click", ".edit-btn", function () {
-      const id = $(this).data("id");
-      const category = categories.value.find((cat) => cat.id == id);
-      if (category) openModal('edit', category);
-    });
-
-    // Pasang event listener untuk tombol hapus
-    $(dataTableRef.value).on("click", ".delete-btn", function () {
-      const id = $(this).data("id");
-      deleteCategory(id);
-    });
-  };
-
-  const openModal = (mode, category = null) => {
-    modalMode.value = mode;
-    if (mode === 'edit' && category) {
-      // Editing an existing category
-      kategori.value = category.nama_kategori;
-      jenis.value = category.jenis;
-      deskripsi.value = category.deskripsi;
-      editingId.value = category.id;
-      modalTitle.value = "Edit Kategori";
-      modalButtonText.value = "Update";
+      Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil diperbarui." });
     } else {
-      // Adding a new category
-      kategori.value = "";
-      jenis.value = "pemasukan";
-      deskripsi.value = "";
-      editingId.value = null;
-      modalTitle.value = "Tambah Kategori";
-      modalButtonText.value = "Simpan";
-    }
-    showModal.value = true;
-  };
-
-  const closeModal = () => {
-    showModal.value = false;
-  };
-
-  const handleSubmit = async () => {
-    loading.value = true;
-    error.value = "";
-
-    if (!kategori.value.trim()) {
-      error.value = "Nama kategori wajib diisi!";
-      loading.value = false;
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem("token");
-      const payload = { nama_kategori: kategori.value, jenis: jenis.value, deskripsi: deskripsi.value };
-
-      if (modalMode.value === 'edit') {
-        await axios.put(`/api/categories/${editingId.value}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'Kategori berhasil diperbarui.',
-        });
-      } else {
-        await axios.post("/api/categories", payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'Kategori berhasil ditambahkan.',
-        });
-      }
-      showModal.value = false;
-      await fetchCategories();
-      initDataTable(); // Inisialisasi ulang DataTables setelah data berubah
-    } catch (err) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Oops...',
-        text: 'Terjadi kesalahan, silakan coba lagi.',
+      await axios.post("/api/categories", payload, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-    } finally {
-      loading.value = false;
+      Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil ditambahkan." });
     }
-  };
+    showModal.value = false;
+    await fetchCategories();
+  } catch (err) {
+    Swal.fire({ icon: "error", title: "Oops...", text: "Terjadi kesalahan, silakan coba lagi." });
+  } finally {
+    loading.value = false;
+  }
+};
 
-  const deleteCategory = async (id) => {
-    const result = await Swal.fire({
-      title: 'Apakah Anda yakin?',
-      text: "Anda tidak dapat mengembalikan data ini!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      confirmButtonText: 'Ya, hapus!',
-      cancelButtonText: 'Batal',
-    });
+const deleteCategory = async (id) => {
+  const result = await Swal.fire({
+    title: "Apakah Anda yakin?",
+    text: "Data tidak dapat dikembalikan!",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#3085d6",
+    cancelButtonColor: "#d33",
+    confirmButtonText: "Ya, hapus!",
+    cancelButtonText: "Batal",
+  });
 
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem("token");
-        await axios.delete(`/api/categories/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire({
-          icon: 'success',
-          title: 'Berhasil!',
-          text: 'Kategori berhasil dihapus.',
-        });
-        fetchCategories();
-      } catch (err) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Oops...',
-          text: 'Gagal menghapus kategori.',
-        });
-      }
+  if (result.isConfirmed) {
+    try {
+        const token = sessionStorage.getItem('token')
+      await axios.delete(`/api/categories/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil dihapus." });
+      await fetchCategories();
+    } catch (err) {
+      Swal.fire({ icon: "error", title: "Oops...", text: "Gagal menghapus kategori." });
     }
-  };
-
-  onMounted(fetchCategories);
-  </script>
-
-  <style scoped>
-  .w-100 {
-    width: 100%;
-    overflow-x: auto; /* Memungkinkan tabel di-scroll horizontal */
   }
+};
 
-  .dataTables_wrapper {
-    overflow-x: auto; /* Memastikan wrapper DataTables dapat di-scroll */
-  }
+onMounted(fetchCategories);
+</script>
+<style scoped>
+.w-100 {
+  width: 100%;
+  overflow-x: auto;
+}
 
-  table.display {
-    width: 100% !important; /* Pastikan tabel mengambil lebar penuh */
-  }
-  </style>
+.dataTables_wrapper {
+  overflow-x: auto;
+}
+
+table.display {
+  width: 100% !important;
+}
+</style>
+

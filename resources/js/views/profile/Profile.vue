@@ -1,130 +1,443 @@
-<script setup>
-import { ref, onMounted } from "vue";
-import axios from "axios";
-import Swal from "sweetalert2";
-import { CCard, CCardBody, CCardHeader, CRow, CCol, CAvatar, CButton, CForm, CFormInput, CSpinner } from "@coreui/vue";
+<template>
+    <CRow>
+      <CCol sm="12" md="8" lg="6" class="mx-auto">
+        <CCard>
+          <CCardHeader class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Profil Pengguna</h4>
+            <CButton color="primary" size="sm" @click="openEditModal">
+              <CIcon icon="cil-pencil" class="me-2" />
+              Edit Profil
+            </CButton>
+          </CCardHeader>
 
-// State untuk menyimpan data user
-const user = ref({
-  name: "",
-  email: "",
-  username: "",
-  profile_picture: "",
-  role: "",
-  status: "",
-});
+          <!-- Loading -->
+          <CCardBody v-if="loading">
+            <div class="text-center py-4">
+              <CSpinner color="primary" />
+            </div>
+          </CCardBody>
 
-const loading = ref(true);
-const error = ref(null);
+          <!-- Error -->
+          <CCardBody v-else-if="error">
+            <div class="alert alert-danger" role="alert">
+              {{ error }}
+            </div>
+          </CCardBody>
 
-// Fetch data user dari API Laravel
-const fetchUserProfile = async () => {
-  try {
-    const token = sessionStorage.getItem("token");  // Using sessionStorage
-    if (!token) {
-      error.value = "Token tidak ditemukan, harap login kembali.";
+          <!-- Data User -->
+          <CCardBody v-else>
+            <div class="text-center mb-4">
+              <div class="position-relative d-inline-block mb-3">
+                <CAvatar :src="profilePictureUrl" size="xl" class="profile-avatar" />
+                <div class="position-absolute bottom-0 end-0">
+                  <label for="profile-upload" class="btn btn-sm btn-primary rounded-circle" style="width: 32px; height: 32px">
+                    <CIcon icon="cil-pencil" size="sm" />
+                  </label>
+                  <input
+                    type="file"
+                    id="profile-upload"
+                    class="d-none"
+                    accept="image/*"
+                    @change="handleQuickImageUpload"
+                  />
+                </div>
+              </div>
+              <h4 class="mb-1">{{ user.name }}</h4>
+              <p class="text-muted mb-1">{{ user.email }}</p>
+              <CBadge :color="user.role === 'superadmin' ? 'danger' : 'primary'" class="text-uppercase">
+                {{ user.role }}
+              </CBadge>
+            </div>
+
+            <div class="profile-info mt-4">
+              <h5 class="mb-3">Informasi Profil</h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="profile-field">
+                    <label class="text-muted">Nama Lengkap</label>
+                    <p class="mb-0">{{ user.name }}</p>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="profile-field">
+                    <label class="text-muted">Username</label>
+                    <p class="mb-0">{{ user.username }}</p>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="profile-field">
+                    <label class="text-muted">Email</label>
+                    <p class="mb-0">{{ user.email }}</p>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="profile-field">
+                    <label class="text-muted">Status</label>
+                    <CBadge :color="user.status === 'active' ? 'success' : 'danger'">
+                      {{ user.status }}
+                    </CBadge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CCardBody>
+        </CCard>
+      </CCol>
+    </CRow>
+
+    <!-- Modal Edit Profile -->
+    <CModal
+      :visible="showEditModal"
+      @close="closeEditModal"
+      title="Edit Profil"
+      size="lg"
+    >
+      <CModalHeader>
+        <h5 class="mb-0">Edit Profil</h5>
+      </CModalHeader>
+      <CModalBody>
+        <CForm @submit.prevent="handleQuickUpdate" class="row g-3">
+          <CCol md="6">
+            <CFormLabel for="name">Nama Lengkap</CFormLabel>
+            <CFormInput
+              id="name"
+              v-model="quickEditForm.name"
+              :class="{ 'is-invalid': validationErrors.name }"
+              required
+            />
+            <CFormFeedback invalid v-if="validationErrors.name">
+              {{ validationErrors.name[0] }}
+            </CFormFeedback>
+          </CCol>
+
+          <CCol md="6">
+            <CFormLabel for="username">Username</CFormLabel>
+            <CFormInput
+              id="username"
+              v-model="quickEditForm.username"
+              :class="{ 'is-invalid': validationErrors.username }"
+              required
+            />
+            <CFormFeedback invalid v-if="validationErrors.username">
+              {{ validationErrors.username[0] }}
+            </CFormFeedback>
+          </CCol>
+
+          <CCol md="6">
+            <CFormLabel for="email">Email</CFormLabel>
+            <CFormInput
+              id="email"
+              v-model="quickEditForm.email"
+              type="email"
+              :class="{ 'is-invalid': validationErrors.email }"
+              required
+            />
+            <CFormFeedback invalid v-if="validationErrors.email">
+              {{ validationErrors.email[0] }}
+            </CFormFeedback>
+          </CCol>
+
+          <CCol md="6">
+            <CFormLabel for="password">Password (Opsional)</CFormLabel>
+            <CFormInput
+              id="password"
+              v-model="quickEditForm.password"
+              type="password"
+              :class="{ 'is-invalid': validationErrors.password }"
+            />
+            <CFormText>Kosongkan jika tidak ingin mengubah password</CFormText>
+            <CFormFeedback invalid v-if="validationErrors.password">
+              {{ validationErrors.password[0] }}
+            </CFormFeedback>
+          </CCol>
+
+          <!-- Role dan Status hanya untuk superadmin -->
+          <template v-if="isSuperAdmin">
+            <CCol md="6">
+              <CFormLabel for="role">Role</CFormLabel>
+              <CFormSelect
+                id="role"
+                v-model="quickEditForm.role"
+                :disabled="user.id === currentUser.id"
+              >
+                <option value="admin">Admin</option>
+                <option value="superadmin">Superadmin</option>
+              </CFormSelect>
+              <CFormText v-if="user.id === currentUser.id">
+                Superadmin tidak dapat mengubah rolenya sendiri
+              </CFormText>
+            </CCol>
+
+            <CCol md="6">
+              <CFormLabel for="status">Status</CFormLabel>
+              <CFormSelect
+                id="status"
+                v-model="quickEditForm.status"
+                :disabled="user.id === currentUser.id"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </CFormSelect>
+              <CFormText v-if="user.id === currentUser.id">
+                Superadmin tidak dapat menonaktifkan akunnya sendiri
+              </CFormText>
+            </CCol>
+          </template>
+        </CForm>
+      </CModalBody>
+      <CModalFooter>
+        <CButton color="secondary" @click="closeEditModal">
+          Batal
+        </CButton>
+        <CButton color="primary" @click="handleQuickUpdate" :disabled="loading">
+          <CSpinner v-if="loading" size="sm" class="me-1" />
+          Simpan Perubahan
+        </CButton>
+      </CModalFooter>
+    </CModal>
+  </template>
+
+  <script setup>
+  import { ref, onMounted, computed } from "vue";
+  import axios from "axios";
+  import Swal from "sweetalert2";
+  import { useAuthStore } from "@/stores/auth";
+
+  // State
+  const loading = ref(false);
+  const error = ref("");
+  const user = ref({});
+  const validationErrors = ref({});
+  const auth = useAuthStore();
+  const showEditModal = ref(false);
+
+  const baseStorageUrl = import.meta.env.VITE_API_BASE_URL + "/storage/profile_pictures/";
+
+  // Quick edit form untuk update langsung
+  const quickEditForm = ref({
+    name: "",
+    username: "",
+    email: "",
+    password: "",
+    role: "",
+    status: "",
+  });
+
+  // Computed
+  const currentUser = computed(() => auth.user);
+  const isSuperAdmin = computed(() => currentUser.value?.role === 'superadmin');
+
+  const profilePictureUrl = computed(() => {
+    if (!user.value.profile_picture) {
+      return new URL("@/assets/images/avatars/2.jpg", import.meta.url).href;
+    }
+    return user.value.profile_picture.startsWith('http')
+      ? user.value.profile_picture
+      : `${baseStorageUrl}${user.value.profile_picture}`;
+  });
+
+  // Methods
+  const fetchUserProfile = async () => {
+    loading.value = true;
+    error.value = "";
+    validationErrors.value = {};
+
+    try {
+      const token = sessionStorage.getItem("token");
+      if (!token) {
+        error.value = "Token tidak ditemukan, harap login kembali.";
+        return;
+      }
+
+      const res = await axios.get("/api/profile", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      user.value = res.data;
+
+      // Update quick edit form
+      resetForm();
+    } catch (err) {
+      error.value = "Gagal mengambil data profil.";
+    } finally {
       loading.value = false;
+    }
+  };
+
+  const openEditModal = () => {
+    resetForm();
+    showEditModal.value = true;
+  };
+
+  const closeEditModal = () => {
+    showEditModal.value = false;
+    validationErrors.value = {};
+  };
+
+  const handleQuickUpdate = async () => {
+    loading.value = true;
+    validationErrors.value = {};
+
+    try {
+      const token = sessionStorage.getItem("token");
+      const formData = new FormData();
+
+      // Append form data
+      formData.append("name", quickEditForm.value.name);
+      formData.append("username", quickEditForm.value.username);
+      formData.append("email", quickEditForm.value.email);
+
+      if (quickEditForm.value.password) {
+        formData.append("password", quickEditForm.value.password);
+      }
+
+      // Append role dan status jika superadmin
+      if (isSuperAdmin.value && user.value.id !== currentUser.value.id) {
+        if (quickEditForm.value.role) formData.append("role", quickEditForm.value.role);
+        if (quickEditForm.value.status) formData.append("status", quickEditForm.value.status);
+      }
+
+      await axios.post(`/api/users/${user.value.id}?_method=PUT`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil!",
+        text: "Profil berhasil diperbarui.",
+      });
+
+      // Refresh profile data
+      await fetchUserProfile();
+      // Update auth store
+      await auth.fetchUser();
+      // Tutup modal
+      closeEditModal();
+    } catch (err) {
+      if (err.response?.data?.errors) {
+        validationErrors.value = err.response.data.errors;
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Gagal!",
+          text: "Terjadi kesalahan saat memperbarui profil.",
+        });
+      }
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  const handleQuickImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file
+    if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
+      Swal.fire({
+        icon: "error",
+        title: "Format file tidak valid",
+        text: "Hanya file JPEG, PNG, atau JPG yang diizinkan",
+      });
+      event.target.value = "";
       return;
     }
 
-    const response = await axios.get("/api/profile", {
-      headers: {
-        Authorization: `Bearer ${token}`,  // Token diambil dari sessionStorage
-      },
-    });
-
-    // Set user data
-    user.value = response.data;
-  } catch (err) {
-    error.value = "Gagal mengambil data user.";
-  } finally {
-    loading.value = false;
-  }
-};
-
-// Edit Profile Function
-const editProfile = () => {
-  Swal.fire({
-    title: 'Edit Profile',
-    html: `
-      <input type="text" id="name" class="swal2-input" value="${user.value.name}" placeholder="Name" />
-      <input type="email" id="email" class="swal2-input" value="${user.value.email}" placeholder="Email" />
-      <input type="text" id="username" class="swal2-input" value="${user.value.username}" placeholder="Username" />
-    `,
-    focusConfirm: false,
-    preConfirm: () => {
-      const name = document.getElementById('name').value;
-      const email = document.getElementById('email').value;
-      const username = document.getElementById('username').value;
-
-      // Validasi input
-      if (!name || !email || !username) {
-        Swal.showValidationMessage('Harap isi semua field');
-        return false;
-      }
-
-      // Kirim request untuk memperbarui data
-      return axios.put("/api/profile", {
-        name: name,
-        email: email,
-        username: username,
-      }, {
-        headers: {
-          Authorization: `Bearer ${sessionStorage.getItem("token")}`,
-        },
-      })
-      .then((response) => {
-        if (response.data.success) {
-          Swal.fire('Profil berhasil diperbarui!', '', 'success');
-          user.value = response.data.user;  // Update the local user data
-        } else {
-          Swal.fire('Gagal memperbarui profil', '', 'error');
-        }
-      })
-      .catch((error) => {
-        Swal.fire('Terjadi kesalahan', '', 'error');
+    if (file.size > 2 * 1024 * 1024) {
+      Swal.fire({
+        icon: "error",
+        title: "Ukuran file terlalu besar",
+        text: "Maksimal ukuran file 2MB",
       });
+      event.target.value = "";
+      return;
     }
-  });
-};
 
-// Load data saat komponen dimount
-onMounted(fetchUserProfile);
-</script>
+    loading.value = true;
+    try {
+      const token = sessionStorage.getItem("token");
+      const formData = new FormData();
+      formData.append("profile_picture", file);
 
-<template>
-  <CRow>
-    <CCol sm="12" md="8" lg="6" class="mx-auto">
-      <CCard>
-        <CCardHeader>
-          <h4>Profil Pengguna</h4>
-        </CCardHeader>
-        <CCardBody v-if="loading">
-          <CSpinner color="primary" />
-        </CCardBody>
-        <CCardBody v-else-if="error">
-          <p class="text-danger">{{ error }}</p>
-        </CCardBody>
-        <CCardBody v-else>
-          <div class="text-center">
-            <CAvatar :src="`/storage/profile_pictures/${user.profile_picture}`" size="100" class="mb-3" />
-            <h5>{{ user.name }}</h5>
-            <p class="text-muted">{{ user.email }}</p>
-            <p><strong>Role:</strong> {{ user.role }}</p>
-            <p><strong>Status:</strong> {{ user.status === 'active' ? 'Aktif' : 'Nonaktif' }}</p>
-          </div>
-          <CForm>
-            <CFormInput label="Username" v-model="user.username" readonly />
-            <CButton color="primary" class="mt-3" @click="editProfile">Edit Profile</CButton>
-          </CForm>
-        </CCardBody>
-      </CCard>
-    </CCol>
-  </CRow>
-</template>
+      await axios.post(`/api/users/${user.value.id}?_method=PUT`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
-<style scoped>
-.text-center {
-  text-align: center;
-}
-</style>
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil!",
+        text: "Foto profil berhasil diperbarui.",
+      });
+
+      // Refresh profile data
+      await fetchUserProfile();
+      // Update auth store
+      await auth.fetchUser();
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Gagal!",
+        text: "Terjadi kesalahan saat memperbarui foto profil.",
+      });
+    } finally {
+      loading.value = false;
+      event.target.value = ""; // Reset input file
+    }
+  };
+
+  const resetForm = () => {
+    quickEditForm.value = {
+      name: user.value.name || "",
+      username: user.value.username || "",
+      email: user.value.email || "",
+      password: "",
+      role: user.value.role || "",
+      status: user.value.status || "",
+    };
+    validationErrors.value = {};
+  };
+
+  // Lifecycle
+  onMounted(fetchUserProfile);
+  </script>
+
+  <style scoped>
+  .profile-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .btn-sm.rounded-circle {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .profile-field {
+    margin-bottom: 1rem;
+  }
+
+  .profile-field label {
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    display: block;
+  }
+
+  .profile-field p {
+    font-weight: 500;
+  }
+  </style>

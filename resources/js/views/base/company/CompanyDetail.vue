@@ -64,7 +64,7 @@
   const fetchData = async () => {
     loading.value = true
     try {
-      const token = localStorage.getItem("token")
+        const token = sessionStorage.getItem('token')
       const id = route.params.id
 
       const [companyRes, incomeRes] = await Promise.all([

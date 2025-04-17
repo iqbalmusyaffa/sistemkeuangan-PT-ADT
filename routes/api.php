@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\Api\MerekController;
+use App\Http\Controllers\Api\UnitsController;
+use App\Http\Controllers\Api\PurchasematerialController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -21,47 +24,33 @@ use App\Http\Controllers\Api\ExpenseController;
 
 // Route::post('/register', [UserController::class, 'register']);
 Route::post('/login', [UserController::class, 'login']);
-Route::get('/categories', [KategoriTransaksiController::class, 'index']);
+
 
 Route::middleware('auth:sanctum')->group(function () {
     // Route::get('/user', function (Request $request) {
     //     return $request->user();
     // });
-    Route::get('/users', [UserController::class, 'index']);
-    Route::post('/users', [UserController::class, 'store']);
-    Route::put('/users/{id}', [UserController::class, 'update']);
-    Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    Route::apiResource('users', UserController::class);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // Category routes
-    Route::post('/categories', [KategoriTransaksiController::class, 'store']);
-    Route::get('/categories/{id}', [KategoriTransaksiController::class, 'show']);
-    Route::put('/categories/{id}', [KategoriTransaksiController::class, 'update']);
-    Route::delete('/categories/{id}', [KategoriTransaksiController::class, 'destroy']);
+    Route::apiResource('categories', KategoriTransaksiController::class);
     // Transaction routes
-    Route::get('/transactions', [TransactionController::class, 'index']);
-    Route::post('/transactions', [TransactionController::class, 'store']);
-    Route::get('/transactions/{id}', [TransactionController::class, 'show']);
-    Route::put('/transactions/{id}', [TransactionController::class, 'update']);
-    Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+    Route::apiResource('transactions', TransactionController::class);
     // Company routes
-    Route::get('/companies', [CompanyController::class, 'index']);
-    Route::post('/companies', [CompanyController::class, 'store']);
-    Route::get('/companies/{id}', [CompanyController::class, 'show']);
-    Route::put('/companies/{id}', [CompanyController::class, 'update']);
+    Route::apiResource('companies', CompanyController::class);
     // Income routes
-    Route::get('/incomes', [IncomeController::class, 'index']);
-    Route::post('/incomes', [IncomeController::class, 'store']);
-    Route::get('/incomes/{id}', [IncomeController::class, 'show']);
-    Route::put('/incomes/{id}', [IncomeController::class, 'update']);
-    Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
+    Route::apiResource('incomes', IncomeController::class);
 // Pengeluaran (Expense)
-Route::get('/expenses', [ExpenseController::class, 'index']);
-Route::get('/expenses/{id}', [ExpenseController::class, 'show']);
-Route::post('/expenses', [ExpenseController::class, 'store']);
-Route::put('/expenses/{id}', [ExpenseController::class, 'update']);
-Route::delete('/expenses/{id}', [ExpenseController::class, 'destroy']);
+    Route::apiResource('expenses', ExpenseController::class);
+    // Merek routes
+    Route::apiResource('mereks', MerekController::class);
+    // Unit routes
+    Route::apiResource('units', UnitsController::class);
+    // Purchasematerial routes
+    Route::apiResource('purchasematerials', PurchasematerialController::class);
+
 
     Route::post('/logout', [UserController::class, 'logout']);
 });

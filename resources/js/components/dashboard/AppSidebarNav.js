@@ -51,11 +51,34 @@ const AppSidebarNav = defineComponent({
     const route = useRoute()
     const firstRender = ref(true)
 
+    // Ambil role pengguna dari sessionStorage
+    const userRole = ref(sessionStorage.getItem('role'))
+
+    // Watch for changes in sessionStorage
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'role') {
+        userRole.value = e.newValue
+      }
+    })
+
+    // Check role on mount
     onMounted(() => {
       firstRender.value = false
+      userRole.value = sessionStorage.getItem('role')
+      console.log('Current role:', userRole.value) // Debug log
     })
 
     const renderItem = (item) => {
+      // Debug log untuk item yang memiliki roles
+      if (item.roles) {
+        console.log('Checking item:', item.name, 'Roles:', item.roles, 'User role:', userRole.value)
+      }
+
+      // Periksa apakah item memiliki role yang ditentukan
+      if (item.roles && !item.roles.includes(userRole.value)) {
+        return null // Jangan tampilkan item jika role tidak sesuai
+      }
+
       if (item.items) {
         return h(
           CNavGroup,
@@ -179,7 +202,7 @@ const AppSidebarNav = defineComponent({
           as: simplebar,
         },
         {
-          default: () => nav.map((item) => renderItem(item)),
+          default: () => nav.filter(item => !item.roles || item.roles.includes(userRole.value)).map((item) => renderItem(item)),
         },
       )
   },
