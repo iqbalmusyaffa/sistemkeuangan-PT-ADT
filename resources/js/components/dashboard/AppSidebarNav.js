@@ -65,13 +65,13 @@ const AppSidebarNav = defineComponent({
     onMounted(() => {
       firstRender.value = false
       userRole.value = sessionStorage.getItem('role')
-      console.log('Current role:', userRole.value) // Debug log
+    //   console.log('Current role:', userRole.value) // Debug log
     })
 
     const renderItem = (item) => {
       // Debug log untuk item yang memiliki roles
       if (item.roles) {
-        console.log('Checking item:', item.name, 'Roles:', item.roles, 'User role:', userRole.value)
+        // console.log('Checking item:', item.name, 'Roles:', item.roles, 'User role:', userRole.value)
       }
 
       // Periksa apakah item memiliki role yang ditentukan

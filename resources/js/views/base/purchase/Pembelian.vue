@@ -61,33 +61,33 @@
           <CRow class="mb-3">
             <CCol md="4">
               <CFormLabel for="qty">Jumlah</CFormLabel>
-              <CFormInput 
-                type="number" 
-                v-model.number="form.qty" 
-                id="qty" 
-                required 
-                @input="calculateTotal" 
+              <CFormInput
+                type="number"
+                v-model.number="form.qty"
+                id="qty"
+                required
+                @input="calculateTotal"
                 min="1"
               />
             </CCol>
             <CCol md="4">
               <CFormLabel for="harga">Harga</CFormLabel>
-              <CFormInput 
-                type="number" 
-                v-model.number="form.harga" 
-                id="harga" 
-                required 
-                @input="calculateTotal" 
+              <CFormInput
+                type="number"
+                v-model.number="form.harga"
+                id="harga"
+                required
+                @input="calculateTotal"
                 min="0"
               />
             </CCol>
             <CCol md="4">
               <CFormLabel for="total_harga">Total Harga</CFormLabel>
-              <CFormInput 
-                type="number" 
-                v-model.number="form.total_harga" 
-                id="total_harga" 
-                readonly 
+              <CFormInput
+                type="number"
+                v-model.number="form.total_harga"
+                id="total_harga"
+                readonly
                 class="bg-light"
               />
             </CCol>
@@ -145,7 +145,7 @@ const fetchMereks = async () => {
     });
     mereks.value = response.data;
   } catch (err) {
-    console.error("Gagal memuat merek:", err);
+    // console.error("Gagal memuat merek:", err);
   }
 };
 
@@ -157,7 +157,7 @@ const fetchUnits = async () => {
     });
     units.value = response.data;
   } catch (err) {
-    console.error("Gagal memuat unit:", err);
+    // console.error("Gagal memuat unit:", err);
   }
 };
 
@@ -198,29 +198,29 @@ const initDataTable = () => {
         render: (data, type, row, meta) => meta.row + 1,
       },
       { title: "Item", data: "item" },
-      { 
-        title: "Merek", 
+      {
+        title: "Merek",
         data: "merek",
         render: (data) => data ? data.merek_name : "-"
       },
       { title: "Tipe", data: "type" },
-      { 
-        title: "Unit", 
+      {
+        title: "Unit",
         data: "unit",
         render: (data) => data ? data.unit_name : "-"
       },
-      { 
-        title: "Jumlah", 
+      {
+        title: "Jumlah",
         data: "qty",
         render: (data) => data.toLocaleString()
       },
-      { 
-        title: "Harga", 
+      {
+        title: "Harga",
         data: "harga",
         render: (data) => `Rp ${data.toLocaleString()}`
       },
-      { 
-        title: "Total", 
+      {
+        title: "Total",
         data: "total_harga",
         render: (data) => `Rp ${data.toLocaleString()}`
       },
@@ -254,7 +254,7 @@ const calculateTotal = () => {
   // Ensure qty and harga are numbers
   const qty = parseFloat(form.value.qty) || 0;
   const harga = parseFloat(form.value.harga) || 0;
-  
+
   // Calculate total
   form.value.total_harga = qty * harga;
 };

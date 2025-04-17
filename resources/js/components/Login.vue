@@ -53,8 +53,8 @@
           if (response.success) {
             // Simpan role ke sessionStorage
             sessionStorage.setItem('role', response.data.role);
-            console.log('Role saved:', response.data.role); // Tambah log untuk debug
-            
+            // console.log('Role saved:', response.data.role); // Tambah log untuk debug
+
             Swal.fire({
               icon: 'success',
               title: 'Success!',

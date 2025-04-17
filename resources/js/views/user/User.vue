@@ -105,7 +105,7 @@ const currentProfilePicture = ref("");
     try {
       const token = sessionStorage.getItem("token");
       const userRole = sessionStorage.getItem("role");
-      
+
       if (userRole !== 'superadmin') {
         Swal.fire({
           icon: 'error',
@@ -145,8 +145,8 @@ const currentProfilePicture = ref("");
       { title: "Email", data: "email" },
       { title: "Username", data: "username" },
       { title: "Role", data: "role" },
-      { 
-        title: "Status", 
+      {
+        title: "Status",
         data: "status",
         render: (data, type, row) => {
           let statusClass = 'secondary';
@@ -246,7 +246,7 @@ const currentProfilePicture = ref("");
 const openModal = (mode, user = null) => {
   modalMode.value = mode;
   profilePictureFile.value = null;
-  
+
   if (mode === 'edit' && user) {
     name.value = user.name;
     email.value = user.email;
@@ -318,7 +318,7 @@ const handleSubmit = async () => {
   try {
     const token = sessionStorage.getItem("token");
     const userRole = sessionStorage.getItem("role");
-    
+
     if (userRole !== 'superadmin') {
       Swal.fire({
         icon: 'error',
@@ -366,7 +366,7 @@ const handleSubmit = async () => {
         loading.value = false;
         return;
       }
-      
+
       await axios.post("/api/users", formData, config);
       Swal.fire({
         icon: 'success',
@@ -378,12 +378,12 @@ const handleSubmit = async () => {
     closeModal();
     await fetchUsers();
   } catch (err) {
-    console.error("Error submitting form:", err);
+    // console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || err.message || "Terjadi kesalahan saat menyimpan data.";
-    Swal.fire({ 
-      icon: "error", 
-      title: "Oops...", 
-      text: errorMessage 
+    Swal.fire({
+      icon: "error",
+      title: "Oops...",
+      text: errorMessage
     });
   } finally {
     loading.value = false;
@@ -392,7 +392,7 @@ const handleSubmit = async () => {
 
 const deleteUser = async (id) => {
   const userRole = sessionStorage.getItem("role");
-  
+
   if (userRole !== 'superadmin') {
     Swal.fire({
       icon: 'error',
@@ -447,7 +447,7 @@ const updateUserStatus = async (id, newStatus) => {
     try {
       const token = sessionStorage.getItem("token");
       const userRole = sessionStorage.getItem("role");
-      
+
       if (userRole !== 'superadmin') {
         Swal.fire({
           icon: 'error',
@@ -461,7 +461,7 @@ const updateUserStatus = async (id, newStatus) => {
       formData.append('status', newStatus);
 
       await axios.put(`/api/users/${id}`, formData, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
