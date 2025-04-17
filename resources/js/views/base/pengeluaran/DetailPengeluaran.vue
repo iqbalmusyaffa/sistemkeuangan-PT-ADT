@@ -63,7 +63,7 @@
   }
 
   onMounted(async () => {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     const id = route.params.id
 
     try {

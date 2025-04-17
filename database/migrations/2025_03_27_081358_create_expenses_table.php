@@ -21,6 +21,8 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->date('transaction_date');
             $table->enum('status', ['Pending', 'Lunas'])->default('Pending');
+            // Kolom terkait dana
+            $table->decimal('prepared_fund', 15, 2);
             $table->string('bukti')->nullable();
             $table->timestamps();
         });

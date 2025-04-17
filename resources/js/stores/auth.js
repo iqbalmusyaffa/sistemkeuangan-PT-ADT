@@ -24,13 +24,19 @@ export const useAuthStore = defineStore('auth', {
     async login(email, password) {
       try {
         const response = await axios.post('/api/login', { email, password })
+        console.log('Login response:', response.data) // Debug log
+        
         const token = response.data.access_token
-        const expiry = Date.now() + 1 * 60 * 60 * 1000  // sesi 1jam 
+        const expiry = Date.now() + 1 * 60 * 60 * 1000  // sesi 1jam
 
         if (token) {
           this.setToken(token, expiry)
+          // Simpan role ke sessionStorage
+          sessionStorage.setItem('role', response.data.role)
+          console.log('Role saved in auth store:', response.data.role) // Debug log
+          
           await this.fetchUser()
-          return { success: true }
+          return { success: true, data: response.data }
         } else {
           return { success: false, message: 'Token not found in response.' }
         }
@@ -71,13 +77,15 @@ export const useAuthStore = defineStore('auth', {
     },
 
     logout(showAlert = false) {
+      // Clear state
       this.token = null
       this.tokenExpiry = null
       this.user = null
 
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('token_expiry')
+      // Clear session storage
+      sessionStorage.clear() // Hapus semua data session
 
+      // Clear axios header
       delete axios.defaults.headers.common['Authorization']
 
       if (showAlert) {

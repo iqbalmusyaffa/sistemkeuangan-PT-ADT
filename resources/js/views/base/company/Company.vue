@@ -79,7 +79,7 @@
     try {
       const response = await axios.get("/api/companies", {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${sessionStorage.getItem("token")}`,
         },
       });
       companies.value = response.data;
@@ -174,7 +174,7 @@
     };
 
     try {
-      const token = localStorage.getItem("token");
+        const token = sessionStorage.getItem('token')
 
       if (modalMode.value === "edit") {
         await axios.put(`/api/companies/${editingId.value}`, payload, {
@@ -210,7 +210,7 @@
 
     if (result.isConfirmed) {
       try {
-        const token = localStorage.getItem("token");
+        const token = sessionStorage.getItem('token')
         await axios.delete(`/api/companies/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });

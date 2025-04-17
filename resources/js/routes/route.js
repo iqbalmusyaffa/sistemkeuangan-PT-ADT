@@ -25,18 +25,36 @@ const routes = [
         path: '/kategori',
         name: 'Kategori',
         component: () => import('@/views/kategori/Kategori.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true,requiresSuperadmin: true },
       },
       {
         path: '/user',
         name: 'User',
         component: () => import('@/views/user/User.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true,requiresSuperadmin: true },
       },
       {
         path: '/profile',
         name: 'Profile',
         component: () => import('@/views/profile/Profile.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/base/merek',
+        name: 'Merek',
+        component: () => import('@/views/base/merek/Merek.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/base/unit',
+        name: 'Unit',
+        component: () => import('@/views/base/unit/Unit.vue'),
+        meta: { requiresAuth: true, },
+      },
+      {
+        path: '/base/purchase/pembelian',
+        name: 'Pembelian',
+        component: () => import('@/views/base/purchase/Pembelian.vue'),
         meta: { requiresAuth: true },
       },
       {
@@ -136,6 +154,7 @@ const router = createRouter({
 // Middleware untuk proteksi halaman dengan token
 router.beforeEach(async (to, from, next) => {
   const token = sessionStorage.getItem('token')
+  const role = sessionStorage.getItem('role');  // Ambil role dari sessionStorage
 
   // Jika sudah login, redirect dari login ke dashboard
   if (token && (to.path === '/login')) {
@@ -155,14 +174,19 @@ router.beforeEach(async (to, from, next) => {
       // Jika user tidak ada atau tidak aktif, redirect ke login atau halaman lain
       if (!response.data || response.data.status !== 'active') {
         sessionStorage.removeItem('token') // Hapus token jika user tidak valid
+        sessionStorage.removeItem('role');  // Hapus role jika user tidak valid
         return next('/login')
       }
-
+ // Cek apakah role sesuai untuk route ini
+ if (to.meta.requiresSuperadmin && role !== 'superadmin') {
+    return next('/dashboard');  // Arahkan ke dashboard jika bukan superadmin
+  }
       // Jika user valid, lanjutkan ke route yang diminta
       return next()
     } catch (error) {
       // Jika ada error pada pengecekan profil (misalnya token expired)
       sessionStorage.removeItem('token')
+      sessionStorage.removeItem('role');
       return next('/login')
     }
   }

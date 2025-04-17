@@ -12,26 +12,59 @@ export default [
     {
       component: 'CNavTitle',
       name: 'Manajemen Pengguna',
+      roles: ['superadmin'], // Role yang bisa mengakses
+
     },
     {
       component: 'CNavItem',
       name: 'User',
       to: '/user',
       icon: 'cil-user',
+      roles: ['superadmin'], // Role yang bisa mengakses
+
     },
     {
       component: 'CNavItem',
       name: 'Kategori',
       to: '/kategori',
       icon: 'cil-list',
+      roles: ['superadmin'], // Role yang bisa mengakses
+
     },
     {
-      component: 'CNavTitle',
-      name: 'Master Data',
-    },
+        component: 'CNavTitle',
+        name: 'Master Data Pembelian',
+      },
+    {
+        component: 'CNavGroup',
+        name: 'Master Data Pembelian',
+        to: '/base',
+        icon: 'cil-folder',
+        items: [
+          {
+              component: 'CNavItem',
+              name: 'Merek',
+              to: '/base/merek',
+            },
+            {
+              component: 'CNavItem',
+              name: 'Unit',
+              to: '/base/unit',
+            },
+            {
+              component: 'CNavItem',
+              name: 'Pembelian Material',
+              to: '/base/purchase/pembelian',
+            },
+        ],
+      },
+      {
+        component: 'CNavTitle',
+        name: 'Master Data Transaksi',
+      },
     {
       component: 'CNavGroup',
-      name: 'Master Data',
+      name: 'Master Data Transaksi',
       to: '/base',
       icon: 'cil-folder',
       items: [

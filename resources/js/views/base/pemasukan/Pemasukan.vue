@@ -137,7 +137,7 @@
   const fetchData = async () => {
     loading.value = true
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const [incomeRes, companyRes, categoryRes] = await Promise.all([
         axios.get('/api/incomes', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/companies', { headers: { Authorization: `Bearer ${token}` } }),
@@ -254,7 +254,7 @@
         return Swal.fire('Gagal', 'Kode transaksi harus diisi secara manual.', 'warning')
       }
 
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const payload = {
         company_id: selectedCompanyId.value,
         category_id: selectedCategoryId.value,
@@ -297,7 +297,7 @@
 
   if (konfirmasi.isConfirmed) {
     try {
-      const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
       await axios.delete(`/api/incomes/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
