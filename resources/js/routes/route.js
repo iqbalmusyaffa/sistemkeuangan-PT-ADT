@@ -58,6 +58,24 @@ const routes = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/base/project/project',
+        name: 'Project',
+        component: () => import('@/views/base/project/Project.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/base/project/:id/detail',
+        name: 'ProjectDetail',
+        component: () => import('@/views/base/project/ProjectDetail.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/base/termin/termin',
+        name: 'Termin',
+        component: () => import('@/views/base/termin/Termin.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/base/company',
         name: 'DataPerusahaan',
         component: () => import('@/views/base/company/Company.vue'),

@@ -13,6 +13,6 @@ class Merek extends Model
     protected $fillable = ['name', 'deskripsi'];
     public function purchasematerials()
     {
-        return $this->hasMany(Purchasematerial::class); 
+        return $this->hasMany(Purchasematerial::class);
     }
 }

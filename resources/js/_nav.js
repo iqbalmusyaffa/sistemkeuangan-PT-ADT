@@ -9,6 +9,7 @@ export default [
         text: 'NEW',
       },
     },
+
     {
       component: 'CNavTitle',
       name: 'Manajemen Pengguna',
@@ -50,6 +51,23 @@ export default [
               component: 'CNavItem',
               name: 'Unit',
               to: '/base/unit',
+            },
+        ],
+      },
+      {
+        component: 'CNavTitle',
+        name: 'Master Data Proyek',
+      },
+    {
+        component: 'CNavGroup',
+        name: 'Master Data Proyek',
+        to: '/base',
+        icon: 'cil-folder',
+        items: [
+            {
+              component: 'CNavItem',
+              name: 'Proyek',
+              to: '/base/project/project',
             },
             {
               component: 'CNavItem',
@@ -95,6 +113,11 @@ export default [
         },
       ],
     },
+    // kolom master data penjualan
+    {
+        component: 'CNavTitle',
+        name: 'Master Data Pembelian',
+      },
     {
       component: 'CNavTitle',
       name: 'Lainnya',

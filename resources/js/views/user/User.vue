@@ -60,7 +60,6 @@
                   id="profile_picture"
                   @change="handleFileUpload"
                   accept="image/*"
-                  :required="modalMode === 'tambah'"
                 />
                 <small class="text-muted">Max size 2MB (JPEG, PNG, JPG)</small>
               </CCol>
@@ -87,7 +86,7 @@ const name = ref("");
 const email = ref("");
 const username = ref("");
 const password = ref("");
-const role = ref("user");
+const role = ref("admin");
 const users = ref([]);
 const error = ref("");
 const loading = ref(false);
@@ -272,7 +271,7 @@ const resetForm = () => {
   email.value = "";
   username.value = "";
   password.value = "";
-  role.value = "user";
+  role.value = "admin";
   currentProfilePicture.value = "";
   profilePictureFile.value = null;
   editingId.value = null;
@@ -360,13 +359,6 @@ const handleSubmit = async () => {
         text: 'Data user berhasil diperbarui',
       });
     } else {
-      // Validasi tambahan untuk mode tambah
-      if (!profilePictureFile.value) {
-        error.value = "Foto profil wajib diisi!";
-        loading.value = false;
-        return;
-      }
-
       await axios.post("/api/users", formData, config);
       Swal.fire({
         icon: 'success',
@@ -378,7 +370,7 @@ const handleSubmit = async () => {
     closeModal();
     await fetchUsers();
   } catch (err) {
-    // console.error("Error submitting form:", err);
+    console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || err.message || "Terjadi kesalahan saat menyimpan data.";
     Swal.fire({
       icon: "error",
@@ -457,15 +449,16 @@ const updateUserStatus = async (id, newStatus) => {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('status', newStatus);
-
-      await axios.put(`/api/users/${id}`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
+      // Send status update as JSON instead of FormData
+      await axios.put(`/api/users/${id}`, 
+        { status: newStatus },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
 
       Swal.fire({
         icon: 'success',
@@ -475,6 +468,7 @@ const updateUserStatus = async (id, newStatus) => {
 
       fetchUsers();
     } catch (err) {
+      console.error("Error updating status:", err);
       handleError('Gagal mengubah status user', err);
     }
   }

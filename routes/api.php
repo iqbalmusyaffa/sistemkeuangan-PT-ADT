@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\MerekController;
 use App\Http\Controllers\Api\UnitsController;
 use App\Http\Controllers\Api\PurchasematerialController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\TerminController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -50,7 +52,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('units', UnitsController::class);
     // Purchasematerial routes
     Route::apiResource('purchasematerials', PurchasematerialController::class);
+    // Project routes
+    Route::apiResource('projects', ProjectController::class);
 
+    // Termin routes
+    Route::apiResource('termins', TerminController::class);
+    Route::get('/projects/{projectId}/termins', [TerminController::class, 'getByProject']);
+    Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']);
 
     Route::post('/logout', [UserController::class, 'logout']);
 });

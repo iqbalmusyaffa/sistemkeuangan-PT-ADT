@@ -1,89 +1,126 @@
 <template>
-    <div class="d-flex justify-content-center align-items-center min-vh-100 bg-light">
-      <div class="row w-100 align-items-center">
-        <div class="col-lg-6 col-md-8 col-11 mx-auto">
-          <div class="card shadow-lg border-0 rounded-4 p-4">
-            <h5 class="text-primary">Login</h5>
-            <h2 class="fw-bold">Hi, welcome back!</h2>
-            <p class="text-muted">Please enter your credentials to access your account.</p>
-            <form @submit.prevent="login">
-              <div class="mb-3">
-                <label for="email" class="form-label">Email address</label>
-                <input type="email" class="form-control" id="email" v-model="email" required />
-              </div>
-              <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" class="form-control" id="password" v-model="password" required />
-              </div>
-              <div class="d-flex justify-content-between">
-                <button type="submit" class="btn btn-primary" :disabled="isLoading">
-                  <span v-if="isLoading">Loading...</span>
-                  <span v-else>Login</span>
-                </button>
-                <a href="#" class="text-muted">Forgot password?</a>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  </template>
+  <div class="wrapper min-vh-100 d-flex flex-row align-items-center">
+    <CContainer>
+      <CRow class="justify-content-center">
+        <CCol :md="8">
+          <CCardGroup>
+            <CCard class="p-4">
+              <CCardBody>
+                <CForm @submit.prevent="login">
+                  <h1>Login</h1>
+                  <p class="text-body-secondary">Sign In to your account</p>
+                  <CInputGroup class="mb-3">
+                    <CInputGroupText>
+                      <CIcon icon="cil-user" />
+                    </CInputGroupText>
+                    <CFormInput
+                      v-model="email"
+                      placeholder="Email"
+                      autocomplete="email"
+                      required
+                    />
+                  </CInputGroup>
+                  <CInputGroup class="mb-4">
+                    <CInputGroupText>
+                      <CIcon icon="cil-lock-locked" />
+                    </CInputGroupText>
+                    <CFormInput
+                      v-model="password"
+                      type="password"
+                      placeholder="Password"
+                      autocomplete="current-password"
+                      required
+                    />
+                  </CInputGroup>
+                  <CRow>
+                    <CCol :xs="6">
+                      <CButton color="primary" class="px-4" type="submit" :disabled="isLoading">
+                        {{ isLoading ? 'Loading...' : 'Login' }}
+                      </CButton>
+                    </CCol>
+                    <CCol :xs="6" class="text-right">
+                      <CButton color="link" class="px-0">
+                        Forgot password?
+                      </CButton>
+                    </CCol>
+                  </CRow>
+                </CForm>
+              </CCardBody>
+            </CCard>
+            <CCard class="text-white bg-primary py-5" style="width: 44%">
+              <CCardBody class="text-center">
+                <div>
+                  <h2>Sign up</h2>
+                  <p>
+                    Lorem ipsum dolor sit amet, consectetur adipisicing elit,
+                    sed do eiusmod tempor incididunt ut labore et dolore magna
+                    aliqua.
+                  </p>
+                  <CButton color="light" variant="outline" class="mt-3">
+                    Register Now!
+                  </CButton>
+                </div>
+              </CCardBody>
+            </CCard>
+          </CCardGroup>
+        </CCol>
+      </CRow>
+    </CContainer>
+  </div>
+</template>
 
-  <script>
-  import Swal from 'sweetalert2';
-  import { useAuthStore } from '@/stores/auth';
+<script>
+import Swal from 'sweetalert2';
+import { useAuthStore } from '@/stores/auth';
 
-  export default {
-    data() {
-      return {
-        email: '',
-        password: '',
-        isLoading: false,
-      };
-    },
-    methods: {
-      async login() {
-        const auth = useAuthStore();
-        this.isLoading = true;
+export default {
+  data() {
+    return {
+      email: '',
+      password: '',
+      isLoading: false,
+    };
+  },
+  methods: {
+    async login() {
+      const auth = useAuthStore();
+      this.isLoading = true;
 
-        try {
-          const response = await auth.login(this.email, this.password);
+      try {
+        const response = await auth.login(this.email, this.password);
 
-          // Jika berhasil, redirect ke dashboard
-          if (response.success) {
-            // Simpan role ke sessionStorage
-            sessionStorage.setItem('role', response.data.role);
-            // console.log('Role saved:', response.data.role); // Tambah log untuk debug
+        if (response.success) {
+          sessionStorage.setItem('role', response.data.role);
 
-            Swal.fire({
-              icon: 'success',
-              title: 'Success!',
-              text: 'Login successful!',
-            });
-            this.$router.push('/dashboard');
-          } else {
-            Swal.fire({
-              icon: 'error',
-              title: 'Login Failed',
-              text: response.message || 'Invalid login credentials.',
-            });
-          }
-        } catch (error) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Success!',
+            text: 'Login successful!',
+          });
+          this.$router.push('/dashboard');
+        } else {
           Swal.fire({
             icon: 'error',
-            title: 'Error',
-            text: 'Something went wrong during login.',
+            title: 'Login Failed',
+            text: response.message || 'Invalid login credentials.',
           });
-        } finally {
-          this.isLoading = false;
         }
-      },
+      } catch (error) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: 'Something went wrong during login.',
+        });
+      } finally {
+        this.isLoading = false;
+      }
     },
-  };
-  </script>
+  },
+};
+</script>
 
-  <style scoped>
-  .card {
-    background-color: #ffffff;
-  }
-  </style>
+<style scoped>
+.wrapper {
+  background-color: #f5f5f5;
+}
+</style>

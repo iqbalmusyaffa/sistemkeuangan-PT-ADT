@@ -13,15 +13,13 @@ return new class extends Migration
     {
         Schema::create('purchasematerials', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('project_id')->constrained('projects')->onDelete('cascade');
             $table->string('item');
-            $table->foreignId('merek_id')
-                  ->constrained('mereks')
-                  ->onDelete('cascade');
+            $table->foreignId('merek_id')->constrained('mereks')->onDelete('cascade');
             $table->string('type');
             $table->text('spesifikasi')->nullable();
-            $table->foreignId('unit_id')
-            ->constrained('units')
-            ->onDelete('cascade');
+            $table->foreignId('unit_id')->constrained('units')->onDelete('cascade');
+            $table->foreignId('category_id')->constrained('kategoris')->onDelete('cascade');
             $table->integer('qty');
             $table->decimal('harga', 15, 2);
             $table->decimal('total_harga', 15, 2);
