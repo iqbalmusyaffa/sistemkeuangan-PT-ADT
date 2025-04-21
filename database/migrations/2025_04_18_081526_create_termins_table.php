@@ -15,11 +15,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('project_id')->constrained('projects')->onDelete('cascade');
             $table->string('nama_termin');
+            $table->decimal('nilai_termin', 18, 2);
             $table->decimal('dp_percentage', 5, 2)->default(0);
             $table->decimal('nilai_dp', 18, 2)->default(0);
             $table->decimal('nilai_pelunasan', 18, 2)->default(0);
             $table->date('tanggal_dp')->nullable();
-            $table->date('tanggal_pelunasan')->nullable(); 
+            $table->date('tanggal_pelunasan')->nullable();
             $table->enum('status_termin', ['Belum Dibayar', 'DP Dibayar', 'Lunas'])->default('Belum Dibayar');
             $table->text('keterangan')->nullable();
             $table->timestamps();

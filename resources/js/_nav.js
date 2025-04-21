@@ -74,6 +74,7 @@ export default [
               name: 'Pembelian Material',
               to: '/base/purchase/pembelian',
             },
+
         ],
       },
       {
@@ -111,6 +112,11 @@ export default [
           name: 'Kasbon',
           to: '/base/kasbon',
         },
+        {
+            component: 'CNavItem',
+            name: 'termin',
+            to: '/base/termin/termin',
+          },
       ],
     },
     // kolom master data penjualan

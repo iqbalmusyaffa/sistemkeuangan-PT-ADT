@@ -18,34 +18,38 @@ class PurchasematerialController extends Controller
      */
     public function index(Request $request)
     {
-        if ($request->ajax()) {
-            $query = Purchasematerial::with(['unit', 'merek', 'category', 'project']);
-            
-            // Filter by project if project_id is provided
-            if ($request->has('project_id') && $request->project_id) {
-                $query->where('project_id', $request->project_id);
+        try {
+            if (!$request->has('project_id')) {
+                return response()->json([
+                    'error' => 'Project ID harus dipilih'
+                ], 400);
             }
-            
-            $data = $query->get();
-            
-            return DataTables::of($data)
-                ->addIndexColumn()
-                ->addColumn('action', function($row){
-                    return '<button class="btn btn-sm btn-primary edit-btn" data-id="'.$row->id.'">Edit</button>
-                            <button class="btn btn-sm btn-danger delete-btn" data-id="'.$row->id.'">Hapus</button>';
-                })
-                ->rawColumns(['action'])
-                ->make(true);
-        }
 
-        $query = Purchasematerial::with(['unit', 'merek', 'category', 'project']);
-        
-        // Filter by project if project_id is provided
-        if ($request->has('project_id') && $request->project_id) {
-            $query->where('project_id', $request->project_id);
+            $projectId = $request->project_id;
+            
+            // Verify project exists
+            $project = Project::find($projectId);
+            if (!$project) {
+                return response()->json([
+                    'error' => 'Project tidak ditemukan'
+                ], 404);
+            }
+
+            // Get purchases for this project only
+            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'project'])
+                ->where('project_id', $projectId)
+                ->get();
+
+            return response()->json([
+                'project' => $project,
+                'purchases' => $purchases
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in PurchasematerialController@index: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Terjadi kesalahan saat mengambil data'
+            ], 500);
         }
-        
-        return response()->json($query->get());
     }
 
     /**
@@ -57,7 +61,7 @@ class PurchasematerialController extends Controller
             // Check if the category is a service
             $category = Kategori::find($request->category_id);
             $isService = $category && str_contains(strtolower($category->nama_kategori), 'jasa');
-            
+
             // Define validation rules
             $rules = [
                 'item' => 'required|string|max:255',
@@ -70,19 +74,19 @@ class PurchasematerialController extends Controller
                 'deskripsi' => 'nullable|string',
                 'project_id' => 'required|exists:projects,id',
             ];
-            
+
             // Add merek_id validation based on category type
             if (!$isService) {
                 $rules['merek_id'] = 'required|exists:mereks,id';
             } else {
                 $rules['merek_id'] = 'nullable|exists:mereks,id';
             }
-            
+
             $validatedData = $request->validate($rules);
 
             // Calculate total_harga
             $total_harga = $validatedData['qty'] * $validatedData['harga'];
-            
+
             // Prepare data for creation
             $data = [
                 'item' => $validatedData['item'],
@@ -144,11 +148,11 @@ class PurchasematerialController extends Controller
     {
         try {
             $purchasematerial = Purchasematerial::findOrFail($id);
-            
+
             // Check if the category is a service
             $category = Kategori::find($request->category_id);
             $isService = $category && str_contains(strtolower($category->nama_kategori), 'jasa');
-            
+
             // Define validation rules
             $rules = [
                 'item' => 'required|string|max:255',
@@ -161,19 +165,19 @@ class PurchasematerialController extends Controller
                 'deskripsi' => 'nullable|string',
                 'project_id' => 'required|exists:projects,id',
             ];
-            
+
             // Add merek_id validation based on category type
             if (!$isService) {
                 $rules['merek_id'] = 'required|exists:mereks,id';
             } else {
                 $rules['merek_id'] = 'nullable|exists:mereks,id';
             }
-            
+
             $validatedData = $request->validate($rules);
 
             // Calculate total_harga
             $total_harga = $validatedData['qty'] * $validatedData['harga'];
-            
+
             // Prepare data for update
             $data = [
                 'item' => $validatedData['item'],
@@ -245,4 +249,10 @@ class PurchasematerialController extends Controller
             ], 500);
         }
     }
+    public function getProjects(Request $request)
+{
+    $projects = Project::all();
+    return response()->json($projects);
+}
+
 }

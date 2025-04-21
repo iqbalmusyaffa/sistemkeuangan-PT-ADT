@@ -4,15 +4,86 @@
       <CCard>
         <CCardHeader>
           <CIcon icon="cil-money" /> Manajemen Termin
-          <CButton color="primary" @click="openModal('tambah')" class="float-end">
+          <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject">
             Tambah Termin
           </CButton>
         </CCardHeader>
         <CCardBody>
           <div v-if="error" class="alert alert-danger">{{ error }}</div>
           <div v-if="loading" class="alert alert-info">Loading...</div>
-          <div class="w-100">
-            <table ref="terminTableRef" class="display nowrap"></table>
+
+          <!-- Project Filter -->
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="project_filter">Pilih Project</CFormLabel>
+              <CFormSelect 
+                v-model="selectedProject" 
+                id="project_filter" 
+                @change="filterByProject"
+              >
+                <option value="">-- Pilih Project --</option>
+                <option 
+                  v-for="project in projects" 
+                  :key="project.id" 
+                  :value="project.id"
+                  :data-nama-project="project.nama_project"
+                >
+                  {{ project.nama_customer }} - {{ project.nama_project }}
+                </option>
+              </CFormSelect>
+            </CCol>
+            <!-- Ganti Project Button -->
+            <CCol md="6" class="text-end">
+              <CButton
+                color="secondary"
+                v-if="selectedProject"
+                @click="changeProject"
+                class="mt-2"
+              >
+                Ganti Project
+              </CButton>
+            </CCol>
+          </CRow>
+
+          <!-- Tabel Termin -->
+          <div v-if="selectedProject">
+            <div class="w-100">
+              <table ref="terminTableRef" class="display nowrap"></table>
+            </div>
+
+            <!-- Ringkasan Biaya -->
+            <div class="total-section mt-3">
+              <div class="card">
+                <div class="card-body">
+                  <h5>Ringkasan Termin:</h5>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <table class="table table-sm">
+                        <tr>
+                          <td>Total Nilai Termin</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalTermin) }}</td>
+                        </tr>
+                        <tr>
+                          <td>Total DP</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalDP) }}</td>
+                        </tr>
+                        <tr>
+                          <td>Total Pelunasan</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalPelunasan) }}</td>
+                        </tr>
+                        <tr class="fw-bold">
+                          <td>Total Keseluruhan</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</td>
+                        </tr>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="alert alert-info">
+            Silakan pilih project terlebih dahulu untuk melihat data termin
           </div>
         </CCardBody>
       </CCard>
@@ -27,9 +98,15 @@
               <CFormLabel for="project_id">Project</CFormLabel>
               <CFormSelect v-model="form.project_id" id="project_id" required>
                 <option value="">Pilih Project</option>
-                <option v-for="project in projects" :key="project.id" :value="project.id">
-                  {{ project.nama_project }} - {{ project.nama_customer }}
-                </option>
+                <optgroup v-for="(projectGroup, customer) in groupedProjects" 
+                         :key="customer" 
+                         :label="customer">
+                  <option v-for="project in projectGroup" 
+                          :key="project.id" 
+                          :value="project.id">
+                    {{ project.nama_project }}
+                  </option>
+                </optgroup>
               </CFormSelect>
             </CCol>
           </CRow>
@@ -42,7 +119,16 @@
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="nilai_termin">Nilai Termin</CFormLabel>
-              <CFormInput type="number" v-model.number="form.nilai_termin" id="nilai_termin" required @input="calculateValues" min="0" />
+              <div class="input-group">
+                <span class="input-group-text">Rp</span>
+                <CFormInput
+                  type="text"
+                  :value="form.displayNilaiTermin"
+                  @input="handleNilaiTerminInput"
+                  id="nilai_termin"
+                  required
+                />
+              </div>
             </CCol>
             <CCol md="6">
               <CFormLabel for="dp_percentage">Persentase DP (%)</CFormLabel>
@@ -52,11 +138,28 @@
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="nilai_dp">Nilai DP</CFormLabel>
-              <CFormInput type="number" v-model.number="form.nilai_dp" id="nilai_dp" readonly class="bg-light" />
+              <div class="input-group">
+                <span class="input-group-text">Rp</span>
+                <CFormInput
+                  type="text"
+                  :value="form.displayNilaiDP"
+                  @input="handleNilaiDPInput"
+                  id="nilai_dp"
+                />
+              </div>
             </CCol>
             <CCol md="6">
               <CFormLabel for="nilai_pelunasan">Nilai Pelunasan</CFormLabel>
-              <CFormInput type="number" v-model.number="form.nilai_pelunasan" id="nilai_pelunasan" readonly class="bg-light" />
+              <div class="input-group">
+                <span class="input-group-text">Rp</span>
+                <CFormInput
+                  type="text"
+                  :value="form.displayNilaiPelunasan"
+                  id="nilai_pelunasan"
+                  readonly
+                  class="bg-light"
+                />
+              </div>
             </CCol>
           </CRow>
           <CRow class="mb-3">
@@ -124,7 +227,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from "vue";
+import { ref, onMounted, nextTick, watch, computed } from "vue";
 import axios from "axios";
 import $ from "jquery";
 import Swal from "sweetalert2";
@@ -137,13 +240,16 @@ const form = ref({
   project_id: "",
   nama_termin: "",
   nilai_termin: 0,
-  dp_percentage: 50, // Default 50% down payment
+  dp_percentage: 50,
   nilai_dp: 0,
   nilai_pelunasan: 0,
   tanggal_dp: "",
   tanggal_pelunasan: "",
   status_termin: "Belum Dibayar",
-  keterangan: ""
+  keterangan: "",
+  displayNilaiTermin: "0",
+  displayNilaiDP: "0",
+  displayNilaiPelunasan: "0"
 });
 
 const statusForm = ref({
@@ -163,7 +269,9 @@ const modalButtonText = ref("Simpan");
 const modalMode = ref("tambah");
 const editingId = ref(null);
 const updatingStatusId = ref(null);
+const selectedProject = ref("");
 
+// Fetch Projects
 const fetchProjects = async () => {
   try {
     const token = sessionStorage.getItem("token");
@@ -176,17 +284,39 @@ const fetchProjects = async () => {
   }
 };
 
-const fetchTermins = async () => {
+const fetchTermins = async (projectId = null) => {
   loading.value = true;
   error.value = "";
 
   try {
-    const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/termins", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    if (!projectId) {
+      termins.value = [];
+      return;
+    }
 
-    termins.value = response.data;
+    const token = sessionStorage.getItem("token");
+    
+    // Fetch both termins and purchases
+    const [terminResponse, purchaseResponse] = await Promise.all([
+      axios.get(`/api/projects/${projectId}/termins`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      axios.get(`/api/purchasematerials?project_id=${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ]);
+
+    termins.value = terminResponse.data;
+    
+    // Calculate total from purchases
+    const totalPurchase = purchaseResponse.data.purchases.reduce((sum, purchase) => {
+      return sum + Number(purchase.total_harga);
+    }, 0);
+
+    // Update form with total purchase value
+    form.value.nilai_termin = totalPurchase;
+    form.value.displayNilaiTermin = formatCurrency(totalPurchase);
+    calculateValues();
 
     nextTick(() => {
       initDataTable();
@@ -204,6 +334,8 @@ const calculateValues = () => {
   if (form.value.nilai_termin && form.value.dp_percentage) {
     form.value.nilai_dp = form.value.nilai_termin * (form.value.dp_percentage / 100);
     form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
   }
 };
 
@@ -219,29 +351,38 @@ const initDataTable = () => {
       { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
       { 
         title: "Project", 
-        data: "project",
-        render: (data) => data ? `${data.nama_project} - ${data.nama_customer}` : "-"
+        data: null,
+        render: (data, type, row) => {
+          const project = row.project || {};
+          return project.nama_project && project.nama_customer ? 
+            `${project.nama_project} - ${project.nama_customer}` : 
+            "-";
+        }
       },
       { title: "Nama Termin", data: "nama_termin" },
       {
         title: "Nilai Termin",
         data: "nilai_termin",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
+        render: (data) => `Rp ${formatCurrency(data)}`
       },
       {
         title: "DP (%)",
         data: "dp_percentage",
-        render: (data) => `${data}%`
+        render: (data, type, row) => row.status_termin === "Lunas" ? "100%" : `${data}%`
       },
       {
         title: "Nilai DP",
         data: "nilai_dp",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
+        render: (data, type, row) => row.status_termin === "Lunas" ? 
+          `Rp ${formatCurrency(row.nilai_termin)}` : 
+          `Rp ${formatCurrency(data)}`
       },
       {
         title: "Nilai Pelunasan",
         data: "nilai_pelunasan",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
+        render: (data, type, row) => row.status_termin === "Lunas" ? 
+          "Rp 0" : 
+          `Rp ${formatCurrency(data)}`
       },
       {
         title: "Status",
@@ -286,8 +427,25 @@ const initDataTable = () => {
   });
 };
 
+const filterByProject = async () => {
+  if (selectedProject.value) {
+    await fetchTermins(selectedProject.value);
+  } else {
+    termins.value = [];
+    if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
+      $(terminTableRef.value).DataTable().destroy();
+      $(terminTableRef.value).empty();
+    }
+  }
+};
+
+// Watch for changes in selectedProject
+watch(selectedProject, async (newValue) => {
+  await filterByProject();
+});
+
 // Open Modal for Add/Edit
-const openModal = (mode, termin = null) => {
+const openModal = async (mode, termin = null) => {
   modalMode.value = mode;
   if (mode === "edit" && termin) {
     form.value = {
@@ -300,24 +458,50 @@ const openModal = (mode, termin = null) => {
       tanggal_dp: termin.tanggal_dp || "",
       tanggal_pelunasan: termin.tanggal_pelunasan || "",
       status_termin: termin.status_termin,
-      keterangan: termin.keterangan || ""
+      keterangan: termin.keterangan || "",
+      displayNilaiTermin: formatCurrency(termin.nilai_termin),
+      displayNilaiDP: formatCurrency(termin.nilai_dp),
+      displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan)
     };
     editingId.value = termin.id;
     modalTitle.value = "Edit Termin";
     modalButtonText.value = "Update";
   } else {
-    form.value = {
-      project_id: "",
-      nama_termin: "",
-      nilai_termin: 0,
-      dp_percentage: 50, // Default 50% down payment
-      nilai_dp: 0,
-      nilai_pelunasan: 0,
-      tanggal_dp: "",
-      tanggal_pelunasan: "",
-      status_termin: "Belum Dibayar",
-      keterangan: ""
-    };
+    // Fetch total purchase value for the selected project
+    try {
+      const token = sessionStorage.getItem("token");
+      const projectId = selectedProject.value;
+      const response = await axios.get(`/api/purchasematerials?project_id=${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const totalPurchase = response.data.purchases.reduce((sum, purchase) => {
+        return sum + Number(purchase.total_harga);
+      }, 0);
+
+      form.value = {
+        project_id: selectedProject.value || "",
+        nama_termin: "",
+        nilai_termin: totalPurchase,
+        dp_percentage: 50,
+        nilai_dp: totalPurchase * 0.5,
+        nilai_pelunasan: totalPurchase * 0.5,
+        tanggal_dp: "",
+        tanggal_pelunasan: "",
+        status_termin: "Belum Dibayar",
+        keterangan: "",
+        displayNilaiTermin: formatCurrency(totalPurchase),
+        displayNilaiDP: formatCurrency(totalPurchase * 0.5),
+        displayNilaiPelunasan: formatCurrency(totalPurchase * 0.5)
+      };
+    } catch (err) {
+      console.error("Failed to fetch purchase total:", err);
+      Swal.fire({ 
+        icon: "error", 
+        title: "Oops...", 
+        text: "Gagal mengambil data total pembelian" 
+      });
+    }
     editingId.value = null;
     modalTitle.value = "Tambah Termin";
     modalButtonText.value = "Simpan";
@@ -394,7 +578,7 @@ const handleSubmit = async () => {
     }
 
     closeModal();
-    await fetchTermins();
+    await fetchTermins(selectedProject.value);
   } catch (err) {
     Swal.fire({ icon: "error", title: "Oops...", text: "Terjadi kesalahan." });
   } finally {
@@ -402,20 +586,47 @@ const handleSubmit = async () => {
   }
 };
 
-// Handle Status Update
+// Add watch for status_termin changes
+watch(() => form.value.status_termin, (newStatus) => {
+  if (newStatus === "Lunas") {
+    form.value.nilai_pelunasan = 0;
+    form.value.displayNilaiPelunasan = formatCurrency(0);
+    
+    // Update DP to match total nilai termin
+    form.value.nilai_dp = form.value.nilai_termin;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_termin);
+    form.value.dp_percentage = 100;
+  }
+});
+
+// Modify handleStatusUpdate function
 const handleStatusUpdate = async () => {
   loading.value = true;
   error.value = "";
 
   try {
     const token = sessionStorage.getItem("token");
+    
+    // If status is changing to Lunas, update the values
+    if (statusForm.value.status_termin === "Lunas") {
+      const termin = termins.value.find(t => t.id === updatingStatusId.value);
+      if (termin) {
+        statusForm.value = {
+          ...statusForm.value,
+          nilai_pelunasan: 0,
+          nilai_dp: termin.nilai_termin,
+          dp_percentage: 100
+        };
+      }
+    }
+
     await axios.put(`/api/termins/${updatingStatusId.value}/status`, statusForm.value, {
       headers: { Authorization: `Bearer ${token}` },
     });
     
     Swal.fire({ icon: "success", title: "Berhasil!", text: "Status termin diperbarui." });
     closeStatusModal();
-    await fetchTermins();
+    await fetchTermins(selectedProject.value);
   } catch (err) {
     Swal.fire({ icon: "error", title: "Oops...", text: "Terjadi kesalahan saat memperbarui status." });
   } finally {
@@ -441,17 +652,103 @@ const deleteTermin = async (id) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin dihapus." });
-      await fetchTermins();
+      await fetchTermins(selectedProject.value);
     } catch (err) {
       Swal.fire({ icon: "error", title: "Oops...", text: "Gagal menghapus data termin." });
     }
   }
 };
 
+// Change Project (Reset selected project)
+const changeProject = async () => {
+  selectedProject.value = null;
+  // Clear data and destroy DataTable
+  termins.value = [];
+  if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
+    $(terminTableRef.value).DataTable().destroy();
+    $(terminTableRef.value).empty();
+  }
+};
+
+// Format currency
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('id-ID').format(value);
+};
+
+// Unformat currency
+const unformatCurrency = (value) => {
+  return Number(value.replace(/[^\d,-]/g, ''));
+};
+
+// Handle currency input
+const handleNilaiTerminInput = (event) => {
+  const unformattedValue = unformatCurrency(event.target.value);
+  form.value.nilai_termin = unformattedValue;
+  form.value.displayNilaiTermin = formatCurrency(unformattedValue);
+  calculateValues();
+};
+
+// Add new function to handle DP value input
+const handleNilaiDPInput = (event) => {
+  const unformattedValue = unformatCurrency(event.target.value);
+  form.value.nilai_dp = unformattedValue;
+  form.value.displayNilaiDP = formatCurrency(unformattedValue);
+  
+  // Calculate DP percentage based on input value
+  if (form.value.nilai_termin > 0) {
+    form.value.dp_percentage = (unformattedValue / form.value.nilai_termin) * 100;
+  }
+  
+  // Calculate pelunasan
+  form.value.nilai_pelunasan = form.value.nilai_termin - unformattedValue;
+  form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+};
+
+// Modify computed properties for totals
+const totalTermin = computed(() => {
+  return termins.value.reduce((sum, t) => sum + Number(t.nilai_termin), 0);
+});
+
+const totalDP = computed(() => {
+  return termins.value.reduce((sum, t) => {
+    if (t.status_termin === "Lunas") {
+      return sum + Number(t.nilai_termin); // Full amount for lunas
+    }
+    return sum + Number(t.nilai_dp);
+  }, 0);
+});
+
+const totalPelunasan = computed(() => {
+  return termins.value.reduce((sum, t) => {
+    if (t.status_termin === "Lunas") {
+      return sum + 0; // Zero for lunas
+    } else if (t.status_termin === "DP Dibayar") {
+      return sum + Number(t.nilai_pelunasan); // Show remaining amount
+    } else {
+      return sum + Number(t.nilai_pelunasan); // Show full pelunasan amount
+    }
+  }, 0);
+});
+
+const totalKeseluruhan = computed(() => {
+  return termins.value.reduce((sum, t) => sum + Number(t.nilai_termin), 0);
+});
+
+// Add computed property for grouped projects
+const groupedProjects = computed(() => {
+  const grouped = {};
+  projects.value.forEach(project => {
+    if (!grouped[project.nama_customer]) {
+      grouped[project.nama_customer] = [];
+    }
+    grouped[project.nama_customer].push(project);
+  });
+  return grouped;
+});
+
 // Initial Fetching
 onMounted(() => {
   fetchProjects();
-  fetchTermins();
 });
 </script>
 

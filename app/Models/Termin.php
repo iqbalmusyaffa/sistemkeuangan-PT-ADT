@@ -38,4 +38,9 @@ class Termin extends Model
     {
         return $this->belongsTo(Project::class);
     }
-} 
+    public function purchaseMaterials()
+{
+    return $this->hasMany(PurchaseMaterial::class);
+}
+
+}

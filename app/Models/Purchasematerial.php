@@ -47,4 +47,9 @@ class Purchasematerial extends Model
     {
         return $this->belongsTo(Project::class, 'project_id'); // Foreign key 'project_id' points to Project model
     }
+    public function termin()
+{
+    return $this->belongsTo(Termin::class);
+}
+
 }

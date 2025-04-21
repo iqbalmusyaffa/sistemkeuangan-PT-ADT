@@ -4,66 +4,92 @@
         <CCard>
           <CCardHeader>
             <CIcon icon="cil-cart" /> Pembelian Material
-            <CButton color="primary" @click="openModal('tambah')" class="float-end">
+            <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject">
               Tambah Pembelian
             </CButton>
           </CCardHeader>
           <CCardBody>
             <div v-if="error" class="alert alert-danger">{{ error }}</div>
             <div v-if="loading" class="alert alert-info">Loading...</div>
-            
-            <!-- Project Filter -->
-            <CRow class="mb-3">
-              <CCol md="6">
-                <CFormLabel for="project_filter">Filter by Project</CFormLabel>
-                <CFormSelect 
-                  v-model="selectedProject" 
-                  id="project_filter" 
-                  @change="filterByProject"
-                >
-                  <option value="">Semua Project</option>
-                  <option v-for="project in projects" :key="project.id" :value="project.id">
-                    {{ project.nama_customer }} - {{ project.nama_project }}
-                  </option>
-                </CFormSelect>
-              </CCol>
-            </CRow>
-            
-            <div class="w-100">
-              <table ref="pembelianTableRef" class="display nowrap"></table>
-              <div class="total-section mt-3">
-                <div class="card">
-                  <div class="card-body">
-                    <h5>Ringkasan Biaya:</h5>
-                    <div class="row">
-                      <div class="col-md-6">
-                        <table class="table table-sm">
-                          <tr>
-                            <td>Total Material</td>
-                            <td class="text-end">Rp {{ formatCurrency(totalMaterial) }}</td>
-                          </tr>
-                          <tr>
-                            <td>Total Jasa</td>
-                            <td class="text-end">Rp {{ formatCurrency(totalJasa) }}</td>
-                          </tr>
-                          <tr>
-                            <td>Total Jasa Lain-lain</td>
-                            <td class="text-end">Rp {{ formatCurrency(totalJasaLain) }}</td>
-                          </tr>
-                          <tr class="fw-bold">
-                            <td>Total Belanja (Invoice)</td>
-                            <td class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</td>
-                          </tr>
-                        </table>
-                      </div>
+
+           <!-- Project Filter -->
+         <!-- Project Filter -->
+<CRow class="mb-3">
+  <CCol md="6">
+    <CFormLabel for="project_filter">Pilih Project</CFormLabel>
+    <CFormSelect 
+      v-model="selectedProject" 
+      id="project_filter" 
+      @change="filterByProject"
+    >
+      <option value="">-- Pilih Project --</option>
+      <option 
+        v-for="project in projects" 
+        :key="project.id" 
+        :value="project.id"
+        :data-nama-project="project.nama_project"
+      >
+        {{ project.nama_customer }} - {{ project.nama_project }}
+      </option>
+    </CFormSelect>
+  </CCol>
+            <!-- Ganti Project Button -->
+            <CCol md="6" class="text-end">
+              <CButton
+                color="secondary"
+                v-if="selectedProject"
+                @click="changeProject"
+                class="mt-2"
+              >
+                Ganti Project
+              </CButton>
+            </CCol>
+
+          </CRow>
+
+
+
+            <!-- Tabel Pembelian -->
+         <!-- Data Table for Purchases -->
+<div v-if="selectedProject">
+  <table ref="pembelianTableRef" class="display nowrap"></table>
+
+            <div class="total-section mt-3">
+              <div class="card">
+                <div class="card-body">
+                  <h5>Ringkasan Biaya:</h5>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <table class="table table-sm">
+                        <tr>
+                          <td>Total Material</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalMaterial) }}</td>
+                        </tr>
+                        <tr>
+                          <td>Total Jasa</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalJasa) }}</td>
+                        </tr>
+                        <tr>
+                          <td>Total Jasa Lain-lain</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalJasaLain) }}</td>
+                        </tr>
+                        <tr class="fw-bold">
+                          <td>Total Belanja (Invoice)</td>
+                          <td class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</td>
+                        </tr>
+                      </table>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </CCardBody>
-        </CCard>
-      </CCol>
+          </div>
+          <div v-else class="alert alert-info">
+            Silakan pilih project terlebih dahulu untuk melihat data pembelian
+          </div>
+        </CCardBody>
+      </CCard>
+    </CCol>
 
       <!-- Modal Form -->
       <CModal :visible="showModal" @close="closeModal" :title="modalTitle" size="lg">
@@ -74,9 +100,15 @@
                 <CFormLabel for="project_id">Project</CFormLabel>
                 <CFormSelect v-model="form.project_id" id="project_id" required>
                   <option value="">Pilih Project</option>
-                  <option v-for="project in projects" :key="project.id" :value="project.id">
-                    {{ project.nama_customer }} - {{ project.nama_project }}
-                  </option>
+                  <optgroup v-for="(projectGroup, customer) in groupedProjects" 
+                           :key="customer" 
+                           :label="customer">
+                    <option v-for="project in projectGroup" 
+                            :key="project.id" 
+                            :value="project.id">
+                      {{ project.nama_project }}
+                    </option>
+                  </optgroup>
                 </CFormSelect>
               </CCol>
             </CRow>
@@ -87,9 +119,9 @@
               </CCol>
               <CCol md="6">
                 <CFormLabel for="merek_id">Merek</CFormLabel>
-                <CFormSelect 
-                  v-model="form.merek_id" 
-                  id="merek_id" 
+                <CFormSelect
+                  v-model="form.merek_id"
+                  id="merek_id"
                   :required="!isServiceCategory"
                   :disabled="isServiceCategory"
                 >
@@ -215,18 +247,20 @@
   const modalMode = ref("tambah");
   const editingId = ref(null);
   const selectedProject = ref("");
+  const selectedProjectDetails = ref(null);
 
-  const fetchProjects = async () => {
-    try {
-      const token = sessionStorage.getItem("token");
-      const response = await axios.get("/api/projects", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      projects.value = response.data;
-    } catch (err) {
-      console.error("Failed to load projects:", err);
-    }
-  };
+  // Fetch Projects
+const fetchProjects = async () => {
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/projects", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    projects.value = response.data;
+  } catch (err) {
+    console.error("Failed to load projects:", err);
+  }
+};
 
   const fetchMereks = async () => {
     try {
@@ -263,84 +297,107 @@
       console.error("Failed to load categories:", err);
     }
   };
-
-  const fetchPembelians = async () => {
+  const fetchPembelians = async (projectId = null) => {
     loading.value = true;
     error.value = "";
+    
+    // Destroy existing DataTable if it exists
+    if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
+      $(pembelianTableRef.value).DataTable().destroy();
+      // Clear the table contents
+      $(pembelianTableRef.value).empty();
+    }
 
     try {
+      if (!projectId) {
+        pembelians.value = [];
+        return;
+      }
+
       const token = sessionStorage.getItem("token");
-      const url = selectedProject.value 
-        ? `/api/purchasematerials?project_id=${selectedProject.value}`
-        : "/api/purchasematerials";
-        
-      const response = await axios.get(url, {
+      const response = await axios.get(`/api/purchasematerials?project_id=${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      pembelians.value = response.data;
+      if (response.data.error) {
+        error.value = response.data.error;
+        pembelians.value = [];
+        return;
+      }
 
-      nextTick(() => {
-        initDataTable();
-      });
+      // Store current project details and purchases
+      const currentProject = response.data.project;
+      pembelians.value = response.data.purchases;
+
+      console.log('Current Project:', currentProject);
+      console.log('Purchases:', pembelians.value);
+
+      // Initialize DataTable after data is loaded
+      await nextTick();
+      if (pembelians.value.length > 0) {
+        initDataTable(currentProject);
+      }
     } catch (err) {
+      console.error('Error fetching purchases:', err);
       error.value = "Failed to load purchase data.";
       Swal.fire({ icon: "error", title: "Oops...", text: error.value });
+      pembelians.value = [];
     } finally {
       loading.value = false;
     }
   };
 
-  const filterByProject = () => {
-    fetchPembelians();
-  };
-
-  // DataTable initialization
-  const initDataTable = () => {
+  const initDataTable = (currentProject) => {
     if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
       $(pembelianTableRef.value).DataTable().destroy();
+      $(pembelianTableRef.value).empty();
     }
 
-    $(pembelianTableRef.value).DataTable({
+    console.log('Initializing DataTable with project:', currentProject);
+
+    const table = $(pembelianTableRef.value).DataTable({
       data: pembelians.value,
       columns: [
         { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
         { 
           title: "Project", 
-          data: "project",
-          render: (data) => data ? `${data.nama_customer} - ${data.nama_project}` : "-"
+          data: null,
+          render: (data) => {
+            console.log('Rendering project data:', data);
+            return `${currentProject.nama_customer} - ${currentProject.nama_project}`;
+          }
         },
         { title: "Item", data: "item" },
-        {
-          title: "Merek",
-          data: "merek",
-          render: (data) => data ? data.name : "-"
+        { 
+          title: "Merek", 
+          data: "merek", 
+          render: (data) => data ? data.name : "-" 
         },
         { title: "Tipe", data: "type" },
-        {
-          title: "Unit",
-          data: "unit",
-          render: (data) => data ? data.unit_name : "-"
+        { 
+          title: "Unit", 
+          data: "unit", 
+          render: (data) => data ? data.unit_name : "-" 
         },
-        {
-          title: "Kategori",
-          data: "category",
-          render: (data) => data ? data.nama_kategori : "-"
+        { 
+          title: "Kategori", 
+          data: "category", 
+          render: (data) => data ? data.nama_kategori : "-" 
         },
-        {
-          title: "Jumlah",
-          data: "qty",
-          render: (data) => data.toLocaleString()
+        { 
+          title: "Jumlah", 
+          data: "qty", 
+          render: (data) => data.toLocaleString() 
         },
-        {
-          title: "Harga",
-          data: "harga",
-          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}`
+        { 
+          title: "Harga", 
+          data: "harga", 
+          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}` 
         },
-        {
-          title: "Total",
-          data: "total_harga",
-          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}`
+        { 
+          title: "Total", 
+          data: "total_harga", 
+          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}` 
         },
         {
           title: "Aksi",
@@ -348,25 +405,45 @@
           render: (data, type, row) => `
             <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
             <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
-          `,
+          `
         },
       ],
       responsive: true,
       scrollX: true,
       destroy: true,
-    });
+      drawCallback: function () {
+        $(".edit-btn").off("click").on("click", function () {
+          const id = $(this).data("id");
+          const pembelian = pembelians.value.find(p => p.id === id);
+          openModal("edit", pembelian);
+        });
 
-    $(pembelianTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
-      const id = $(this).data("id");
-      const pembelian = pembelians.value.find((p) => p.id == id);
-      if (pembelian) openModal("edit", pembelian);
-    });
-
-    $(pembelianTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
-      const id = $(this).data("id");
-      deletePembelian(id);
+        $(".delete-btn").off("click").on("click", function () {
+          const id = $(this).data("id");
+          handleDelete(id);
+        });
+      }
     });
   };
+
+  const filterByProject = async () => {
+    console.log('Selected Project ID:', selectedProject.value);
+    if (selectedProject.value) {
+      await fetchPembelians(selectedProject.value);
+    } else {
+      pembelians.value = [];
+      if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
+        $(pembelianTableRef.value).DataTable().destroy();
+        $(pembelianTableRef.value).empty();
+      }
+    }
+  };
+
+  // Watch for changes in selectedProject
+  watch(selectedProject, async (newValue) => {
+    console.log('Project selection changed:', newValue);
+    await filterByProject();
+  });
 
   // Open Modal for Add/Edit
   const openModal = (mode, pembelian = null) => {
@@ -470,7 +547,7 @@
     try {
       const token = sessionStorage.getItem("token");
       const payload = { ...form.value };
-      
+
       // If it's a service, set merek_id to null
       if (isServiceCategory.value) {
         payload.merek_id = null;
@@ -497,35 +574,47 @@
     }
   };
 
-  // Delete Pembelian (Purchase material)
-  const deletePembelian = async (id) => {
-    const result = await Swal.fire({
-      title: "Yakin ingin menghapus?",
-      text: "Data tidak dapat dikembalikan!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Ya, hapus!",
-      cancelButtonText: "Batal",
-    });
-
+  const handleDelete = (id) => {
+  Swal.fire({
+    title: "Yakin ingin menghapus?",
+    text: "Data tidak dapat dikembalikan!",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#d33",
+    cancelButtonColor: "#3085d6",
+    confirmButtonText: "Ya, hapus!",
+  }).then(async (result) => {
     if (result.isConfirmed) {
       try {
         const token = sessionStorage.getItem("token");
         await axios.delete(`/api/purchasematerials/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        Swal.fire({ icon: "success", title: "Berhasil!", text: "Data pembelian dihapus." });
-        await fetchPembelians();
+        Swal.fire("Terhapus!", "Data berhasil dihapus.", "success");
+        await fetchPembelians(selectedProject.value);
       } catch (err) {
-        Swal.fire({ icon: "error", title: "Oops...", text: "Gagal menghapus data pembelian." });
+        Swal.fire("Gagal!", "Terjadi kesalahan saat menghapus.", "error");
       }
     }
-  };
+  });
+};
+
 
   // Add formatting functions
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('id-ID').format(value);
   };
+// Change Project (Reset selected project)
+const changeProject = async () => {
+  selectedProject.value = null;
+  // Clear data and destroy DataTable
+  pembelians.value = [];
+  if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
+    $(pembelianTableRef.value).DataTable().destroy();
+    // Clear the table contents
+    $(pembelianTableRef.value).empty();
+  }
+};
 
   const unformatCurrency = (value) => {
     return Number(value.replace(/[^\d,-]/g, ''));
@@ -574,6 +663,18 @@
 
   const totalKeseluruhan = computed(() => {
     return pembelians.value.reduce((sum, p) => sum + Number(p.total_harga), 0);
+  });
+
+  // Add this computed property
+  const groupedProjects = computed(() => {
+    const grouped = {};
+    projects.value.forEach(project => {
+      if (!grouped[project.nama_customer]) {
+        grouped[project.nama_customer] = [];
+      }
+      grouped[project.nama_customer].push(project);
+    });
+    return grouped;
   });
 
   // Initial Fetching
