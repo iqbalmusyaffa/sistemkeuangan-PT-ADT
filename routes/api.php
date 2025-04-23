@@ -11,8 +11,11 @@ use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\Api\MerekController;
 use App\Http\Controllers\Api\UnitsController;
 use App\Http\Controllers\Api\PurchasematerialController;
-use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ProyekController;
 use App\Http\Controllers\Api\TerminController;
+use App\Http\Controllers\Api\ServiceCategoryController;
+
+use App\Http\Controllers\Api\ActivityController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -52,14 +55,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('units', UnitsController::class);
     // Purchasematerial routes
     Route::apiResource('purchasematerials', PurchasematerialController::class);
-    // Project routes
-    Route::apiResource('projects', ProjectController::class);
+    // Proyek routes
+    Route::apiResource('proyeks', ProyekController::class);
 
     // Termin routes
     Route::apiResource('termins', TerminController::class);
-    Route::get('/projects/{projectId}/termins', [TerminController::class, 'getByProject']);
+    Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);
     Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']);
 
+    // Additional proyek-related routes
+    Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
+    Route::get('proyeks/{id}/purchase-materials', [ProyekController::class, 'getPurchaseMaterials']);
+
     Route::post('/logout', [UserController::class, 'logout']);
+
+    Route::apiResource('service-categories', ServiceCategoryController::class);
+    Route::get('/activity-log', [ActivityController::class, 'index']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

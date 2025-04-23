@@ -7,13 +7,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Merek;
 use App\Models\Unit;
 use App\Models\Kategori;
+use App\Traits\Trackable;
 
 class Purchasematerial extends Model
 {
     use HasFactory;
+    use Trackable;
 
     protected $fillable = [
-        'item', 'merek_id', 'type', 'spesifikasi', 'unit_id', 'category_id', 'qty', 'harga', 'total_harga', 'deskripsi', 'project_id'
+        'item', 'merek_id', 'type', 'spesifikasi', 'unit_id', 'category_id', 'qty', 'harga', 'total_harga', 'deskripsi', 'proyek_id'
     ];
 
     /**
@@ -41,11 +43,11 @@ class Purchasematerial extends Model
     }
 
     /**
-     * Relationship with Project model.
+     * Relationship with Proyek model.
      */
-    public function project()
+    public function proyek()
     {
-        return $this->belongsTo(Project::class, 'project_id'); // Foreign key 'project_id' points to Project model
+        return $this->belongsTo(Proyek::class, 'proyek_id'); // Foreign key 'proyek_id' points to Proyek model
     }
     public function termin()
 {

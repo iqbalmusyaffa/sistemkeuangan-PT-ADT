@@ -3,16 +3,16 @@
     <CCol>
       <CCard>
         <CCardHeader>
-          <CIcon icon="cil-briefcase" /> Manajemen Project
+          <CIcon icon="cil-briefcase" /> Manajemen Proyek
           <CButton color="primary" @click="openModal('tambah')" class="float-end">
-            Tambah Project
+            Tambah Proyek
           </CButton>
         </CCardHeader>
         <CCardBody>
           <div v-if="error" class="alert alert-danger">{{ error }}</div>
           <div v-if="loading" class="alert alert-info">Loading...</div>
           <div class="w-100">
-            <table ref="projectTableRef" class="display nowrap"></table>
+            <table ref="proyekTableRef" class="display nowrap"></table>
           </div>
         </CCardBody>
       </CCard>
@@ -28,13 +28,33 @@
               <CFormInput v-model="form.nama_customer" id="nama_customer" required />
             </CCol>
             <CCol md="6">
-              <CFormLabel for="nama_project">Nama Project</CFormLabel>
-              <CFormInput v-model="form.nama_project" id="nama_project" required />
+              <CFormLabel for="nama_proyek">Nama Proyek</CFormLabel>
+              <CFormInput v-model="form.nama_proyek" id="nama_proyek" required />
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="nama_perusahaan">Nama Perusahaan</CFormLabel>
+              <CFormInput v-model="form.nama_perusahaan" id="nama_perusahaan" required />
+            </CCol>
+            <CCol md="6">
+              <CFormLabel for="email">Email</CFormLabel>
+              <CFormInput type="email" v-model="form.email" id="email" required />
             </CCol>
           </CRow>
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel for="lokasi">Lokasi</CFormLabel>
+              <CFormLabel for="alamat">Alamat</CFormLabel>
+              <CFormInput v-model="form.alamat" id="alamat" required />
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="no_telp">No. Telepon</CFormLabel>
+              <CFormInput v-model="form.no_telp" id="no_telp" required />
+            </CCol>
+            <CCol md="6">
+              <CFormLabel for="lokasi">Lokasi Proyek</CFormLabel>
               <CFormInput v-model="form.lokasi" id="lokasi" />
             </CCol>
           </CRow>
@@ -54,7 +74,7 @@
               <CFormInput type="number" v-model.number="form.anggaran_kontrak" id="anggaran_kontrak" required min="0" />
             </CCol>
             <CCol md="6">
-              <CFormLabel for="status_project">Status Project</CFormLabel>
+              <CFormLabel for="status_project">Status Proyek</CFormLabel>
               <CFormSelect v-model="form.status_project" id="status_project" required>
                 <option value="">Pilih Status</option>
                 <option value="Berjalan">Berjalan</option>
@@ -83,13 +103,18 @@ import $ from "jquery";
 import Swal from "sweetalert2";
 import "datatables.net-dt/css/dataTables.dataTables.min.css";
 import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
-import "datatables.net-responsive-dt";
+import "datatables.net";
+import "datatables.net-responsive";
 import { useRouter } from "vue-router";
 
-const projectTableRef = ref(null);
+const proyekTableRef = ref(null);
 const form = ref({
   nama_customer: "",
-  nama_project: "",
+  nama_proyek: "",
+  nama_perusahaan: "",
+  alamat: "",
+  no_telp: "",
+  email: "",
   lokasi: "",
   tanggal_mulai: "",
   tanggal_selesai: "",
@@ -98,34 +123,44 @@ const form = ref({
   deskripsi: ""
 });
 
-const projects = ref([]);
+const proyeks = ref([]);
 const error = ref("");
 const loading = ref(false);
 const showModal = ref(false);
-const modalTitle = ref("Tambah Project");
+const modalTitle = ref("Tambah Proyek");
 const modalButtonText = ref("Simpan");
 const modalMode = ref("tambah");
 const editingId = ref(null);
 const router = useRouter();
 
-const fetchProjects = async () => {
+const fetchProyeks = async () => {
   loading.value = true;
   error.value = "";
 
   try {
     const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/projects", {
+    const response = await axios.get("/api/proyeks", {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    projects.value = response.data;
+    if (response.data && response.data.status === 'success') {
+      proyeks.value = response.data.data;
+    } else {
+      proyeks.value = [];
+      error.value = "Data tidak valid";
+    }
 
     nextTick(() => {
       initDataTable();
     });
   } catch (err) {
-    error.value = "Failed to load project data.";
-    Swal.fire({ icon: "error", title: "Oops...", text: error.value });
+    console.error('Error fetching projects:', err);
+    error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
+    Swal.fire({
+      icon: "error",
+      title: "Oops...",
+      text: error.value
+    });
   } finally {
     loading.value = false;
   }
@@ -133,24 +168,45 @@ const fetchProjects = async () => {
 
 // DataTable initialization
 const initDataTable = () => {
-  if ($.fn.DataTable.isDataTable(projectTableRef.value)) {
-    $(projectTableRef.value).DataTable().destroy();
+  if ($.fn.DataTable.isDataTable(proyekTableRef.value)) {
+    $(proyekTableRef.value).DataTable().destroy();
   }
 
-  $(projectTableRef.value).DataTable({
-    data: projects.value,
+  if (!proyeks.value || proyeks.value.length === 0) {
+    return;
+  }
+
+  $(proyekTableRef.value).DataTable({
+    data: proyeks.value,
     columns: [
-      { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
-      { title: "Customer", data: "nama_customer" },
-      { title: "Project", data: "nama_project" },
-      { title: "Lokasi", data: "lokasi" },
-      { 
-        title: "Tanggal Mulai", 
+      {
+        title: "No",
+        data: null,
+        render: (data, type, row, meta) => meta.row + 1
+      },
+      {
+        title: "Customer",
+        data: "nama_customer"
+      },
+      {
+        title: "Proyek",
+        data: "nama_proyek"
+      },
+      {
+        title: "Perusahaan",
+        data: "nama_perusahaan"
+      },
+      {
+        title: "Lokasi",
+        data: "lokasi"
+      },
+      {
+        title: "Tanggal Mulai",
         data: "tanggal_mulai",
         render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-"
       },
-      { 
-        title: "Tanggal Selesai", 
+      {
+        title: "Tanggal Selesai",
         data: "tanggal_selesai",
         render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-"
       },
@@ -159,8 +215,8 @@ const initDataTable = () => {
         data: "anggaran_kontrak",
         render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
       },
-      { 
-        title: "Status", 
+      {
+        title: "Status",
         data: "status_project",
         render: (data) => {
           const statusClasses = {
@@ -176,60 +232,74 @@ const initDataTable = () => {
         data: null,
         render: (data, type, row) => `
           <button class="btn btn-sm btn-info detail-btn" data-id="${row.id}">
-            <CIcon icon="cil-list" /> Detail
+            <i class="cil-list"></i> Detail
           </button>
           <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">
-            <CIcon icon="cil-pencil" /> Edit
+            <i class="cil-pencil"></i> Edit
           </button>
           <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
-            <CIcon icon="cil-trash" /> Hapus
+            <i class="cil-trash"></i> Hapus
           </button>
         `,
       },
     ],
-    responsive: true,
     scrollX: true,
-    destroy: true,
+    scrollCollapse: true,
+    fixedColumns: {
+      left: 1,
+      right: 1
+    },
+    dom: '<"top"lf>rt<"bottom"ip><"clear">',
+    pageLength: 10,
+    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]]
   });
 
-  $(projectTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
+  $(proyekTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
     const id = $(this).data("id");
-    const project = projects.value.find((p) => p.id == id);
-    if (project) openModal("edit", project);
+    const proyek = proyeks.value.find((p) => p.id == id);
+    if (proyek) openModal("edit", proyek);
   });
 
-  $(projectTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
+  $(proyekTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
     const id = $(this).data("id");
-    deleteProject(id);
+    deleteProyek(id);
   });
 
-  $(projectTableRef.value).off("click", ".detail-btn").on("click", ".detail-btn", function () {
+  $(proyekTableRef.value).off("click", ".detail-btn").on("click", ".detail-btn", function () {
     const id = $(this).data("id");
-    router.push(`/base/project/${id}/detail`);
+    router.push(`/base/proyek/${id}/detail`);
   });
 };
 
 // Open Modal for Add/Edit
-const openModal = (mode, project = null) => {
+const openModal = (mode, proyek = null) => {
   modalMode.value = mode;
-  if (mode === "edit" && project) {
+  if (mode === "edit" && proyek) {
     form.value = {
-      nama_customer: project.nama_customer,
-      nama_project: project.nama_project,
-      lokasi: project.lokasi || "",
-      tanggal_mulai: project.tanggal_mulai || "",
-      tanggal_selesai: project.tanggal_selesai || "",
-      anggaran_kontrak: project.anggaran_kontrak,
-      status_project: project.status_project,
-      deskripsi: project.deskripsi || ""
+      nama_customer: proyek.nama_customer,
+      nama_proyek: proyek.nama_proyek,
+      nama_perusahaan: proyek.nama_perusahaan,
+      alamat: proyek.alamat,
+      no_telp: proyek.no_telp,
+      email: proyek.email,
+      lokasi: proyek.lokasi || "",
+      tanggal_mulai: proyek.tanggal_mulai || "",
+      tanggal_selesai: proyek.tanggal_selesai || "",
+      anggaran_kontrak: proyek.anggaran_kontrak,
+      status_project: proyek.status_project,
+      deskripsi: proyek.deskripsi || ""
     };
-    editingId.value = project.id;
-    modalTitle.value = "Edit Project";
+    editingId.value = proyek.id;
+    modalTitle.value = "Edit Proyek";
     modalButtonText.value = "Update";
   } else {
     form.value = {
       nama_customer: "",
-      nama_project: "",
+      nama_proyek: "",
+      nama_perusahaan: "",
+      alamat: "",
+      no_telp: "",
+      email: "",
       lokasi: "",
       tanggal_mulai: "",
       tanggal_selesai: "",
@@ -238,7 +308,7 @@ const openModal = (mode, project = null) => {
       deskripsi: ""
     };
     editingId.value = null;
-    modalTitle.value = "Tambah Project";
+    modalTitle.value = "Tambah Proyek";
     modalButtonText.value = "Simpan";
   }
   showModal.value = true;
@@ -248,7 +318,11 @@ const closeModal = () => {
   showModal.value = false;
   form.value = {
     nama_customer: "",
-    nama_project: "",
+    nama_proyek: "",
+    nama_perusahaan: "",
+    alamat: "",
+    no_telp: "",
+    email: "",
     lokasi: "",
     tanggal_mulai: "",
     tanggal_selesai: "",
@@ -262,27 +336,27 @@ const handleSubmit = async () => {
   try {
     const token = sessionStorage.getItem("token");
     const headers = { Authorization: `Bearer ${token}` };
-    
+
     if (modalMode.value === "edit") {
-      await axios.put(`/api/projects/${editingId.value}`, form.value, { headers });
-      Swal.fire({ icon: "success", title: "Success", text: "Project berhasil diupdate" });
+      await axios.put(`/api/proyeks/${editingId.value}`, form.value, { headers });
+      Swal.fire({ icon: "success", title: "Success", text: "Proyek berhasil diupdate" });
     } else {
-      await axios.post("/api/projects", form.value, { headers });
-      Swal.fire({ icon: "success", title: "Success", text: "Project berhasil ditambahkan" });
+      await axios.post("/api/proyeks", form.value, { headers });
+      Swal.fire({ icon: "success", title: "Success", text: "Proyek berhasil ditambahkan" });
     }
-    
+
     closeModal();
-    fetchProjects();
+    fetchProyeks();
   } catch (err) {
-    Swal.fire({ 
-      icon: "error", 
-      title: "Error", 
-      text: err.response?.data?.message || "Terjadi kesalahan saat menyimpan data" 
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: err.response?.data?.message || "Terjadi kesalahan saat menyimpan data"
     });
   }
 };
 
-const deleteProject = async (id) => {
+const deleteProyek = async (id) => {
   try {
     const result = await Swal.fire({
       title: "Apakah anda yakin?",
@@ -297,23 +371,87 @@ const deleteProject = async (id) => {
 
     if (result.isConfirmed) {
       const token = sessionStorage.getItem("token");
-      await axios.delete(`/api/projects/${id}`, {
+      await axios.delete(`/api/proyeks/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      Swal.fire({ icon: "success", title: "Success", text: "Project berhasil dihapus" });
-      fetchProjects();
+
+      Swal.fire({ icon: "success", title: "Success", text: "Proyek berhasil dihapus" });
+      fetchProyeks();
     }
   } catch (err) {
-    Swal.fire({ 
-      icon: "error", 
-      title: "Error", 
-      text: err.response?.data?.message || "Terjadi kesalahan saat menghapus data" 
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: err.response?.data?.message || "Terjadi kesalahan saat menghapus data"
     });
   }
 };
 
 onMounted(() => {
-  fetchProjects();
+  fetchProyeks();
 });
-</script> 
+</script>
+
+<style scoped>
+.w-100 {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dataTables_wrapper {
+  overflow-x: auto;
+  position: relative;
+}
+
+table.display {
+  width: 100% !important;
+  min-width: 1000px;
+}
+
+/* Fixed columns styles */
+.dataTables_scroll {
+  position: relative;
+  clear: both;
+  width: 100%;
+}
+
+.dataTables_scrollBody {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: none;
+}
+
+/* Fixed column styles */
+.fixed-columns {
+  position: sticky;
+  background: white;
+  z-index: 1;
+}
+
+.fixed-columns-left {
+  left: 0;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.fixed-columns-right {
+  right: 0;
+  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+}
+
+/* Table cell styles */
+table.dataTable tbody td {
+  white-space: nowrap;
+  padding: 8px;
+}
+
+/* Button styles */
+.btn {
+  margin: 0 2px;
+}
+
+/* Status badge styles */
+.badge {
+  padding: 0.5em 0.75em;
+  font-size: 0.875em;
+}
+</style>

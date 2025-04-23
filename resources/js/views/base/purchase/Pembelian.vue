@@ -17,19 +17,18 @@
 <CRow class="mb-3">
   <CCol md="6">
     <CFormLabel for="project_filter">Pilih Project</CFormLabel>
-    <CFormSelect 
-      v-model="selectedProject" 
-      id="project_filter" 
+    <CFormSelect
+      v-model="selectedProject"
+      id="project_filter"
       @change="filterByProject"
     >
       <option value="">-- Pilih Project --</option>
-      <option 
-        v-for="project in projects" 
-        :key="project.id" 
+      <option
+        v-for="project in projects"
+        :key="project.id"
         :value="project.id"
-        :data-nama-project="project.nama_project"
       >
-        {{ project.nama_customer }} - {{ project.nama_project }}
+        {{ project.nama_customer }} - {{ project.nama_proyek }}
       </option>
     </CFormSelect>
   </CCol>
@@ -97,16 +96,16 @@
           <CForm @submit.prevent="handleSubmit">
             <CRow class="mb-3">
               <CCol md="12">
-                <CFormLabel for="project_id">Project</CFormLabel>
-                <CFormSelect v-model="form.project_id" id="project_id" required>
-                  <option value="">Pilih Project</option>
-                  <optgroup v-for="(projectGroup, customer) in groupedProjects" 
-                           :key="customer" 
+                <CFormLabel for="project_id">Proyek</CFormLabel>
+                <CFormSelect v-model="form.proyek_id" id="project_id" required>
+                  <option value="">Pilih Proyek</option>
+                  <optgroup v-for="(projectGroup, customer) in groupedProjects"
+                           :key="customer"
                            :label="customer">
-                    <option v-for="project in projectGroup" 
-                            :key="project.id" 
+                    <option v-for="project in projectGroup"
+                            :key="project.id"
                             :value="project.id">
-                      {{ project.nama_project }}
+                      {{ project.nama_proyek }}
                     </option>
                   </optgroup>
                 </CFormSelect>
@@ -220,19 +219,19 @@
 
   const pembelianTableRef = ref(null);
   const form = ref({
+    proyek_id: "",
     item: "",
     merek_id: "",
     type: "",
     spesifikasi: "",
     unit_id: "",
     category_id: "",
-    qty: 0,
+    qty: 1,
     harga: 0,
     total_harga: 0,
     deskripsi: "",
     displayHarga: "0",
-    displayTotalHarga: "0",
-    project_id: ""
+    displayTotalHarga: "0"
   });
   const mereks = ref([]);
   const units = ref([]);
@@ -253,12 +252,18 @@
 const fetchProjects = async () => {
   try {
     const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/projects", {
+    const response = await axios.get("/api/proyeks", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    projects.value = response.data;
+
+    if (response.data && response.data.status === 'success') {
+      projects.value = response.data.data;
+    } else {
+      projects.value = [];
+      error.value = "Data tidak valid";
+    }
   } catch (err) {
-    console.error("Failed to load projects:", err);
+    error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
   }
 };
 
@@ -270,7 +275,7 @@ const fetchProjects = async () => {
       });
       mereks.value = response.data;
     } catch (err) {
-      console.error("Failed to load mereks:", err);
+      error.value = "Gagal memuat data merek";
     }
   };
 
@@ -282,7 +287,7 @@ const fetchProjects = async () => {
       });
       units.value = response.data;
     } catch (err) {
-      console.error("Failed to load units:", err);
+      error.value = "Gagal memuat data unit";
     }
   };
 
@@ -294,140 +299,152 @@ const fetchProjects = async () => {
       });
       categories.value = response.data;
     } catch (err) {
-      console.error("Failed to load categories:", err);
+      error.value = "Gagal memuat data kategori";
     }
   };
-  const fetchPembelians = async (projectId = null) => {
-    loading.value = true;
-    error.value = "";
-    
-    // Destroy existing DataTable if it exists
-    if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
-      $(pembelianTableRef.value).DataTable().destroy();
-      // Clear the table contents
-      $(pembelianTableRef.value).empty();
-    }
+  const fetchPembelians = async (proyekId) => {
+    if (!proyekId) return;
 
     try {
-      if (!projectId) {
-        pembelians.value = [];
-        return;
-      }
-
       const token = sessionStorage.getItem("token");
-      const response = await axios.get(`/api/purchasematerials?project_id=${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const [purchaseResponse, proyekResponse] = await Promise.all([
+        axios.get(`/api/purchasematerials`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            proyek_id: proyekId
+          }
+        }),
+        axios.get(`/api/proyeks/${proyekId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
 
-      if (response.data.error) {
-        error.value = response.data.error;
-        pembelians.value = [];
-        return;
-      }
+      if (purchaseResponse.data && proyekResponse.data) {
+        pembelians.value = purchaseResponse.data.purchases.map(purchase => ({
+          ...purchase,
+          displayHarga: formatCurrency(purchase.harga),
+          displayTotalHarga: formatCurrency(purchase.total_harga),
+          nama_proyek: proyekResponse.data.nama_proyek,
+          nama_customer: proyekResponse.data.nama_customer
+        }));
 
-      // Store current project details and purchases
-      const currentProject = response.data.project;
-      pembelians.value = response.data.purchases;
-
-      console.log('Current Project:', currentProject);
-      console.log('Purchases:', pembelians.value);
-
-      // Initialize DataTable after data is loaded
-      await nextTick();
-      if (pembelians.value.length > 0) {
-        initDataTable(currentProject);
+        selectedProjectDetails.value = proyekResponse.data;
+        initDataTable();
       }
     } catch (err) {
-      console.error('Error fetching purchases:', err);
-      error.value = "Failed to load purchase data.";
-      Swal.fire({ icon: "error", title: "Oops...", text: error.value });
-      pembelians.value = [];
-    } finally {
-      loading.value = false;
+      console.error("Error fetching purchases:", err);
+      let errorMessage = "Gagal mengambil data pembelian";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      Swal.fire({
+        icon: "error",
+        title: "Oops...",
+        text: errorMessage
+      });
     }
   };
 
-  const initDataTable = (currentProject) => {
+  const initDataTable = () => {
     if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
       $(pembelianTableRef.value).DataTable().destroy();
-      $(pembelianTableRef.value).empty();
     }
 
-    console.log('Initializing DataTable with project:', currentProject);
-
-    const table = $(pembelianTableRef.value).DataTable({
+    $(pembelianTableRef.value).DataTable({
       data: pembelians.value,
       columns: [
         { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
-        { 
-          title: "Project", 
+        {
+          title: "Proyek",
           data: null,
           render: (data) => {
-            console.log('Rendering project data:', data);
-            return `${currentProject.nama_customer} - ${currentProject.nama_project}`;
+            const proyek = selectedProjectDetails.value;
+            return proyek ? `${proyek.nama_customer} - ${proyek.nama_proyek}` : "-";
           }
         },
         { title: "Item", data: "item" },
-        { 
-          title: "Merek", 
-          data: "merek", 
-          render: (data) => data ? data.name : "-" 
+        {
+          title: "Merek",
+          data: "merek",
+          render: (data) => data ? data.name : "-"
         },
         { title: "Tipe", data: "type" },
-        { 
-          title: "Unit", 
-          data: "unit", 
-          render: (data) => data ? data.unit_name : "-" 
+        {
+          title: "Unit",
+          data: "unit",
+          render: (data) => data ? data.unit_name : "-"
         },
-        { 
-          title: "Kategori", 
-          data: "category", 
-          render: (data) => data ? data.nama_kategori : "-" 
+        {
+          title: "Kategori",
+          data: "category",
+          render: (data) => data ? data.nama_kategori : "-"
         },
-        { 
-          title: "Jumlah", 
-          data: "qty", 
-          render: (data) => data.toLocaleString() 
+        {
+          title: "Jumlah",
+          data: "qty",
+          render: (data) => data.toLocaleString()
         },
-        { 
-          title: "Harga", 
-          data: "harga", 
-          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}` 
+        {
+          title: "Harga",
+          data: "harga",
+          render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
         },
-        { 
-          title: "Total", 
-          data: "total_harga", 
-          render: (data) => `Rp${new Intl.NumberFormat('id-ID').format(data)}` 
+        {
+          title: "Total",
+          data: "total_harga",
+          render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
         },
         {
           title: "Aksi",
           data: null,
           render: (data, type, row) => `
-            <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
-            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+            <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">
+              <i class="cil-pencil"></i> Edit
+            </button>
+            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
+              <i class="cil-trash"></i> Hapus
+            </button>
           `
-        },
+        }
       ],
-      responsive: true,
       scrollX: true,
-      destroy: true,
-      drawCallback: function () {
-        $(".edit-btn").off("click").on("click", function () {
-          const id = $(this).data("id");
-          const pembelian = pembelians.value.find(p => p.id === id);
-          openModal("edit", pembelian);
-        });
+      scrollCollapse: true,
+      fixedColumns: {
+        left: 1,
+        right: 1
+      },
+      dom: '<"top"lf>rt<"bottom"ip><"clear">',
+      pageLength: 10,
+      lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]],
+      autoWidth: false,
+      columnDefs: [
+        { width: "5%", targets: 0 }, // No
+        { width: "15%", targets: 1 }, // Proyek
+        { width: "10%", targets: 2 }, // Item
+        { width: "10%", targets: 3 }, // Merek
+        { width: "10%", targets: 4 }, // Tipe
+        { width: "10%", targets: 5 }, // Unit
+        { width: "10%", targets: 6 }, // Kategori
+        { width: "5%", targets: 7 }, // Jumlah
+        { width: "10%", targets: 8 }, // Harga
+        { width: "10%", targets: 9 }, // Total
+        { width: "5%", targets: 10 } // Aksi
+      ]
+    });
 
-        $(".delete-btn").off("click").on("click", function () {
-          const id = $(this).data("id");
-          handleDelete(id);
-        });
-      }
+    $(pembelianTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
+      const id = $(this).data("id");
+      const pembelian = pembelians.value.find(p => p.id === id);
+      if (pembelian) openModal("edit", pembelian);
+    });
+
+    $(pembelianTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
+      const id = $(this).data("id");
+      handleDelete(id);
     });
   };
 
   const filterByProject = async () => {
-    console.log('Selected Project ID:', selectedProject.value);
     if (selectedProject.value) {
       await fetchPembelians(selectedProject.value);
     } else {
@@ -441,7 +458,6 @@ const fetchProjects = async () => {
 
   // Watch for changes in selectedProject
   watch(selectedProject, async (newValue) => {
-    console.log('Project selection changed:', newValue);
     await filterByProject();
   });
 
@@ -450,6 +466,7 @@ const fetchProjects = async () => {
     modalMode.value = mode;
     if (mode === "edit" && pembelian) {
       form.value = {
+        proyek_id: pembelian.proyek_id,
         item: pembelian.item,
         merek_id: pembelian.merek_id,
         type: pembelian.type,
@@ -461,27 +478,26 @@ const fetchProjects = async () => {
         total_harga: pembelian.total_harga,
         deskripsi: pembelian.deskripsi || "",
         displayHarga: formatCurrency(pembelian.harga),
-        displayTotalHarga: formatCurrency(pembelian.total_harga),
-        project_id: pembelian.project_id
+        displayTotalHarga: formatCurrency(pembelian.total_harga)
       };
       editingId.value = pembelian.id;
       modalTitle.value = "Edit Pembelian";
       modalButtonText.value = "Update";
     } else {
       form.value = {
+        proyek_id: selectedProject.value,
         item: "",
         merek_id: "",
         type: "",
         spesifikasi: "",
         unit_id: "",
         category_id: "",
-        qty: 0,
+        qty: 1,
         harga: 0,
         total_harga: 0,
         deskripsi: "",
         displayHarga: "0",
-        displayTotalHarga: "0",
-        project_id: selectedProject.value || ""
+        displayTotalHarga: "0"
       };
       editingId.value = null;
       modalTitle.value = "Tambah Pembelian";
@@ -503,102 +519,102 @@ const fetchProjects = async () => {
 
   // Update the handleSubmit function validation
   const handleSubmit = async () => {
-    loading.value = true;
-    error.value = "";
-
-    if (!form.value.project_id) {
-      error.value = "Project wajib dipilih!";
-      loading.value = false;
-      return;
-    }
-
-    if (!form.value.item.trim()) {
-      error.value = "Nama item wajib diisi!";
-      loading.value = false;
-      return;
-    }
-
-    if (!form.value.unit_id) {
-      error.value = "Unit wajib dipilih!";
-      loading.value = false;
-      return;
-    }
-
-    if (!form.value.category_id) {
-      error.value = "Kategori wajib dipilih!";
-      loading.value = false;
-      return;
-    }
-
-    if (!form.value.qty || form.value.qty <= 0) {
-      error.value = "Jumlah harus lebih dari 0!";
-      loading.value = false;
-      return;
-    }
-
-    if (!form.value.harga || form.value.harga <= 0) {
-      error.value = "Harga harus lebih dari 0!";
-      loading.value = false;
-      return;
-    }
-
-    calculateTotal();  // Ensure total_harga is calculated
-
     try {
-      const token = sessionStorage.getItem("token");
-      const payload = { ...form.value };
-
-      // If it's a service, set merek_id to null
-      if (isServiceCategory.value) {
-        payload.merek_id = null;
+      if (!form.value.proyek_id) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Proyek harus dipilih"
+        });
+        return;
       }
+
+      const token = sessionStorage.getItem("token");
+      const payload = {
+        proyek_id: form.value.proyek_id,
+        item: form.value.item,
+        merek_id: form.value.merek_id,
+        type: form.value.type,
+        spesifikasi: form.value.spesifikasi,
+        unit_id: form.value.unit_id,
+        category_id: form.value.category_id,
+        qty: form.value.qty,
+        harga: unformatCurrency(form.value.displayHarga),
+        total_harga: unformatCurrency(form.value.displayTotalHarga),
+        deskripsi: form.value.deskripsi
+      };
 
       if (modalMode.value === "edit") {
         await axios.put(`/api/purchasematerials/${editingId.value}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
-        Swal.fire({ icon: "success", title: "Berhasil!", text: "Data pembelian diperbarui." });
+        Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil diupdate" });
       } else {
         await axios.post("/api/purchasematerials", payload, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
-        Swal.fire({ icon: "success", title: "Berhasil!", text: "Data pembelian ditambahkan." });
+        Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil ditambahkan" });
       }
 
       closeModal();
-      await fetchPembelians();
+      await fetchPembelians(form.value.proyek_id);
     } catch (err) {
-      Swal.fire({ icon: "error", title: "Oops...", text: "Terjadi kesalahan." });
-    } finally {
-      loading.value = false;
+      console.error("Error submitting form:", err);
+      let errorMessage = "Terjadi kesalahan saat menyimpan data";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: errorMessage
+      });
     }
   };
 
-  const handleDelete = (id) => {
-  Swal.fire({
-    title: "Yakin ingin menghapus?",
-    text: "Data tidak dapat dikembalikan!",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonColor: "#d33",
-    cancelButtonColor: "#3085d6",
-    confirmButtonText: "Ya, hapus!",
-  }).then(async (result) => {
-    if (result.isConfirmed) {
-      try {
+  const handleDelete = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: "Yakin ingin menghapus?",
+        text: "Data tidak dapat dikembalikan!",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6",
+        confirmButtonText: "Ya, hapus!",
+        cancelButtonText: "Batal"
+      });
+
+      if (result.isConfirmed) {
         const token = sessionStorage.getItem("token");
         await axios.delete(`/api/purchasematerials/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
-        Swal.fire("Terhapus!", "Data berhasil dihapus.", "success");
+        Swal.fire({ icon: "success", title: "Success", text: "Data berhasil dihapus" });
         await fetchPembelians(selectedProject.value);
-      } catch (err) {
-        Swal.fire("Gagal!", "Terjadi kesalahan saat menghapus.", "error");
       }
+    } catch (err) {
+      console.error("Error deleting purchase:", err);
+      let errorMessage = "Gagal menghapus data";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: errorMessage
+      });
     }
-  });
-};
-
+  };
 
   // Add formatting functions
   const formatCurrency = (value) => {
@@ -692,10 +708,55 @@ const changeProject = async () => {
     width: 100%;
     overflow-x: auto;
   }
+
   .dataTables_wrapper {
     overflow-x: auto;
+    position: relative;
   }
+
   table.display {
     width: 100% !important;
+    min-width: 1200px;
+  }
+
+  /* Fixed columns styles */
+  .dataTables_scroll {
+    position: relative;
+    clear: both;
+    width: 100%;
+  }
+
+  .dataTables_scrollBody {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: none;
+  }
+
+  /* Fixed column styles */
+  .fixed-columns {
+    position: sticky;
+    background: white;
+    z-index: 1;
+  }
+
+  .fixed-columns-left {
+    left: 0;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+  }
+
+  .fixed-columns-right {
+    right: 0;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  }
+
+  /* Table cell styles */
+  table.dataTable tbody td {
+    white-space: nowrap;
+    padding: 8px;
+  }
+
+  /* Button styles */
+  .btn {
+    margin: 0 2px;
   }
   </style>

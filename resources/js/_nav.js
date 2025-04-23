@@ -33,6 +33,21 @@ export default [
 
     },
     {
+        component: 'CNavItem',
+        name: 'Acivity Log',
+        to: '/activitylog',
+        icon: 'cil-list',
+        // roles: ['superadmin'], // Role yang bisa mengakses
+
+      },
+    {
+        component: 'CNavItem',
+        name: 'Kategori Jasa',
+        to: '/kategorijasa',
+        icon: 'cil-list',
+        roles: ['superadmin'],
+      },
+    {
         component: 'CNavTitle',
         name: 'Master Data Pembelian',
       },
@@ -67,14 +82,13 @@ export default [
             {
               component: 'CNavItem',
               name: 'Proyek',
-              to: '/base/project/project',
+              to: '/base/proyek/proyek',
             },
             {
               component: 'CNavItem',
               name: 'Pembelian Material',
               to: '/base/purchase/pembelian',
             },
-
         ],
       },
       {

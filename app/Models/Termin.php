@@ -4,13 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-
+use App\Traits\Trackable;
 class Termin extends Model
 {
     use HasFactory;
+    use Trackable;
+
 
     protected $fillable = [
-        'project_id',
+        'proyek_id',
         'nama_termin',
         'nilai_termin',
         'dp_percentage',
@@ -32,15 +34,15 @@ class Termin extends Model
     ];
 
     /**
-     * Get the project that owns the termin.
+     * Get the proyek that owns the termin.
      */
-    public function project()
+    public function proyek()
     {
-        return $this->belongsTo(Project::class);
+        return $this->belongsTo(Proyek::class);
     }
-    public function purchaseMaterials()
-{
-    return $this->hasMany(PurchaseMaterial::class);
-}
 
+    public function purchaseMaterials()
+    {
+        return $this->hasMany(PurchaseMaterial::class);
+    }
 }

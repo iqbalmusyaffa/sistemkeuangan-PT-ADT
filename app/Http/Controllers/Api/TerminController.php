@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Termin;
-use App\Models\Project;
+use App\Models\Proyek;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +15,7 @@ class TerminController extends Controller
      */
     public function index()
     {
-        $termins = Termin::with('project')->orderBy('created_at', 'desc')->get();
+        $termins = Termin::with('proyek')->orderBy('created_at', 'desc')->get();
         return response()->json($termins);
     }
 
@@ -25,7 +25,7 @@ class TerminController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'project_id' => 'required|exists:projects,id',
+            'proyek_id' => 'required|exists:proyeks,id',
             'nama_termin' => 'required|string|max:255',
             'nilai_termin' => 'required|numeric|min:0',
             'dp_percentage' => 'required|numeric|min:0|max:100',
@@ -59,7 +59,7 @@ class TerminController extends Controller
      */
     public function show(Termin $termin)
     {
-        $termin->load('project');
+        $termin->load('proyek');
         return response()->json($termin);
     }
 
@@ -69,7 +69,7 @@ class TerminController extends Controller
     public function update(Request $request, Termin $termin)
     {
         $validated = $request->validate([
-            'project_id' => 'required|exists:projects,id',
+            'proyek_id' => 'required|exists:proyeks,id',
             'nama_termin' => 'required|string|max:255',
             'nilai_termin' => 'required|numeric|min:0',
             'dp_percentage' => 'required|numeric|min:0|max:100',
@@ -113,13 +113,17 @@ class TerminController extends Controller
     /**
      * Get termins by project ID.
      */
-    public function getByProject($projectId)
+    public function getByProject($proyekId)
     {
-        $termins = Termin::where('project_id', $projectId)
+        $termins = Termin::where('proyek_id', $proyekId)
+            ->with('proyek')
             ->orderBy('created_at', 'desc')
             ->get();
         
-        return response()->json($termins);
+        return response()->json([
+            'data' => $termins,
+            'project' => Proyek::find($proyekId)
+        ]);
     }
 
     /**

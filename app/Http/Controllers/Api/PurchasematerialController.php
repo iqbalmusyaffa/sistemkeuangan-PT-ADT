@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Purchasematerial;
 use App\Models\Kategori;
 use App\Models\Merek;
-use App\Models\Project;
+use App\Models\Proyek;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Log;
 
@@ -19,29 +19,29 @@ class PurchasematerialController extends Controller
     public function index(Request $request)
     {
         try {
-            if (!$request->has('project_id')) {
+            if (!$request->has('proyek_id')) {
                 return response()->json([
-                    'error' => 'Project ID harus dipilih'
+                    'error' => 'Proyek ID harus dipilih'
                 ], 400);
             }
 
-            $projectId = $request->project_id;
+            $proyekId = $request->proyek_id;
             
-            // Verify project exists
-            $project = Project::find($projectId);
-            if (!$project) {
+            // Verify proyek exists
+            $proyek = Proyek::find($proyekId);
+            if (!$proyek) {
                 return response()->json([
-                    'error' => 'Project tidak ditemukan'
+                    'error' => 'Proyek tidak ditemukan'
                 ], 404);
             }
 
-            // Get purchases for this project only
-            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'project'])
-                ->where('project_id', $projectId)
+            // Get purchases for this proyek only
+            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'proyek'])
+                ->where('proyek_id', $proyekId)
                 ->get();
 
             return response()->json([
-                'project' => $project,
+                'proyek' => $proyek,
                 'purchases' => $purchases
             ]);
         } catch (\Exception $e) {
@@ -72,7 +72,7 @@ class PurchasematerialController extends Controller
                 'qty' => 'required|integer',
                 'harga' => 'required|numeric',
                 'deskripsi' => 'nullable|string',
-                'project_id' => 'required|exists:projects,id',
+                'proyek_id' => 'required|exists:proyeks,id',
             ];
 
             // Add merek_id validation based on category type
@@ -98,7 +98,7 @@ class PurchasematerialController extends Controller
                 'harga' => $validatedData['harga'],
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
-                'project_id' => $validatedData['project_id'],
+                'proyek_id' => $validatedData['proyek_id'],
             ];
 
             // Handle merek_id for service categories
@@ -163,7 +163,7 @@ class PurchasematerialController extends Controller
                 'qty' => 'required|integer',
                 'harga' => 'required|numeric',
                 'deskripsi' => 'nullable|string',
-                'project_id' => 'required|exists:projects,id',
+                'proyek_id' => 'required|exists:proyeks,id',
             ];
 
             // Add merek_id validation based on category type
@@ -189,7 +189,7 @@ class PurchasematerialController extends Controller
                 'harga' => $validatedData['harga'],
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
-                'project_id' => $validatedData['project_id'],
+                'proyek_id' => $validatedData['proyek_id'],
             ];
 
             // Handle merek_id for service categories
@@ -249,10 +249,10 @@ class PurchasematerialController extends Controller
             ], 500);
         }
     }
-    public function getProjects(Request $request)
-{
-    $projects = Project::all();
-    return response()->json($projects);
-}
 
+    public function getProyeks(Request $request)
+    {
+        $proyeks = Proyek::all();
+        return response()->json($proyeks);
+    }
 }

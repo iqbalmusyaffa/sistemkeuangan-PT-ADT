@@ -28,6 +28,18 @@ const routes = [
         meta: { requiresAuth: true,requiresSuperadmin: true },
       },
       {
+        path: '/kategorijasa',
+        name: 'KategoriJasa',
+        component: () => import('@/views/kategorijasa/Kategorijasa.vue'),
+        meta: { requiresAuth: true,requiresSuperadmin: true },
+      },
+      {
+        path: '/activitylog',
+        name: 'ActivityLog',
+        component: () => import('@/views/activitylog/ActivityLog.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/user',
         name: 'User',
         component: () => import('@/views/user/User.vue'),
@@ -58,15 +70,15 @@ const routes = [
         meta: { requiresAuth: true },
       },
       {
-        path: '/base/project/project',
-        name: 'Project',
-        component: () => import('@/views/base/project/Project.vue'),
+        path: '/base/proyek/proyek',
+        name: 'Proyek',
+        component: () => import('@/views/base/proyek/Proyek.vue'),
         meta: { requiresAuth: true },
       },
       {
-        path: '/base/project/:id/detail',
-        name: 'ProjectDetail',
-        component: () => import('@/views/base/project/ProjectDetail.vue'),
+        path: '/base/proyek/:id/detail',
+        name: 'ProyekDetail',
+        component: () => import('@/views/base/proyek/ProyekDetail.vue'),
         meta: { requiresAuth: true },
       },
       {
