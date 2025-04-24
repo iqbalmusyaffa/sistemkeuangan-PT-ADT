@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('incomes', IncomeController::class);
 // Pengeluaran (Expense)
     Route::apiResource('expenses', ExpenseController::class);
+    Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
+    Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
     // Merek routes
     Route::apiResource('mereks', MerekController::class);
     // Unit routes

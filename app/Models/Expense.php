@@ -5,44 +5,109 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
-use App\Models\Company;
+use App\Models\Proyek;
 use App\Models\Kategori;
+use App\Models\ServiceCategory;
+use App\Models\Purchasematerial;
+use App\Models\Termin;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Traits\Trackable;
 
 class Expense extends Model
 {
     use HasFactory;
+    use Trackable;
+
+    protected $table = 'expenses';
 
     protected $fillable = [
         'kode_transaksi',
         'user_id',
-        'company_id',
+        'proyek_id',
         'category_id',
+        'service_category_id',
         'amount',
         'description',
         'transaction_date',
         'status',
+        'payment_method',
+        'source_type',
+        'source_id',
+        'prepared_fund',
+        'bukti'
     ];
 
     protected $casts = [
-        'status' => 'boolean',
+        'amount' => 'decimal:2',
+        'prepared_fund' => 'decimal:2',
         'transaction_date' => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
+
+    protected $with = ['proyek', 'category', 'serviceCategory'];
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    public function company()
+    public function proyek()
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Proyek::class, 'proyek_id');
     }
 
     public function category()
     {
-        return $this->belongsTo(Kategori::class);
+        return $this->belongsTo(Kategori::class, 'category_id');
+    }
+
+    public function serviceCategory()
+    {
+        return $this->belongsTo(ServiceCategory::class, 'service_category_id');
+    }
+
+    public function source()
+    {
+        if ($this->source_type === 'termin') {
+            return $this->belongsTo(Termin::class, 'source_id');
+        }
+        if ($this->source_type === 'purchase') {
+            return $this->belongsTo(Purchasematerial::class, 'source_id');
+        }
+        return null;
+    }
+
+    public function getActiveCategory()
+    {
+        return $this->service_category_id ? $this->serviceCategory : $this->category;
+    }
+
+    public function getCategoryNameAttribute()
+    {
+        $category = $this->getActiveCategory();
+        return $category ? $category->nama_kategori : null;
+    }
+
+    public function scopeByProyek($query, $proyekId)
+    {
+        return $query->where('proyek_id', $proyekId);
+    }
+
+    public function scopeByPeriod($query, $startDate, $endDate)
+    {
+        return $query->whereBetween('transaction_date', [$startDate, $endDate]);
+    }
+
+    public function scopeByStatus($query, $status)
+    {
+        return $query->where('status', $status);
+    }
+
+    public function scopeBySource($query, $sourceType)
+    {
+        return $query->where('source_type', $sourceType);
     }
 
     protected static function boot()
@@ -79,5 +144,41 @@ class Expense extends Model
         } catch (\Exception $e) {
             Log::error("Error generating kode transaksi: " . $e->getMessage());
         }
+    }
+
+    public static function createFromPurchase($purchase)
+    {
+        $category = $purchase->is_service ? $purchase->serviceCategory : $purchase->category;
+        
+        return self::create([
+            'user_id' => auth()->id(),
+            'proyek_id' => $purchase->proyek_id,
+            'category_id' => $purchase->is_service ? null : $purchase->category_id,
+            'service_category_id' => $purchase->is_service ? $purchase->service_category_id : null,
+            'amount' => $purchase->total_harga,
+            'description' => "Pembelian {$purchase->item} untuk proyek " . optional($purchase->proyek)->nama_proyek,
+            'transaction_date' => now(),
+            'status' => 'Lunas',
+            'source_type' => 'purchase',
+            'source_id' => $purchase->id,
+            'prepared_fund' => $purchase->total_harga
+        ]);
+    }
+
+    public static function createFromTermin($termin)
+    {
+        return self::create([
+            'user_id' => auth()->id(),
+            'proyek_id' => $termin->proyek_id,
+            'category_id' => $termin->category_id,
+            'service_category_id' => null,
+            'amount' => $termin->jumlah_pembayaran,
+            'description' => "Pembayaran termin {$termin->nama_termin} untuk proyek " . optional($termin->proyek)->nama_proyek,
+            'transaction_date' => $termin->tanggal_pembayaran,
+            'status' => $termin->status_pembayaran,
+            'source_type' => 'termin',
+            'source_id' => $termin->id,
+            'prepared_fund' => $termin->jumlah_pembayaran
+        ]);
     }
 }

@@ -426,6 +426,23 @@ const initDataTable = () => {
 
   const dataTableConfig = {
     data: termins.value,
+    language: {
+      emptyTable: "Tidak ada data yang tersedia",
+      info: "Menampilkan _START_ hingga _END_ dari _TOTAL_ entri",
+      infoEmpty: "Menampilkan 0 hingga 0 dari 0 entri",
+      infoFiltered: "(disaring dari _MAX_ total entri)",
+      lengthMenu: "Tampilkan _MENU_ entri",
+      loadingRecords: "Memuat...",
+      processing: "Memproses...",
+      search: "Cari:",
+      zeroRecords: "Tidak ditemukan data yang sesuai",
+      paginate: {
+        first: "Pertama",
+        last: "Terakhir",
+        next: "Selanjutnya",
+        previous: "Sebelumnya"
+      }
+    },
     columns: [
       {
         title: "No",

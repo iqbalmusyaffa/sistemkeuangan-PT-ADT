@@ -7,6 +7,7 @@ use App\Models\Termin;
 use App\Models\Proyek;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class TerminController extends Controller
 {
@@ -131,17 +132,79 @@ class TerminController extends Controller
      */
     public function updateStatus(Request $request, Termin $termin)
     {
-        $validated = $request->validate([
-            'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
-            'tanggal_dp' => 'nullable|date',
-            'tanggal_pelunasan' => 'nullable|date',
-        ]);
+        try {
+            DB::beginTransaction();
 
-        $termin->update($validated);
+            $validatedData = $request->validate([
+                'status_termin' => 'required|in:Pending,DP Dibayar,Lunas',
+                'tanggal_dp' => 'nullable|date',
+                'tanggal_pelunasan' => 'nullable|date'
+            ]);
 
-        return response()->json([
-            'message' => 'Status termin berhasil diupdate',
-            'data' => $termin,
-        ]);
+            $oldStatus = $termin->status_termin;
+            $newStatus = $validatedData['status_termin'];
+
+            // Update termin status and dates
+            $termin->status_termin = $newStatus;
+            if ($newStatus === 'DP Dibayar' && !$termin->tanggal_dp) {
+                $termin->tanggal_dp = $validatedData['tanggal_dp'] ?? now();
+            }
+            if ($newStatus === 'Lunas' && !$termin->tanggal_pelunasan) {
+                $termin->tanggal_pelunasan = $validatedData['tanggal_pelunasan'] ?? now();
+            }
+            $termin->save();
+
+            // Create expense records based on status changes
+            if ($oldStatus !== $newStatus) {
+                if ($newStatus === 'DP Dibayar') {
+                    // Create expense for DP
+                    $expense = new \App\Models\Expense([
+                        'user_id' => auth()->id(),
+                        'proyek_id' => $termin->proyek_id,
+                        'category_id' => null, // You might want to set a specific category for DP payments
+                        'amount' => $termin->nilai_dp,
+                        'description' => "Pembayaran DP Termin " . $termin->nama_termin,
+                        'transaction_date' => $termin->tanggal_dp,
+                        'status' => 'Lunas',
+                        'payment_method' => null,
+                        'prepared_fund' => $termin->nilai_dp,
+                        'source_type' => 'termin',
+                        'source_id' => $termin->id
+                    ]);
+                    $expense->save();
+                    $termin->expense_id = $expense->id;
+                    $termin->save();
+                } elseif ($newStatus === 'Lunas') {
+                    // Create expense for final payment
+                    $expense = new \App\Models\Expense([
+                        'user_id' => auth()->id(),
+                        'proyek_id' => $termin->proyek_id,
+                        'category_id' => null, // You might want to set a specific category for final payments
+                        'amount' => $termin->nilai_termin - $termin->nilai_dp,
+                        'description' => "Pelunasan Termin " . $termin->nama_termin,
+                        'transaction_date' => $termin->tanggal_pelunasan,
+                        'status' => 'Lunas',
+                        'payment_method' => null,
+                        'prepared_fund' => $termin->nilai_termin - $termin->nilai_dp,
+                        'source_type' => 'termin',
+                        'source_id' => $termin->id
+                    ]);
+                    $expense->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Status termin berhasil diupdate',
+                'data' => $termin
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error updating termin status: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Gagal mengupdate status termin',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 } 
