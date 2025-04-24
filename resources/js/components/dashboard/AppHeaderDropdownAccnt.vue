@@ -19,10 +19,10 @@ const logout = async () => {
         headers: { Authorization: `Bearer ${token}` }
       })
     }
-    
+
     // Gunakan auth store untuk logout
     auth.logout()
-    
+
     // Redirect ke halaman login
     router.push('/login')
   } catch (error) {

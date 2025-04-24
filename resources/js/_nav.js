@@ -9,6 +9,7 @@ export default [
         text: 'NEW',
       },
     },
+
     {
       component: 'CNavTitle',
       name: 'Manajemen Pengguna',
@@ -32,6 +33,21 @@ export default [
 
     },
     {
+        component: 'CNavItem',
+        name: 'Acivity Log',
+        to: '/activitylog',
+        icon: 'cil-list',
+        // roles: ['superadmin'], // Role yang bisa mengakses
+
+      },
+    {
+        component: 'CNavItem',
+        name: 'Kategori Jasa',
+        to: '/kategorijasa',
+        icon: 'cil-list',
+        roles: ['superadmin'],
+      },
+    {
         component: 'CNavTitle',
         name: 'Master Data Pembelian',
       },
@@ -50,6 +66,23 @@ export default [
               component: 'CNavItem',
               name: 'Unit',
               to: '/base/unit',
+            },
+        ],
+      },
+      {
+        component: 'CNavTitle',
+        name: 'Master Data Proyek',
+      },
+    {
+        component: 'CNavGroup',
+        name: 'Master Data Proyek',
+        to: '/base',
+        icon: 'cil-folder',
+        items: [
+            {
+              component: 'CNavItem',
+              name: 'Proyek',
+              to: '/base/proyek/proyek',
             },
             {
               component: 'CNavItem',
@@ -93,8 +126,18 @@ export default [
           name: 'Kasbon',
           to: '/base/kasbon',
         },
+        {
+            component: 'CNavItem',
+            name: 'termin',
+            to: '/base/termin/termin',
+          },
       ],
     },
+    // kolom master data penjualan
+    {
+        component: 'CNavTitle',
+        name: 'Master Data Pembelian',
+      },
     {
       component: 'CNavTitle',
       name: 'Lainnya',

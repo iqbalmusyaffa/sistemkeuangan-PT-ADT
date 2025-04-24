@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             KategoriTransaksiSeeder::class, // Memanggil seeder kategori transaksi
             UserSeeder::class, // Memanggil seeder user
             UnitsSeeder::class, // Memanggil seeder unit
+            MerekSeeder::class, // Memanggil seeder merek
         ]);
 
     }
