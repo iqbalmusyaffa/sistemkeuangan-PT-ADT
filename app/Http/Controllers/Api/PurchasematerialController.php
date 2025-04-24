@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Purchasematerial;
 use App\Models\Kategori;
+use App\Models\ServiceCategory;
 use App\Models\Merek;
 use App\Models\Proyek;
+use App\Models\Unit;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class PurchasematerialController extends Controller
 {
@@ -26,19 +29,23 @@ class PurchasematerialController extends Controller
             }
 
             $proyekId = $request->proyek_id;
-            
-            // Verify proyek exists
             $proyek = Proyek::find($proyekId);
+            
             if (!$proyek) {
                 return response()->json([
                     'error' => 'Proyek tidak ditemukan'
                 ], 404);
             }
 
-            // Get purchases for this proyek only
-            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'proyek'])
+            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek'])
                 ->where('proyek_id', $proyekId)
-                ->get();
+                ->get()
+                ->map(function ($purchase) {
+                    $category = $purchase->is_service ? $purchase->serviceCategory : $purchase->category;
+                    return array_merge($purchase->toArray(), [
+                        'category_name' => $category ? $category->nama_kategori : null
+                    ]);
+                });
 
             return response()->json([
                 'proyek' => $proyek,
@@ -58,9 +65,11 @@ class PurchasematerialController extends Controller
     public function store(Request $request)
     {
         try {
-            // Check if the category is a service
-            $category = Kategori::find($request->category_id);
-            $isService = $category && str_contains(strtolower($category->nama_kategori), 'jasa');
+            DB::beginTransaction();
+
+            // Check if the unit is a service type
+            $unit = Unit::findOrFail($request->unit_id);
+            $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
 
             // Define validation rules
             $rules = [
@@ -68,18 +77,19 @@ class PurchasematerialController extends Controller
                 'type' => 'required|string|max:255',
                 'spesifikasi' => 'nullable|string',
                 'unit_id' => 'required|exists:units,id',
-                'category_id' => 'required|exists:kategoris,id',
-                'qty' => 'required|integer',
-                'harga' => 'required|numeric',
+                'qty' => 'required|integer|min:1',
+                'harga' => 'required|numeric|min:0',
                 'deskripsi' => 'nullable|string',
                 'proyek_id' => 'required|exists:proyeks,id',
             ];
 
-            // Add merek_id validation based on category type
-            if (!$isService) {
-                $rules['merek_id'] = 'required|exists:mereks,id';
-            } else {
+            // Add category validation based on type
+            if ($isService) {
+                $rules['service_category_id'] = 'required|exists:service_categories,id';
                 $rules['merek_id'] = 'nullable|exists:mereks,id';
+            } else {
+                $rules['category_id'] = 'required|exists:kategoris,id';
+                $rules['merek_id'] = 'required|exists:mereks,id';
             }
 
             $validatedData = $request->validate($rules);
@@ -87,56 +97,46 @@ class PurchasematerialController extends Controller
             // Calculate total_harga
             $total_harga = $validatedData['qty'] * $validatedData['harga'];
 
-            // Prepare data for creation
+            // Prepare base data
             $data = [
                 'item' => $validatedData['item'],
                 'type' => $validatedData['type'],
                 'spesifikasi' => $validatedData['spesifikasi'] ?? null,
                 'unit_id' => $validatedData['unit_id'],
-                'category_id' => $validatedData['category_id'],
                 'qty' => $validatedData['qty'],
                 'harga' => $validatedData['harga'],
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
                 'proyek_id' => $validatedData['proyek_id'],
+                'is_service' => $isService
             ];
 
-            // Handle merek_id for service categories
+            // Add category data based on type
             if ($isService) {
-                if (isset($validatedData['merek_id'])) {
-                    $merek = Merek::find($validatedData['merek_id']);
-                    if ($merek && $merek->name === '-') {
-                        $data['merek_id'] = $merek->id;
-                    } else {
-                        // If merek is not '-', find or create the '-' merek
-                        $defaultMerek = Merek::where('name', '-')->first();
-                        if ($defaultMerek) {
-                            $data['merek_id'] = $defaultMerek->id;
-                        } else {
-                            $data['merek_id'] = null;
-                        }
-                    }
-                } else {
-                    // If no merek selected, find or create the '-' merek
-                    $defaultMerek = Merek::where('name', '-')->first();
-                    if ($defaultMerek) {
-                        $data['merek_id'] = $defaultMerek->id;
-                    } else {
-                        $data['merek_id'] = null;
-                    }
-                }
+                $data['service_category_id'] = $validatedData['service_category_id'];
+                $data['category_id'] = null;
+                
+                // Handle merek for service (use default '-' merek or null)
+                $defaultMerek = Merek::firstOrCreate(
+                    ['name' => '-'],
+                    ['description' => 'Default merek for services']
+                );
+                $data['merek_id'] = $defaultMerek->id;
             } else {
+                $data['category_id'] = $validatedData['category_id'];
+                $data['service_category_id'] = null;
                 $data['merek_id'] = $validatedData['merek_id'];
             }
 
             $purchasematerial = Purchasematerial::create($data);
-
+            
+            DB::commit();
             return response()->json($purchasematerial, 201);
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error in PurchasematerialController@store: ' . $e->getMessage());
             return response()->json([
-                'error' => 'Gagal menambahkan Pembelian material. Silakan coba lagi nanti.',
-                'message' => $e->getMessage()
+                'error' => 'Gagal menambahkan Pembelian material. ' . $e->getMessage()
             ], 500);
         }
     }
@@ -147,11 +147,13 @@ class PurchasematerialController extends Controller
     public function update(Request $request, string $id)
     {
         try {
-            $purchasematerial = Purchasematerial::findOrFail($id);
+            DB::beginTransaction();
 
-            // Check if the category is a service
-            $category = Kategori::find($request->category_id);
-            $isService = $category && str_contains(strtolower($category->nama_kategori), 'jasa');
+            $purchasematerial = Purchasematerial::findOrFail($id);
+            
+            // Check if the unit is a service type
+            $unit = Unit::findOrFail($request->unit_id);
+            $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
 
             // Define validation rules
             $rules = [
@@ -159,18 +161,19 @@ class PurchasematerialController extends Controller
                 'type' => 'required|string|max:255',
                 'spesifikasi' => 'nullable|string',
                 'unit_id' => 'required|exists:units,id',
-                'category_id' => 'required|exists:kategoris,id',
-                'qty' => 'required|integer',
-                'harga' => 'required|numeric',
+                'qty' => 'required|integer|min:1',
+                'harga' => 'required|numeric|min:0',
                 'deskripsi' => 'nullable|string',
                 'proyek_id' => 'required|exists:proyeks,id',
             ];
 
-            // Add merek_id validation based on category type
-            if (!$isService) {
-                $rules['merek_id'] = 'required|exists:mereks,id';
-            } else {
+            // Add category validation based on type
+            if ($isService) {
+                $rules['service_category_id'] = 'required|exists:service_categories,id';
                 $rules['merek_id'] = 'nullable|exists:mereks,id';
+            } else {
+                $rules['category_id'] = 'required|exists:kategoris,id';
+                $rules['merek_id'] = 'required|exists:mereks,id';
             }
 
             $validatedData = $request->validate($rules);
@@ -178,56 +181,46 @@ class PurchasematerialController extends Controller
             // Calculate total_harga
             $total_harga = $validatedData['qty'] * $validatedData['harga'];
 
-            // Prepare data for update
+            // Prepare base data
             $data = [
                 'item' => $validatedData['item'],
                 'type' => $validatedData['type'],
                 'spesifikasi' => $validatedData['spesifikasi'] ?? null,
                 'unit_id' => $validatedData['unit_id'],
-                'category_id' => $validatedData['category_id'],
                 'qty' => $validatedData['qty'],
                 'harga' => $validatedData['harga'],
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
                 'proyek_id' => $validatedData['proyek_id'],
+                'is_service' => $isService
             ];
 
-            // Handle merek_id for service categories
+            // Add category data based on type
             if ($isService) {
-                if (isset($validatedData['merek_id'])) {
-                    $merek = Merek::find($validatedData['merek_id']);
-                    if ($merek && $merek->name === '-') {
-                        $data['merek_id'] = $merek->id;
-                    } else {
-                        // If merek is not '-', find or create the '-' merek
-                        $defaultMerek = Merek::where('name', '-')->first();
-                        if ($defaultMerek) {
-                            $data['merek_id'] = $defaultMerek->id;
-                        } else {
-                            $data['merek_id'] = null;
-                        }
-                    }
-                } else {
-                    // If no merek selected, find or create the '-' merek
-                    $defaultMerek = Merek::where('name', '-')->first();
-                    if ($defaultMerek) {
-                        $data['merek_id'] = $defaultMerek->id;
-                    } else {
-                        $data['merek_id'] = null;
-                    }
-                }
+                $data['service_category_id'] = $validatedData['service_category_id'];
+                $data['category_id'] = null;
+                
+                // Handle merek for service (use default '-' merek or null)
+                $defaultMerek = Merek::firstOrCreate(
+                    ['name' => '-'],
+                    ['description' => 'Default merek for services']
+                );
+                $data['merek_id'] = $defaultMerek->id;
             } else {
+                $data['category_id'] = $validatedData['category_id'];
+                $data['service_category_id'] = null;
                 $data['merek_id'] = $validatedData['merek_id'];
             }
 
             $purchasematerial->update($data);
-
+            
+            DB::commit();
             return response()->json($purchasematerial);
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error in PurchasematerialController@update: ' . $e->getMessage());
             return response()->json([
-                'error' => 'Gagal mengupdate Pembelian material. Silakan coba lagi nanti.',
-                'message' => $e->getMessage()
+                'error' => 'Gagal mengupdate Pembelian material. ' . $e->getMessage()
             ], 500);
         }
     }

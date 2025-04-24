@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('activitylogs', function (Blueprint $table) { // Ganti ke 'activitylogs'
+        Schema::create('activity_logs', function (Blueprint $table) { // Ganti ke 'activitylogs'
             $table->id();
             $table->string('user_name')->nullable(); // contoh: Admin
             $table->string('model_type'); // misalnya App\Models\Transaction

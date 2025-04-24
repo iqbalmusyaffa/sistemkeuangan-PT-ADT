@@ -15,7 +15,14 @@ class Purchasematerial extends Model
     use Trackable;
 
     protected $fillable = [
-        'item', 'merek_id', 'type', 'spesifikasi', 'unit_id', 'category_id', 'qty', 'harga', 'total_harga', 'deskripsi', 'proyek_id'
+        'item', 'merek_id', 'type', 'spesifikasi', 'unit_id', 'category_id', 'service_category_id', 'is_service', 'qty', 'harga', 'total_harga', 'deskripsi', 'proyek_id'
+    ];
+
+    protected $casts = [
+        'is_service' => 'boolean',
+        'qty' => 'integer',
+        'harga' => 'decimal:2',
+        'total_harga' => 'decimal:2',
     ];
 
     /**
@@ -49,9 +56,25 @@ class Purchasematerial extends Model
     {
         return $this->belongsTo(Proyek::class, 'proyek_id'); // Foreign key 'proyek_id' points to Proyek model
     }
-    public function termin()
-{
-    return $this->belongsTo(Termin::class);
-}
 
+    public function termin()
+    {
+        return $this->belongsTo(Termin::class);
+    }
+
+    public function serviceCategory()
+    {
+        return $this->belongsTo(ServiceCategory::class, 'service_category_id'); // Foreign key 'service_category_id' points to ServiceCategory model
+    }
+
+    public function getActiveCategory()
+    {
+        return $this->is_service ? $this->serviceCategory : $this->category;
+    }
+
+    public function getCategoryNameAttribute()
+    {
+        $category = $this->getActiveCategory();
+        return $category ? $category->nama_kategori : null;
+    }
 }

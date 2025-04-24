@@ -126,13 +126,21 @@
                   </CTableRow>
                 </CTableHead>
                 <CTableBody>
-                  <CTableRow v-for="(purchase, index) in purchases" :key="purchase.id">
+                  <CTableRow 
+                    v-for="(purchase, index) in purchases" 
+                    :key="purchase.id"
+                    :class="{
+                      'service-row': purchase.is_service && purchase.unit?.unit_name?.toLowerCase() === 'jasa',
+                      'service-other-row': purchase.is_service && ['set', 'transaksi'].includes(purchase.unit?.unit_name?.toLowerCase()),
+                      'material-row': !purchase.is_service
+                    }"
+                  >
                     <CTableDataCell>{{ index + 1 }}</CTableDataCell>
                     <CTableDataCell>{{ purchase.item }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.merek?.name || '-' }}</CTableDataCell>
+                    <CTableDataCell>{{ purchase.is_service ? '-' : (purchase.merek?.name || '-') }}</CTableDataCell>
                     <CTableDataCell>{{ purchase.type || '-' }}</CTableDataCell>
                     <CTableDataCell>{{ purchase.unit?.unit_name || '-' }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.category?.nama_kategori || '-' }}</CTableDataCell>
+                    <CTableDataCell>{{ purchase.is_service ? (purchase.service_category?.nama_kategori || '-') : (purchase.category?.nama_kategori || '-') }}</CTableDataCell>
                     <CTableDataCell>{{ purchase.qty }}</CTableDataCell>
                     <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.harga) }}</CTableDataCell>
                     <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.total_harga) }}</CTableDataCell>
@@ -140,7 +148,19 @@
                 </CTableBody>
                 <CTableFoot>
                   <CTableRow>
-                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Pembelian</CTableDataCell>
+                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Material</CTableDataCell>
+                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalMaterial) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow>
+                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa</CTableDataCell>
+                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasa) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow>
+                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa Lain-lain</CTableDataCell>
+                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasaLain) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow class="table-primary">
+                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Keseluruhan</CTableDataCell>
                     <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
                   </CTableRow>
                 </CTableFoot>
@@ -275,11 +295,39 @@ const fetchTermins = async () => {
   }
 };
 
-// Computed properties for totals
-const totalPurchases = computed(() => {
-  return purchases.value.reduce((sum, purchase) => sum + Number(purchase.total_harga), 0);
+// Update computed properties for purchase totals
+const totalMaterial = computed(() => {
+  return purchases.value
+    .filter(p => !p.is_service)
+    .reduce((sum, p) => sum + Number(p.total_harga), 0);
 });
 
+const totalJasa = computed(() => {
+  return purchases.value
+    .filter(p => {
+      if (!p.is_service) return false;
+      const unitName = p.unit?.unit_name?.toLowerCase();
+      return unitName === 'jasa';
+    })
+    .reduce((sum, p) => sum + Number(p.total_harga), 0);
+});
+
+const totalJasaLain = computed(() => {
+  return purchases.value
+    .filter(p => {
+      if (!p.is_service) return false;
+      const unitName = p.unit?.unit_name?.toLowerCase();
+      return ['set', 'transaksi'].includes(unitName);
+    })
+    .reduce((sum, p) => sum + Number(p.total_harga), 0);
+});
+
+// Update total purchases to include all types
+const totalPurchases = computed(() => {
+  return totalMaterial.value + totalJasa.value + totalJasaLain.value;
+});
+
+// Computed properties for totals
 const totalTermins = computed(() => {
   return termins.value.reduce((sum, termin) => sum + Number(termin.nilai_termin), 0);
 });
@@ -366,5 +414,22 @@ onMounted(async () => {
 
 .fw-bold {
   font-weight: bold;
+}
+
+/* Add styles for different purchase types */
+.service-row {
+  background-color: #e8f4ff !important;
+}
+
+.service-other-row {
+  background-color: #fff3e0 !important;
+}
+
+.material-row {
+  background-color: #ffffff !important;
+}
+
+.table-primary {
+  background-color: #cfe2ff !important;
 }
 </style> 

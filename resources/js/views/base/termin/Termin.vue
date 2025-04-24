@@ -61,6 +61,10 @@
                     <CTable>
                       <CTableBody>
                         <CTableRow>
+                          <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
+                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
+                        </CTableRow>
+                        <CTableRow>
                           <CTableDataCell>Total Nilai Termin</CTableDataCell>
                           <CTableDataCell class="text-end">Rp {{ formatCurrency(totalTermin) }}</CTableDataCell>
                         </CTableRow>
@@ -99,11 +103,11 @@
               <CFormLabel for="project_id">Proyek</CFormLabel>
               <CFormSelect v-model="form.project_id" id="project_id" required>
                 <option value="">Pilih Proyek</option>
-                <optgroup v-for="(projectGroup, customer) in groupedProjects" 
-                         :key="customer" 
+                <optgroup v-for="(projectGroup, customer) in groupedProjects"
+                         :key="customer"
                          :label="customer">
-                  <option v-for="project in projectGroup" 
-                          :key="project.id" 
+                  <option v-for="project in projectGroup"
+                          :key="project.id"
                           :value="project.id">
                     {{ project.nama_proyek }}
                   </option>
@@ -128,8 +132,13 @@
                   @input="handleNilaiTerminInput"
                   id="nilai_termin"
                   required
+                  :readonly="true"
+                  class="bg-light"
                 />
               </div>
+              <small class="text-muted">
+                Nilai termin diambil dari Total Belanja (Invoice)
+              </small>
             </CCol>
             <CCol md="6">
               <CFormLabel for="dp_percentage">Persentase DP (%)</CFormLabel>
@@ -261,6 +270,7 @@ const statusForm = ref({
 
 const projects = ref([]);
 const termins = ref([]);
+const purchases = ref([]);
 const error = ref("");
 const loading = ref(false);
 const showModal = ref(false);
@@ -287,9 +297,9 @@ const groupedProjects = computed(() => {
 
 // Add handleNilaiTerminInput method
 const handleNilaiTerminInput = (event) => {
-  const value = event.target.value.replace(/[^\d]/g, '');
-  form.value.nilai_termin = Number(value) || 0;
-  form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
+  // Nilai termin is now read-only, always using total purchases
+  form.value.nilai_termin = totalPurchases.value;
+  form.value.displayNilaiTermin = formatCurrency(totalPurchases.value);
   calculateValues();
 };
 
@@ -298,7 +308,7 @@ const handleNilaiDPInput = (event) => {
   const value = event.target.value.replace(/[^\d]/g, '');
   form.value.nilai_dp = Number(value) || 0;
   form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-  
+
   // Calculate percentage based on DP value
   if (form.value.nilai_termin > 0) {
     form.value.dp_percentage = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
@@ -318,7 +328,7 @@ const fetchProjects = async () => {
   try {
     const token = sessionStorage.getItem("token");
     const response = await axios.get("/api/proyeks", {
-      headers: { 
+      headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
@@ -330,7 +340,7 @@ const fetchProjects = async () => {
         nama_customer: project.nama_customer || '-',
         nama_proyek: project.nama_proyek || project.nama_project || '-'
       }));
-      
+
       if (projects.value.length === 0) {
         error.value = "Tidak ada data proyek tersedia";
       }
@@ -354,41 +364,49 @@ const fetchTermins = async () => {
 
   try {
     const token = sessionStorage.getItem("token");
+    console.log("Fetching termins for project:", selectedProject.value);
+
     const response = await axios.get("/api/termins", {
       headers: { Authorization: `Bearer ${token}` },
       params: { proyek_id: selectedProject.value }
     });
 
-    if (response.data) {
-      termins.value = Array.isArray(response.data.data) ? response.data.data : [];
-      selectedProjectDetails.value = response.data.project || null;
-      
-      // Always initialize or reinitialize DataTable
-      nextTick(() => {
-        const table = initDataTable();
-        // Hanya tampilkan pesan error jika benar-benar tidak ada data
-        if (!termins.value || termins.value.length === 0) {
-          error.value = "Tidak ada data termin untuk proyek ini";
-        } else {
-          error.value = ""; // Clear error message if we have data
-        }
-      });
-    } else {
-      throw new Error("Format data tidak sesuai");
+    console.log("Termins response:", response.data);
+
+    // Handle array response directly
+    if (Array.isArray(response.data)) {
+      termins.value = response.data;
     }
+    // Handle response with data property
+    else if (response.data && Array.isArray(response.data.data)) {
+      termins.value = response.data.data;
+    }
+    // Handle other response formats
+    else if (response.data) {
+      termins.value = [response.data];
+    } else {
+      termins.value = [];
+    }
+
+    console.log("Processed termins:", termins.value);
+
+    // Initialize DataTable after data is loaded
+    nextTick(() => {
+      initDataTable();
+    });
+
   } catch (err) {
     console.error('Error fetching termins:', err);
     error.value = "Gagal memuat data termin: " + (err.response?.data?.message || err.message);
     termins.value = [];
-    throw err;
   }
 };
 
 // Calculate DP and Pelunasan values
 const calculateValues = () => {
-  if (form.value.nilai_termin && form.value.dp_percentage) {
-    form.value.nilai_dp = form.value.nilai_termin * (form.value.dp_percentage / 100);
-    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+  if (form.value.dp_percentage) {
+    form.value.nilai_dp = totalPurchases.value * (form.value.dp_percentage / 100);
+    form.value.nilai_pelunasan = totalPurchases.value - form.value.nilai_dp;
     form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
     form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
   }
@@ -396,54 +414,74 @@ const calculateValues = () => {
 
 // DataTable initialization
 const initDataTable = () => {
+  console.log("Initializing DataTable with data:", termins.value);
+
   // Destroy existing DataTable if it exists
   if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
     $(terminTableRef.value).DataTable().destroy();
   }
 
-  // Initialize DataTable with empty table structure if no data
+  // Clear the table contents
+  $(terminTableRef.value).empty();
+
   const dataTableConfig = {
-    data: termins.value || [],
+    data: termins.value,
     columns: [
       {
         title: "No",
         data: null,
-        render: (data, type, row, meta) => meta.row + 1
+        render: (data, type, row, meta) => meta.row + 1,
+        className: 'text-center align-middle',
+        width: '40px'
       },
       {
         title: "Nama Termin",
         data: "nama_termin",
-        defaultContent: "-"
+        render: (data) => data || "-",
+        className: 'text-start align-middle',
+        width: '120px'
       },
       {
         title: "Nilai Termin",
         data: "nilai_termin",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data || 0)}`
+        render: (data) => `Rp ${formatCurrency(data || 0)}`,
+        className: 'text-end align-middle',
+        width: '130px'
       },
       {
         title: "DP (%)",
         data: "dp_percentage",
-        render: (data) => `${data || 0}%`
+        render: (data) => `${data || 0}%`,
+        className: 'text-center align-middle',
+        width: '70px'
       },
       {
         title: "Nilai DP",
         data: "nilai_dp",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data || 0)}`
+        render: (data) => `Rp ${formatCurrency(data || 0)}`,
+        className: 'text-end align-middle',
+        width: '130px'
       },
       {
         title: "Nilai Pelunasan",
         data: "nilai_pelunasan",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data || 0)}`
+        render: (data) => `Rp ${formatCurrency(data || 0)}`,
+        className: 'text-end align-middle',
+        width: '130px'
       },
       {
         title: "Tanggal DP",
         data: "tanggal_dp",
-        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-"
+        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-",
+        className: 'text-center align-middle',
+        width: '100px'
       },
       {
         title: "Tanggal Pelunasan",
         data: "tanggal_pelunasan",
-        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-"
+        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-",
+        className: 'text-center align-middle',
+        width: '100px'
       },
       {
         title: "Status",
@@ -455,103 +493,132 @@ const initDataTable = () => {
             'Lunas': 'success'
           };
           return `<span class="badge bg-${statusClasses[data] || 'secondary'}">${data || '-'}</span>`;
-        }
+        },
+        className: 'text-center align-middle',
+        width: '100px'
       },
       {
         title: "Aksi",
         data: null,
+        orderable: false,
+        className: 'text-center align-middle',
+        width: '100px',
         render: (data, type, row) => {
           if (!row || !row.id) return '';
           return `
-            <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">
-              <i class="cil-pencil"></i> Edit
-            </button>
-            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
-              <i class="cil-trash"></i> Hapus
-            </button>
+            <div class="d-flex justify-content-center" style="gap: 4px;">
+              <button type="button" class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
+              <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+            </div>
           `;
         }
-      },
+      }
     ],
+    // Basic Configuration
+    responsive: false,
+    processing: true,
+    serverSide: false,
+    searching: true,
+    
+    // Scrolling Configuration
     scrollX: true,
     scrollCollapse: true,
+    autoWidth: false,
+    
+    // Fixed Columns Configuration
     fixedColumns: {
-      left: 1,
-      right: 1
+      right: 2 // Fix Status and Action columns
     },
+    
+    // Other configurations
     dom: '<"top"lf>rt<"bottom"ip><"clear">',
     pageLength: 10,
     lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]],
-    language: {
-      emptyTable: "Tidak ada data termin untuk proyek ini",
-      zeroRecords: "Tidak ditemukan data yang sesuai",
-      info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
-      infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
-      infoFiltered: "(difilter dari _MAX_ total data)",
-      lengthMenu: "Tampilkan _MENU_ data",
-      search: "Cari:",
-      paginate: {
-        first: "Pertama",
-        last: "Terakhir",
-        next: "Selanjutnya",
-        previous: "Sebelumnya"
-      }
+    
+    // Event Handlers
+    drawCallback: function(settings) {
+      const api = this.api();
+      
+      // Reattach event handlers for edit buttons
+      $(this).find('.edit-btn').each(function() {
+        $(this).off('click').on('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = $(this).data('id');
+          const termin = termins.value.find(t => t.id === parseInt(id));
+          if (termin) {
+            openModal('edit', termin);
+          }
+        });
+      });
+
+      // Reattach event handlers for delete buttons
+      $(this).find('.delete-btn').each(function() {
+        $(this).off('click').on('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = $(this).data('id');
+          if (id) {
+            deleteTermin(id);
+          }
+        });
+      });
     }
   };
 
   // Initialize DataTable
-  const dataTable = $(terminTableRef.value).DataTable(dataTableConfig);
+  const table = $(terminTableRef.value).DataTable(dataTableConfig);
 
-  // Event handlers - only attach if we have data
-  if (termins.value && termins.value.length > 0) {
-    $(terminTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
-      const id = $(this).data("id");
-      const termin = termins.value.find((t) => t.id == id);
-      if (termin) openModal("edit", termin);
-    });
+  // Handle window resize
+  $(window).on('resize', function() {
+    table.columns.adjust().draw();
+  });
 
-    $(terminTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
-      const id = $(this).data("id");
-      deleteTermin(id);
-    });
-  }
-
-  return dataTable;
+  return table;
 };
 
 const filterByProject = async () => {
   if (selectedProject.value) {
     loading.value = true;
+    error.value = "";
     try {
-      await fetchTermins();
+      console.log("Filtering by project:", selectedProject.value); // Debug log
+      await Promise.all([
+        fetchTermins(),
+        fetchPurchases(selectedProject.value)
+      ]);
     } catch (err) {
       console.error('Error filtering by project:', err);
-      error.value = "Gagal memuat data termin";
+      error.value = "Gagal memuat data";
     } finally {
       loading.value = false;
     }
   } else {
     termins.value = [];
+    purchases.value = [];
     if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
       $(terminTableRef.value).DataTable().destroy();
       $(terminTableRef.value).empty();
     }
-    error.value = "";
   }
 };
 
 // Watch for changes in selectedProject
 watch(selectedProject, async (newValue, oldValue) => {
-  if (newValue !== oldValue) { // Only trigger if value actually changed
+  if (newValue !== oldValue) {
     if (newValue) {
       loading.value = true;
       error.value = "";
       try {
-        await fetchTermins();
+        await Promise.all([
+          fetchTermins(),
+          fetchPurchases(newValue)
+        ]);
       } catch (err) {
         console.error('Error on project change:', err);
-        error.value = "Gagal memuat data termin untuk proyek yang dipilih";
+        error.value = "Gagal memuat data untuk proyek yang dipilih";
         termins.value = [];
+        purchases.value = [];
         if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
           $(terminTableRef.value).DataTable().destroy();
           $(terminTableRef.value).empty();
@@ -561,6 +628,7 @@ watch(selectedProject, async (newValue, oldValue) => {
       }
     } else {
       termins.value = [];
+      purchases.value = [];
       if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
         $(terminTableRef.value).DataTable().destroy();
         $(terminTableRef.value).empty();
@@ -568,24 +636,31 @@ watch(selectedProject, async (newValue, oldValue) => {
       error.value = "";
     }
   }
-}, { immediate: true }); // Add immediate: true to trigger on component mount
+}, { immediate: true });
 
 // Open Modal for Add/Edit
 const openModal = async (mode, termin = null) => {
   modalMode.value = mode;
   if (mode === "edit" && termin) {
+    // Format dates for input type="date"
+    const formatDateForInput = (dateString) => {
+      if (!dateString) return "";
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+
     form.value = {
-      project_id: termin.project_id,
+      project_id: termin.proyek_id || selectedProject.value,
       nama_termin: termin.nama_termin,
-      nilai_termin: termin.nilai_termin,
+      nilai_termin: totalPurchases.value,
       dp_percentage: termin.dp_percentage,
       nilai_dp: termin.nilai_dp,
       nilai_pelunasan: termin.nilai_pelunasan,
-      tanggal_dp: termin.tanggal_dp || "",
-      tanggal_pelunasan: termin.tanggal_pelunasan || "",
+      tanggal_dp: formatDateForInput(termin.tanggal_dp),
+      tanggal_pelunasan: formatDateForInput(termin.tanggal_pelunasan),
       status_termin: termin.status_termin,
       keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(termin.nilai_termin),
+      displayNilaiTermin: formatCurrency(totalPurchases.value),
       displayNilaiDP: formatCurrency(termin.nilai_dp),
       displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan)
     };
@@ -594,20 +669,21 @@ const openModal = async (mode, termin = null) => {
     modalButtonText.value = "Update";
   } else {
     // Set project_id to the currently selected project
+    const today = new Date().toISOString().split('T')[0];
     form.value = {
       project_id: selectedProject.value,
       nama_termin: "",
-      nilai_termin: 0,
+      nilai_termin: totalPurchases.value,
       dp_percentage: 50,
-      nilai_dp: 0,
-      nilai_pelunasan: 0,
-      tanggal_dp: "",
+      nilai_dp: totalPurchases.value * 0.5,
+      nilai_pelunasan: totalPurchases.value * 0.5,
+      tanggal_dp: today,
       tanggal_pelunasan: "",
       status_termin: "Belum Dibayar",
       keterangan: "",
-      displayNilaiTermin: formatCurrency(0),
-      displayNilaiDP: formatCurrency(0),
-      displayNilaiPelunasan: formatCurrency(0)
+      displayNilaiTermin: formatCurrency(totalPurchases.value),
+      displayNilaiDP: formatCurrency(totalPurchases.value * 0.5),
+      displayNilaiPelunasan: formatCurrency(totalPurchases.value * 0.5)
     };
     editingId.value = null;
     modalTitle.value = "Tambah Termin";
@@ -670,23 +746,30 @@ const handleSubmit = async () => {
 
   try {
     const token = sessionStorage.getItem("token");
-    
+
+    // Format dates for API
+    const formatDateForAPI = (dateString) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+
     const payload = {
-      proyek_id: selectedProject.value, // Use selectedProject instead of form.project_id
+      proyek_id: form.value.project_id,
       nama_termin: form.value.nama_termin,
       nilai_termin: form.value.nilai_termin,
       dp_percentage: form.value.dp_percentage,
       nilai_dp: form.value.nilai_dp,
       nilai_pelunasan: form.value.nilai_pelunasan,
-      tanggal_dp: form.value.tanggal_dp || null,
-      tanggal_pelunasan: form.value.tanggal_pelunasan || null,
+      tanggal_dp: formatDateForAPI(form.value.tanggal_dp),
+      tanggal_pelunasan: formatDateForAPI(form.value.tanggal_pelunasan),
       status_termin: form.value.status_termin,
       keterangan: form.value.keterangan || ""
     };
 
     if (modalMode.value === "edit") {
       await axios.put(`/api/termins/${editingId.value}`, payload, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -694,7 +777,7 @@ const handleSubmit = async () => {
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin diperbarui." });
     } else {
       await axios.post("/api/termins", payload, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -707,26 +790,43 @@ const handleSubmit = async () => {
   } catch (err) {
     console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
-    Swal.fire({ 
-      icon: "error", 
-      title: "Error", 
-      text: errorMessage 
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: errorMessage
     });
   } finally {
     loading.value = false;
   }
 };
 
-// Add watch for status_termin changes
+// Add watch for status_termin changes in form
 watch(() => form.value.status_termin, (newStatus) => {
   if (newStatus === "Lunas") {
+    // If status is Lunas, set pelunasan date to today if not already set
+    if (!form.value.tanggal_pelunasan) {
+      form.value.tanggal_pelunasan = new Date().toISOString().split('T')[0];
+    }
     form.value.nilai_pelunasan = 0;
     form.value.displayNilaiPelunasan = formatCurrency(0);
-
-    // Update DP to match total nilai termin
     form.value.nilai_dp = form.value.nilai_termin;
     form.value.displayNilaiDP = formatCurrency(form.value.nilai_termin);
     form.value.dp_percentage = 100;
+  } else if (newStatus === "DP Dibayar") {
+    // If status is DP Dibayar, set DP date to today if not already set
+    if (!form.value.tanggal_dp) {
+      form.value.tanggal_dp = new Date().toISOString().split('T')[0];
+    }
+  }
+});
+
+// Add watch for project_id changes in form
+watch(() => form.value.project_id, (newProjectId) => {
+  if (newProjectId) {
+    const project = projects.value.find(p => p.id === parseInt(newProjectId));
+    if (project) {
+      selectedProject.value = project.id;
+    }
   }
 });
 
@@ -743,7 +843,7 @@ const handleStatusUpdate = async () => {
     if (statusForm.value.status_termin === "DP Dibayar" || statusForm.value.status_termin === "Lunas") {
       const today = new Date();
       const formattedDate = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
-      
+
       const expenseData = {
         tanggal: formattedDate,
         kategori: "Pembayaran Termin",
@@ -790,6 +890,7 @@ const formatCurrency = (value) => {
 const changeProject = () => {
   selectedProject.value = "";
   termins.value = [];
+  purchases.value = [];
   if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
     $(terminTableRef.value).DataTable().destroy();
     $(terminTableRef.value).empty();
@@ -808,8 +909,12 @@ const totalPelunasan = computed(() => {
   return termins.value.reduce((sum, termin) => sum + (Number(termin.nilai_pelunasan) || 0), 0);
 });
 
+const totalPurchases = computed(() => {
+  return purchases.value.reduce((sum, purchase) => sum + Number(purchase.total_harga), 0);
+});
+
 const totalKeseluruhan = computed(() => {
-  return totalTermin.value;
+  return totalPurchases.value;
 });
 
 const deleteTermin = async (id) => {
@@ -846,6 +951,24 @@ const deleteTermin = async (id) => {
       title: "Error",
       text: err.response?.data?.message || "Gagal menghapus data termin"
     });
+  }
+};
+
+// Add new function to fetch purchases
+const fetchPurchases = async (projectId) => {
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/purchasematerials", {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { proyek_id: projectId }
+    });
+
+    if (response.data && response.data.purchases) {
+      purchases.value = response.data.purchases;
+    }
+  } catch (err) {
+    console.error('Error fetching purchases:', err);
+    error.value = 'Gagal memuat data pembelian';
   }
 };
 
@@ -912,5 +1035,144 @@ table.dataTable tbody td {
 .badge {
   padding: 0.5em 0.75em;
   font-size: 0.875em;
+}
+</style>
+
+<style>
+/* Table Container */
+.dataTables_wrapper {
+  margin: 1rem 0;
+  padding: 0;
+  width: 100%;
+}
+
+/* Table Header */
+table.dataTable thead th {
+  padding: 10px 8px;
+  border-bottom: 2px solid #dee2e6;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+  background-color: #fff;
+}
+
+/* Table Body */
+table.dataTable tbody td {
+  padding: 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid #dee2e6;
+  white-space: nowrap;
+  background-color: #fff;
+}
+
+/* Fixed Columns */
+.DTFC_RightWrapper {
+  right: 0 !important;
+}
+
+.DTFC_RightWrapper table.dataTable {
+  margin-right: 0 !important;
+}
+
+.DTFC_RightWrapper .DTFC_RightHeadWrapper,
+.DTFC_RightWrapper .DTFC_RightBodyWrapper {
+  background-color: #fff;
+}
+
+.DTFC_RightWrapper thead th,
+.DTFC_RightWrapper tbody td {
+  border-left: 1px solid #dee2e6;
+}
+
+/* Button Styles */
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  border-radius: 0.2rem;
+  min-width: 40px;
+}
+
+/* Status Badge */
+.badge {
+  padding: 0.35em 0.65em;
+  font-size: 0.75em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Responsive Table */
+.dataTables_scroll {
+  margin-bottom: 1rem;
+}
+
+.dataTables_scrollBody {
+  min-height: 200px;
+}
+
+/* Search and Length Menu */
+.dataTables_length,
+.dataTables_filter {
+  margin-bottom: 1rem;
+}
+
+.dataTables_length select {
+  min-width: 80px;
+}
+
+/* Pagination */
+.dataTables_paginate {
+  margin-top: 1rem;
+}
+
+/* Ensure consistent alignment */
+.text-end {
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
+.align-middle {
+  vertical-align: middle !important;
+}
+
+/* Ensure buttons stay on one line */
+.d-flex.justify-content-center {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+/* Scrollbar Styles */
+.dataTables_scrollBody::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.dataTables_scrollBody::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.dataTables_scrollBody::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.dataTables_scrollBody::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Shadow for fixed columns */
+.DTFC_RightWrapper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -6px;
+  bottom: 0;
+  width: 6px;
+  pointer-events: none;
+  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.1));
 }
 </style>

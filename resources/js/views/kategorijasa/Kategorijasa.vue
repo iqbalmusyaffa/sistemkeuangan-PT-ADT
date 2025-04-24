@@ -38,13 +38,16 @@
             <CRow class="mb-3">
               <CCol md="6">
                 <CFormLabel for="harga">Harga Jasa</CFormLabel>
-                <CFormInput v-model="harga" id="harga" type="number" min="0" required />
+                <div class="input-group">
+                  <span class="input-group-text">Rp</span>
+                  <CFormInput v-model="formattedHarga" id="harga" @input="updateHarga" required />
+                </div>
               </CCol>
               <CCol md="6">
                 <CFormLabel for="unit">Unit</CFormLabel>
                 <CFormSelect v-model="unit_id" id="unit" required>
                   <option value="">Pilih Unit</option>
-                  <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.unit_name }}</option>
+                  <option v-for="unit in filteredUnits" :key="unit.id" :value="unit.id">{{ unit.unit_name }}</option>
                 </CFormSelect>
               </CCol>
             </CRow>
@@ -62,7 +65,7 @@
   </template>
 
   <script setup>
-  import { ref, onMounted, nextTick } from "vue";
+  import { ref, onMounted, nextTick, computed } from "vue";
   import axios from "axios";
   import $ from "jquery";
   import Swal from "sweetalert2";
@@ -124,7 +127,7 @@
       columns: [
         { title: "No", data: null, orderable: false, render: (data, type, row, meta) => meta.row + 1 },
         { title: "Nama Kategori", data: "nama_kategori" },
-        { title: "Harga", data: "harga", render: (data) => `Rp ${parseInt(data).toLocaleString()}` },
+        { title: "Harga", data: "harga", render: (data) => `Rp ${parseInt(data).toLocaleString('de-DE')}` },
         { title: "Unit", data: "unit.unit_name" },
         { title: "Deskripsi", data: "deskripsi" },
         {
@@ -246,6 +249,26 @@
     }
   };
 
+  const formattedHarga = computed({
+    get: () => {
+      return harga.value ? parseInt(harga.value).toLocaleString('de-DE') : "0";
+    },
+    set: (newValue) => {
+      const numericValue = newValue.replace(/[^0-9]/g, '');
+      harga.value = numericValue ? parseInt(numericValue) : 0;
+    }
+  });
+
+  const updateHarga = (event) => {
+    const inputValue = event.target.value;
+    const numericValue = inputValue.replace(/[^0-9]/g, '');
+    harga.value = numericValue ? parseInt(numericValue) : 0;
+  };
+
+  const filteredUnits = computed(() => {
+    return units.value.filter(unit => ['set', 'jasa', 'transaksi'].includes(unit.unit_name.toLowerCase()));
+  });
+
   onMounted(fetchCategories);
   </script>
 
@@ -259,5 +282,20 @@
   }
   table.display {
     width: 100% !important;
+  }
+  .input-group-text {
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #495057;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   </style>

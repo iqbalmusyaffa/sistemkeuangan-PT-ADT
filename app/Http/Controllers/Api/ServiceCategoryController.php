@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller as BaseController;
 use Illuminate\Http\Request;
 use App\Models\ServiceCategory;
-// use Illuminate\Support\Facades\Auth;
-// use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Log;
+use Yajra\DataTables\Facades\DataTables;
 
 class ServiceCategoryController extends BaseController
 {
@@ -15,11 +15,19 @@ class ServiceCategoryController extends BaseController
      */
     public function index(Request $request)
     {
-        if ($request->ajax()) {
-            $data = ServiceCategory::with('unit')->select(['id', 'nama_kategori', 'jenis', 'harga', 'unit_id', 'deskripsi']);
-            return DataTables::of($data)->make(true);
+        try {
+            $query = ServiceCategory::with('unit');
+            
+            if ($request->ajax() && $request->has('datatables')) {
+                return DataTables::of($query)->make(true);
+            }
+
+            $categories = $query->get();
+            return response()->json($categories);
+        } catch (\Exception $e) {
+            Log::error('Error in ServiceCategoryController@index: ' . $e->getMessage());
+            return response()->json(['error' => 'Gagal memuat data kategori jasa.'], 500);
         }
-        return response()->json(ServiceCategory::with('unit')->get());
     }
 
     /**
@@ -36,19 +44,26 @@ class ServiceCategoryController extends BaseController
         ]);
 
         try {
-            $servicecatergory =ServiceCategory::create($validatedData);
-            return response()->json($servicecatergory, 201);
+            $serviceCategory = ServiceCategory::create($validatedData);
+            return response()->json($serviceCategory, 201);
         } catch (\Exception $e) {
+            Log::error('Error in ServiceCategoryController@store: ' . $e->getMessage());
             return response()->json(['error' => 'Gagal menambahkan kategori. Silakan coba lagi nanti.'], 500);
         }
     }
+
     /**
      * Display the specified resource.
      */
     public function show(string $id)
     {
-        $servicecatergory = ServiceCategory::findOrFail($id);
-        return response()->json($servicecatergory);
+        try {
+            $serviceCategory = ServiceCategory::with('unit')->findOrFail($id);
+            return response()->json($serviceCategory);
+        } catch (\Exception $e) {
+            Log::error('Error in ServiceCategoryController@show: ' . $e->getMessage());
+            return response()->json(['error' => 'Kategori tidak ditemukan.'], 404);
+        }
     }
 
     /**
@@ -56,19 +71,23 @@ class ServiceCategoryController extends BaseController
      */
     public function update(Request $request, string $id)
     {
-        $servicecatergory = ServiceCategory::findOrFail($id);
+        try {
+            $serviceCategory = ServiceCategory::findOrFail($id);
 
-        $request->validate([
-            'nama_kategori' => 'required|unique:kategoris,nama_kategori,' . $id,
-            'jenis' => 'required|in:pemasukan,pengeluaran',
-            'harga' => 'required|numeric|min:0',
-            'unit_id' => 'required|exists:units,id',
-            'deskripsi' => 'nullable|string',
-        ]);
+            $validatedData = $request->validate([
+                'nama_kategori' => 'required|string|max:255',
+                'jenis' => 'required|string',
+                'harga' => 'required|numeric|min:0',
+                'unit_id' => 'required|exists:units,id',
+                'deskripsi' => 'nullable|string',
+            ]);
 
-        $servicecatergory->update($request->all());
-
-        return response()->json($servicecatergory);
+            $serviceCategory->update($validatedData);
+            return response()->json($serviceCategory);
+        } catch (\Exception $e) {
+            Log::error('Error in ServiceCategoryController@update: ' . $e->getMessage());
+            return response()->json(['error' => 'Gagal mengupdate kategori.'], 500);
+        }
     }
 
     /**
@@ -76,8 +95,13 @@ class ServiceCategoryController extends BaseController
      */
     public function destroy(string $id)
     {
-        $servicecatergory = ServiceCategory::findOrFail($id);
-        $servicecatergory->delete();
-        return response()->json(null, 204);
+        try {
+            $serviceCategory = ServiceCategory::findOrFail($id);
+            $serviceCategory->delete();
+            return response()->json(null, 204);
+        } catch (\Exception $e) {
+            Log::error('Error in ServiceCategoryController@destroy: ' . $e->getMessage());
+            return response()->json(['error' => 'Gagal menghapus kategori.'], 500);
+        }
     }
 }
