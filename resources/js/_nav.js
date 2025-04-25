@@ -34,7 +34,7 @@ export default [
     },
     {
         component: 'CNavItem',
-        name: 'Acivity Log',
+        name: 'Activity Log',
         to: '/activitylog',
         icon: 'cil-list',
         // roles: ['superadmin'], // Role yang bisa mengakses
@@ -101,11 +101,11 @@ export default [
       to: '/base',
       icon: 'cil-folder',
       items: [
-        {
-          component: 'CNavItem',
-          name: 'Data Perusahaan',
-          to: '/base/company',
-        },
+        // {
+        //   component: 'CNavItem',
+        //   name: 'Data Perusahaan',
+        //   to: '/base/company',
+        // },
         {
           component: 'CNavItem',
           name: 'Pencatatan Pemasukan',
@@ -128,7 +128,7 @@ export default [
         },
         {
             component: 'CNavItem',
-            name: 'termin',
+            name: 'Termin',
             to: '/base/termin/termin',
           },
       ],

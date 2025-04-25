@@ -15,13 +15,13 @@
             <!-- Project Filter -->
             <CRow class="mb-3">
               <CCol md="6">
-                <CFormLabel for="project_filter">Pilih Project</CFormLabel>
+                <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
                 <CFormSelect
                   v-model="selectedProject"
                   id="project_filter"
                   @change="handleProjectChange"
                 >
-                  <option value="">-- Pilih Project --</option>
+                  <option value="">-- Pilih Proyek --</option>
                   <option
                     v-for="project in projects"
                     :key="project.id"
@@ -39,14 +39,14 @@
                   @click="changeProject"
                   class="mt-2"
                 >
-                  Ganti Project
+                  Ganti Proyek
                 </CButton>
               </CCol>
             </CRow>
 
             <!-- Alert when no project selected -->
             <div v-if="!selectedProject" class="alert alert-info">
-              Silakan pilih project terlebih dahulu untuk melihat data pengeluaran
+              Silakan pilih proyek terlebih dahulu untuk melihat data pengeluaran
             </div>
 
             <!-- DataTable -->
@@ -316,7 +316,7 @@
     loading.value = true;
     try {
       const token = sessionStorage.getItem('token');
-      console.log('Fetching projects data...');
+
       const [projectRes, categoryRes, serviceCategoryRes] = await Promise.all([
         axios.get('/api/proyeks', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/categories', { headers: { Authorization: `Bearer ${token}` } }),
@@ -324,16 +324,15 @@
       ]);
 
       projects.value = projectRes.data.data || projectRes.data;
-      console.log('Projects data structure:', JSON.stringify(projects.value, null, 2));
-      console.log('First project:', projects.value[0]);
+
       categories.value = categoryRes.data.data || categoryRes.data;
       serviceCategories.value = serviceCategoryRes.data.data || serviceCategoryRes.data;
 
       if (selectedProject.value) {
-        console.log('Selected project exists, filtering...');
+
         await filterByProject();
       } else {
-        console.log('No selected project, clearing data');
+
         expenses.value = [];
         if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
           $(dataTableRef.value).DataTable().destroy();
@@ -341,7 +340,6 @@
         }
       }
     } catch (e) {
-      console.error('Error fetching data:', e);
       error.value = 'Gagal memuat data';
     } finally {
       loading.value = false;
@@ -349,9 +347,7 @@
   };
 
   const filterByProject = async () => {
-    console.log('filterByProject called with selectedProject:', selectedProject.value);
     if (!selectedProject.value) {
-      console.log('No project selected');
       expenses.value = [];
       if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
         $(dataTableRef.value).DataTable().destroy();
@@ -363,7 +359,7 @@
     try {
       loading.value = true;
       const token = sessionStorage.getItem('token');
-      console.log('Selected Project ID:', selectedProject.value);
+
 
       const [expenseRes, projectDetailsRes] = await Promise.all([
         axios.get('/api/expenses', {
@@ -375,8 +371,6 @@
         })
       ]);
 
-      console.log('Expense API Response:', expenseRes.data);
-      console.log('Project Details Response:', projectDetailsRes.data);
 
       if (!expenseRes.data || !expenseRes.data.data) {
         throw new Error('Invalid response format from expenses API');
@@ -385,13 +379,11 @@
       selectedProjectDetails.value = projectDetailsRes.data;
       expenses.value = expenseRes.data.data;
 
-      console.log('Expenses after setting:', expenses.value);
 
       // Pastikan data sudah ada sebelum DataTable diinisialisasi
       await nextTick();
       initDataTable();
     } catch (e) {
-      console.error('Error in filterByProject:', e);
       error.value = 'Gagal memuat data pengeluaran proyek';
       Swal.fire({
         icon: 'error',
@@ -415,10 +407,8 @@
   };
 
   const initDataTable = () => {
-    console.log('Initializing DataTable with data:', expenses.value);
-    
+
     if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
-      console.log('Destroying existing DataTable');
       $(dataTableRef.value).DataTable().destroy();
     }
 
@@ -429,31 +419,35 @@
           title: 'No',
           data: null,
           width: '5%',
+          className: 'text-center',
           render: (data, type, row, meta) => meta.row + 1
         },
         {
           title: 'Tanggal',
           data: 'transaction_date',
           width: '10%',
+          className: 'text-center',
           render: (data) => {
+            if (!data) return '-';
             const date = new Date(data);
             return date.toLocaleDateString('id-ID', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric'
-            });
+            }).split('/').join('.');
           }
         },
         {
           title: 'Kode',
           data: 'kode_transaksi',
           width: '10%',
+          className: 'text-center',
           render: (data) => data || '-'
         },
         {
           title: 'Nama Proyek',
           data: 'proyek.nama_proyek',
-          width: '15%',
+          width: '20%',
           render: (data, type, row) => data || 'N/A'
         },
         {
@@ -462,28 +456,23 @@
           width: '15%',
           render: (data, type, row) => {
             if (row.service_category_id) {
-              return `Jasa - ${row.service_category?.nama_kategori || 'N/A'}`;
+              return row.service_category?.nama_kategori || 'N/A';
             }
-            return `Material - ${row.category?.nama_kategori || 'N/A'}`;
+            return row.category?.nama_kategori || 'N/A';
           }
-        },
-        {
-          title: 'Deskripsi',
-          data: 'description',
-          width: '20%',
-          render: (data) => data || '-'
         },
         {
           title: 'Jumlah',
           data: 'amount',
-          width: '10%',
+          width: '15%',
           className: 'text-end',
-          render: (data) => `Rp ${parseFloat(data).toLocaleString('id-ID')}`
+          render: (data) => `Rp ${formatCurrency(data || 0)}`
         },
         {
           title: 'Status',
           data: 'status',
-          width: '8%',
+          width: '10%',
+          className: 'text-center',
           render: (data) => {
             const statusClass = {
               'Pending': 'badge bg-warning',
@@ -494,25 +483,20 @@
           }
         },
         {
-          title: 'Sumber',
-          data: 'source_type',
-          width: '8%',
-          render: (data) => {
-            if (!data) return 'Manual';
-            return data === 'purchase' ? 'Pembelian' : 'Termin';
-          }
-        },
-        {
           title: 'Aksi',
           data: null,
-          width: '10%',
+          width: '15%',
+          className: 'text-center',
+          orderable: false,
           render: (data, type, row) => {
             if (row.source_type) {
               return '<button class="btn btn-sm btn-info view-btn" data-id="' + row.id + '">Detail</button>';
             }
             return `
-              <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
-              <button class="btn btn-sm btn-danger ms-1 delete-btn" data-id="${row.id}">Hapus</button>
+              <div class="btn-group">
+                <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+                <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+              </div>
             `;
           }
         },
@@ -563,7 +547,7 @@
       Swal.fire({
         icon: 'warning',
         title: 'Perhatian',
-        text: 'Silakan pilih project terlebih dahulu'
+        text: 'Silakan pilih proyek terlebih dahulu'
       });
       return;
     }
@@ -652,7 +636,7 @@
       showModal.value = false;
       await fetchData();
     } catch (err) {
-      console.error('Error submitting form:', err);
+    //   console.error('Error submitting form:', err);
       Swal.fire('Error', 'Terjadi kesalahan saat menyimpan data', 'error');
     }
   }
@@ -684,12 +668,12 @@
   }
 
   const handleProjectChange = (event) => {
-    console.log('Project change event:', event);
-    console.log('Selected value:', event.target.value);
+    // console.log('Project change event:', event);
+    // console.log('Selected value:', event.target.value);
     selectedProject.value = event.target.value;
     filterByProject();
   };
-
++
   onMounted(() => {
     console.log('Component mounted');
     console.log('jQuery loaded:', typeof $);

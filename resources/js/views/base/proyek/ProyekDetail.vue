@@ -20,88 +20,70 @@
             <CCardBody>
               <CRow>
                 <CCol md="6">
-                  <CListGroup>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Nama Customer</strong>
-                        <span>{{ proyek.nama_customer }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Nama Proyek</strong>
-                        <span>{{ proyek.nama_proyek }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Nama Perusahaan</strong>
-                        <span>{{ proyek.nama_perusahaan }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Alamat</strong>
-                        <span>{{ proyek.alamat }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>No. Telepon</strong>
-                        <span>{{ proyek.no_telp }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Email</strong>
-                        <span>{{ proyek.email }}</span>
-                      </div>
-                    </CListGroupItem>
-                  </CListGroup>
+                  <CTable striped>
+                    <CTableBody>
+                      <CTableRow>
+                        <CTableHeaderCell>Nama Customer</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.nama_customer || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Nama Proyek</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.nama_proyek || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Nama Perusahaan</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.nama_perusahaan || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Alamat</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.alamat || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>No. Telepon</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.no_telp || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Email</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.email || '-' }}</CTableDataCell>
+                      </CTableRow>
+                    </CTableBody>
+                  </CTable>
                 </CCol>
-              <CCol md="6">
-                  <CListGroup>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Lokasi Proyek</strong>
-                        <span>{{ proyek.lokasi }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Anggaran Kontrak</strong>
-                        <span>Rp {{ formatCurrency(proyek.anggaran_kontrak) }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Tanggal Mulai</strong>
-                        <span>{{ formatDate(proyek.tanggal_mulai) }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Tanggal Selesai</strong>
-                        <span>{{ formatDate(proyek.tanggal_selesai) }}</span>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Status Proyek</strong>
-                        <CBadge :color="getStatusColor(proyek.status_project)">
-                        {{ proyek.status_project }}
-                        </CBadge>
-                      </div>
-                    </CListGroupItem>
-                    <CListGroupItem>
-                      <div class="d-flex justify-content-between align-items-center">
-                        <strong>Deskripsi</strong>
-                        <span>{{ proyek.deskripsi }}</span>
-                      </div>
-                    </CListGroupItem>
-                  </CListGroup>
-              </CCol>
-            </CRow>
+                <CCol md="6">
+                  <CTable striped>
+                    <CTableBody>
+                      <CTableRow>
+                        <CTableHeaderCell>Lokasi Proyek</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.lokasi || '-' }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Anggaran Kontrak</CTableHeaderCell>
+                        <CTableDataCell>Rp {{ formatCurrency(proyek.anggaran_kontrak) }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Tanggal Mulai</CTableHeaderCell>
+                        <CTableDataCell>{{ formatDate(proyek.tanggal_mulai) }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Tanggal Selesai</CTableHeaderCell>
+                        <CTableDataCell>{{ formatDate(proyek.tanggal_selesai) }}</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Status Proyek</CTableHeaderCell>
+                        <CTableDataCell>
+                          <CBadge :color="getStatusColor(proyek.status_project)">
+                            {{ proyek.status_project }}
+                          </CBadge>
+                        </CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Deskripsi</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.deskripsi || '-' }}</CTableDataCell>
+                      </CTableRow>
+                    </CTableBody>
+                  </CTable>
+                </CCol>
+              </CRow>
             </CCardBody>
           </CCard>
 
@@ -111,60 +93,62 @@
               <strong>Daftar Pembelian</strong>
             </CCardHeader>
             <CCardBody>
-              <CTable hover responsive>
-                <CTableHead color="light">
-                  <CTableRow>
-                    <CTableHeaderCell scope="col">No</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Item</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Merek</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Tipe</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Unit</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Kategori</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Jumlah</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">Harga</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">Total</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  <CTableRow 
-                    v-for="(purchase, index) in purchases" 
-                    :key="purchase.id"
-                    :class="{
-                      'service-row': purchase.is_service && purchase.unit?.unit_name?.toLowerCase() === 'jasa',
-                      'service-other-row': purchase.is_service && ['set', 'transaksi'].includes(purchase.unit?.unit_name?.toLowerCase()),
-                      'material-row': !purchase.is_service
-                    }"
-                  >
-                    <CTableDataCell>{{ index + 1 }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.item }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.is_service ? '-' : (purchase.merek?.name || '-') }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.type || '-' }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.unit?.unit_name || '-' }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.is_service ? (purchase.service_category?.nama_kategori || '-') : (purchase.category?.nama_kategori || '-') }}</CTableDataCell>
-                    <CTableDataCell>{{ purchase.qty }}</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.harga) }}</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.total_harga) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableBody>
-                <CTableFoot>
-                  <CTableRow>
-                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Material</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalMaterial) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasa) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa Lain-lain</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasaLain) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow class="table-primary">
-                    <CTableDataCell colspan="8" class="text-end fw-bold">Total Keseluruhan</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableFoot>
-              </CTable>
+              <div class="table-responsive">
+                <CTable hover>
+                  <CTableHead>
+                    <CTableRow>
+                      <CTableHeaderCell class="text-center" style="width: 5%">No</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 20%">Item</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 10%">Merek</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 10%">Tipe</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 10%">Unit</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 15%">Kategori</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 10%">Jumlah</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 10%">Harga</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 10%">Total</CTableHeaderCell>
+                    </CTableRow>
+                  </CTableHead>
+                  <CTableBody>
+                    <CTableRow 
+                      v-for="(purchase, index) in purchases" 
+                      :key="purchase.id"
+                      :class="{
+                        'service-row': purchase.is_service && purchase.unit?.unit_name?.toLowerCase() === 'jasa',
+                        'service-other-row': purchase.is_service && ['set', 'transaksi'].includes(purchase.unit?.unit_name?.toLowerCase()),
+                        'material-row': !purchase.is_service
+                      }"
+                    >
+                      <CTableDataCell class="text-center">{{ index + 1 }}</CTableDataCell>
+                      <CTableDataCell>{{ purchase.item }}</CTableDataCell>
+                      <CTableDataCell>{{ purchase.is_service ? '-' : (purchase.merek?.name || '-') }}</CTableDataCell>
+                      <CTableDataCell>{{ purchase.type || '-' }}</CTableDataCell>
+                      <CTableDataCell>{{ purchase.unit?.unit_name || '-' }}</CTableDataCell>
+                      <CTableDataCell>{{ purchase.is_service ? (purchase.service_category?.nama_kategori || '-') : (purchase.category?.nama_kategori || '-') }}</CTableDataCell>
+                      <CTableDataCell class="text-center">{{ purchase.qty }}</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.harga) }}</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(purchase.total_harga) }}</CTableDataCell>
+                    </CTableRow>
+                  </CTableBody>
+                  <CTableFoot>
+                    <CTableRow>
+                      <CTableDataCell colspan="8" class="text-end fw-bold">Total Material</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalMaterial) }}</CTableDataCell>
+                    </CTableRow>
+                    <CTableRow>
+                      <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasa) }}</CTableDataCell>
+                    </CTableRow>
+                    <CTableRow>
+                      <CTableDataCell colspan="8" class="text-end fw-bold">Total Jasa Lain-lain</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalJasaLain) }}</CTableDataCell>
+                    </CTableRow>
+                    <CTableRow class="table-primary">
+                      <CTableDataCell colspan="8" class="text-end fw-bold">Total Keseluruhan</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
+                    </CTableRow>
+                  </CTableFoot>
+                </CTable>
+              </div>
             </CCardBody>
           </CCard>
 
@@ -174,48 +158,50 @@
               <strong>Daftar Termin</strong>
             </CCardHeader>
             <CCardBody>
-              <CTable hover responsive>
-                <CTableHead color="light">
-                  <CTableRow>
-                    <CTableHeaderCell scope="col">No</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Nama Termin</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">Nilai Termin</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">DP (%)</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">Nilai DP</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" class="text-end">Nilai Pelunasan</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Status</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Tanggal DP</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Tanggal Pelunasan</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  <CTableRow v-for="(termin, index) in termins" :key="termin.id">
-                    <CTableDataCell>{{ index + 1 }}</CTableDataCell>
-                    <CTableDataCell>{{ termin.nama_termin }}</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_termin) }}</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ termin.dp_percentage }}%</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_dp) }}</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_pelunasan) }}</CTableDataCell>
-                    <CTableDataCell>
-                      <CBadge :color="getTerminStatusColor(termin.status_termin)">
-                            {{ termin.status_termin }}
-                      </CBadge>
-                    </CTableDataCell>
-                    <CTableDataCell>{{ formatDate(termin.tanggal_dp) }}</CTableDataCell>
-                    <CTableDataCell>{{ formatDate(termin.tanggal_pelunasan) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableBody>
-                <CTableFoot>
-                  <CTableRow>
-                    <CTableDataCell colspan="2" class="text-end fw-bold">Total Termin</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalTermins) }}</CTableDataCell>
-                    <CTableDataCell colspan="2" class="text-end fw-bold">Total DP</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalDP) }}</CTableDataCell>
-                    <CTableDataCell colspan="2" class="text-end fw-bold">Total Pelunasan</CTableDataCell>
-                    <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableFoot>
-              </CTable>
+              <div class="table-responsive">
+                <CTable hover>
+                  <CTableHead>
+                    <CTableRow>
+                      <CTableHeaderCell class="text-center" style="width: 5%">No</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 15%">Nama Termin</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 15%">Nilai Termin</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 10%">DP (%)</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 15%">Nilai DP</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 15%">Nilai Pelunasan</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 10%">Status</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 10%">Tanggal DP</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 10%">Tanggal Pelunasan</CTableHeaderCell>
+                    </CTableRow>
+                  </CTableHead>
+                  <CTableBody>
+                    <CTableRow v-for="(termin, index) in termins" :key="termin.id">
+                      <CTableDataCell class="text-center">{{ index + 1 }}</CTableDataCell>
+                      <CTableDataCell>{{ termin.nama_termin }}</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_termin) }}</CTableDataCell>
+                      <CTableDataCell class="text-center">{{ termin.dp_percentage }}%</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_dp) }}</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(termin.nilai_pelunasan) }}</CTableDataCell>
+                      <CTableDataCell class="text-center">
+                        <CBadge :color="getTerminStatusColor(termin.status_termin)">
+                          {{ termin.status_termin }}
+                        </CBadge>
+                      </CTableDataCell>
+                      <CTableDataCell class="text-center">{{ formatDate(termin.tanggal_dp) }}</CTableDataCell>
+                      <CTableDataCell class="text-center">{{ formatDate(termin.tanggal_pelunasan) }}</CTableDataCell>
+                    </CTableRow>
+                  </CTableBody>
+                  <CTableFoot>
+                    <CTableRow>
+                      <CTableDataCell colspan="2" class="text-end fw-bold">Total Termin</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalTermins) }}</CTableDataCell>
+                      <CTableDataCell colspan="2" class="text-end fw-bold">Total DP</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalDP) }}</CTableDataCell>
+                      <CTableDataCell colspan="2" class="text-end fw-bold">Total Pelunasan</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
+                    </CTableRow>
+                  </CTableFoot>
+                </CTable>
+              </div>
             </CCardBody>
           </CCard>
         </CCardBody>
@@ -281,13 +267,19 @@ const fetchPurchases = async () => {
 const fetchTermins = async () => {
   try {
     const token = sessionStorage.getItem('token');
-    const response = await axios.get('/api/termins', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { proyek_id: route.params.id }
+    console.log('Fetching termins for project:', route.params.id);
+    const response = await axios.get(`/api/proyeks/${route.params.id}/termins`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
+
+    console.log('Termins response:', response.data);
 
     if (response.data && response.data.data) {
       termins.value = response.data.data;
+      console.log('Set termins to:', termins.value);
+    } else {
+      console.log('No termin data found');
+      termins.value = [];
     }
   } catch (err) {
     console.error('Error fetching termins:', err);
@@ -396,27 +388,24 @@ onMounted(async () => {
 </script> 
 
 <style scoped>
-.c-list-group-item {
-  padding: 1rem;
-}
-
-.c-list-group-item strong {
-  min-width: 150px;
-}
-
 .table-responsive {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .text-end {
-  text-align: right;
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
 }
 
 .fw-bold {
-  font-weight: bold;
+  font-weight: bold !important;
 }
 
-/* Add styles for different purchase types */
+/* Purchase row styles */
 .service-row {
   background-color: #e8f4ff !important;
 }
@@ -431,5 +420,42 @@ onMounted(async () => {
 
 .table-primary {
   background-color: #cfe2ff !important;
+}
+
+/* Table header styles */
+.table thead th {
+  vertical-align: middle;
+  border-bottom: 2px solid #dee2e6;
+  white-space: nowrap;
+}
+
+/* Table cell padding */
+.table td, .table th {
+  padding: 0.75rem;
+  vertical-align: middle;
+}
+
+/* Badge styles */
+.badge {
+  padding: 0.5em 0.75em;
+  font-size: 0.875em;
+  font-weight: 600;
+  border-radius: 0.25rem;
+}
+
+/* Card styles */
+.card {
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.75rem 1.25rem;
+}
+
+.card-body {
+  padding: 1.25rem;
 }
 </style> 
