@@ -50,33 +50,52 @@ class Expense extends Model
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withDefault(function ($user) {
+            $user->name = 'Unknown User';
+        });
     }
 
     public function proyek()
     {
-        return $this->belongsTo(Proyek::class, 'proyek_id');
+        return $this->belongsTo(Proyek::class, 'proyek_id')->withDefault(function ($proyek) {
+            $proyek->nama_proyek = 'Unknown Project';
+            $proyek->nama_customer = 'Unknown Customer';
+        });
     }
 
     public function category()
     {
-        return $this->belongsTo(Kategori::class, 'category_id');
+        return $this->belongsTo(Kategori::class, 'category_id')->withDefault(function ($category) {
+            $category->nama_kategori = 'Unknown Category';
+        });
     }
 
     public function serviceCategory()
     {
-        return $this->belongsTo(ServiceCategory::class, 'service_category_id');
+        return $this->belongsTo(ServiceCategory::class, 'service_category_id')->withDefault(function ($category) {
+            $category->nama_kategori = 'Unknown Service Category';
+        });
     }
 
     public function source()
     {
-        if ($this->source_type === 'termin') {
-            return $this->belongsTo(Termin::class, 'source_id');
+        if (empty($this->source_type) || empty($this->source_id)) {
+            return null;
         }
-        if ($this->source_type === 'purchase') {
-            return $this->belongsTo(Purchasematerial::class, 'source_id');
+
+        try {
+            switch ($this->source_type) {
+                case 'termin':
+                    return $this->belongsTo(Termin::class, 'source_id');
+                case 'purchase':
+                    return $this->belongsTo(Purchasematerial::class, 'source_id');
+                default:
+                    return null;
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error in Expense source relationship: ' . $e->getMessage());
+            return null;
         }
-        return null;
     }
 
     public function getActiveCategory()

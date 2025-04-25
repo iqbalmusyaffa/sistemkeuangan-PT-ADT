@@ -16,13 +16,13 @@
          <!-- Project Filter -->
 <CRow class="mb-3">
   <CCol md="6">
-    <CFormLabel for="project_filter">Pilih Project</CFormLabel>
+    <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
     <CFormSelect
       v-model="selectedProject"
       id="project_filter"
       @change="filterByProject"
     >
-      <option value="">-- Pilih Project --</option>
+      <option value="">-- Pilih Proyek --</option>
       <option
         v-for="project in projects"
         :key="project.id"
@@ -40,7 +40,7 @@
                 @click="changeProject"
                 class="mt-2"
               >
-                Ganti Project
+                Ganti Proyek
               </CButton>
             </CCol>
 
@@ -146,26 +146,26 @@
             <CRow class="mb-3">
               <CCol md="12">
                 <CFormLabel for="category_id">Kategori</CFormLabel>
-                <CFormSelect 
-                  v-model="form.category_id" 
-                  id="category_id" 
+                <CFormSelect
+                  v-model="form.category_id"
+                  id="category_id"
                   required
                   :disabled="!form.unit_id"
                 >
                   <option value="">Pilih Kategori</option>
                   <template v-if="isServiceUnit">
-                    <option 
-                      v-for="category in serviceCategories" 
-                      :key="category.id" 
+                    <option
+                      v-for="category in serviceCategories"
+                      :key="category.id"
                       :value="category.id"
                     >
                       {{ category.nama_kategori }}
                     </option>
                   </template>
                   <template v-else>
-                    <option 
-                      v-for="category in normalCategories" 
-                      :key="category.id" 
+                    <option
+                      v-for="category in normalCategories"
+                      :key="category.id"
                       :value="category.id"
                     >
                       {{ category.nama_kategori }}
@@ -189,13 +189,13 @@
             <CRow class="mb-3">
               <CCol md="4">
                 <CFormLabel for="qty">Jumlah</CFormLabel>
-                <CFormInput 
-                  type="number" 
-                  v-model.number="form.qty" 
-                  id="qty" 
-                  required 
-                  @input="calculateTotal" 
-                  min="1" 
+                <CFormInput
+                  type="number"
+                  v-model.number="form.qty"
+                  id="qty"
+                  required
+                  @input="calculateTotal"
+                  min="1"
                 />
               </CCol>
               <CCol md="4">
@@ -344,11 +344,11 @@ const fetchCategories = async () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     console.log("Categories response:", response.data);
-    
+
     // Pastikan response.data adalah array
-    const categoriesData = Array.isArray(response.data) ? response.data : 
+    const categoriesData = Array.isArray(response.data) ? response.data :
                          (response.data.data ? response.data.data : []);
-    
+
     categories.value = categoriesData.map(cat => ({
       ...cat,
       is_service: false
@@ -365,10 +365,10 @@ const fetchServiceCategories = async (unitId) => {
     const response = await axios.get("/api/service-categories", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    
-    const data = Array.isArray(response.data) ? response.data : 
+
+    const data = Array.isArray(response.data) ? response.data :
                 (response.data.data ? response.data.data : []);
-    
+
     serviceCategories.value = data.filter(cat => String(cat.unit_id) === String(unitId));
     console.log('Fetched service categories:', serviceCategories.value); // Debug log
   } catch (err) {
@@ -408,8 +408,8 @@ const fetchPembelians = async (proyekId) => {
           displayTotalHarga: formatCurrency(purchase.total_harga),
           nama_proyek: proyekResponse.data.nama_proyek,
           nama_customer: proyekResponse.data.nama_customer,
-          category_name: purchase.is_service ? 
-            (purchase.service_category?.nama_kategori || '-') : 
+          category_name: purchase.is_service ?
+            (purchase.service_category?.nama_kategori || '-') :
             (purchase.category?.nama_kategori || '-')
         };
       });
@@ -605,17 +605,17 @@ watch(
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        const data = Array.isArray(response.data) ? response.data : 
+        const data = Array.isArray(response.data) ? response.data :
                     (response.data.data ? response.data.data : []);
-        
+
         // Filter categories by unit_id
         serviceCategories.value = data.filter(cat => String(cat.unit_id) === String(newValue));
         console.log("Service categories for unit:", serviceCategories.value);
-        
+
         // Set service mode
         form.value.is_service = true;
         form.value.merek_id = null;
-        
+
         // Disable merek field
         if (document.getElementById('merek_id')) {
           document.getElementById('merek_id').disabled = true;
@@ -633,15 +633,15 @@ watch(
         const response = await axios.get("/api/categories", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
-        normalCategories.value = Array.isArray(response.data) ? response.data : 
+
+        normalCategories.value = Array.isArray(response.data) ? response.data :
                                (response.data.data ? response.data.data : []);
         console.log("Normal categories loaded:", normalCategories.value);
-        
+
         // Reset service mode
         form.value.is_service = false;
         form.value.service_category_id = null;
-        
+
         // Enable merek field
         if (document.getElementById('merek_id')) {
           document.getElementById('merek_id').disabled = false;

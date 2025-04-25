@@ -152,12 +152,8 @@ class ExpenseController extends Controller
         try {
             Log::info('Attempting to fetch expense with ID: ' . $id);
             
-            $expense = Expense::with([
-                'proyek',
-                'category',
-                'serviceCategory',
-                'source'
-            ])->find($id);
+            // First, get the expense without any relationships
+            $expense = Expense::find($id);
 
             if (!$expense) {
                 Log::warning('Expense not found with ID: ' . $id);
@@ -165,6 +161,26 @@ class ExpenseController extends Controller
                     'status' => 'error',
                     'message' => 'Data pengeluaran tidak ditemukan'
                 ], 404);
+            }
+
+            // Load basic relationships
+            $expense->load(['proyek', 'category', 'serviceCategory']);
+
+            // Handle source relationship separately
+            if (!empty($expense->source_type) && !empty($expense->source_id)) {
+                try {
+                    switch ($expense->source_type) {
+                        case 'termin':
+                            $expense->setRelation('source', Termin::find($expense->source_id));
+                            break;
+                        case 'purchase':
+                            $expense->setRelation('source', Purchasematerial::find($expense->source_id));
+                            break;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Error loading source relationship: ' . $e->getMessage());
+                    $expense->setRelation('source', null);
+                }
             }
 
             // Transform status to match frontend expectations
