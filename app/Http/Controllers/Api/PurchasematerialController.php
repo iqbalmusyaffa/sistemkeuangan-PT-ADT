@@ -129,6 +129,27 @@ class PurchasematerialController extends Controller
             }
 
             $purchasematerial = Purchasematerial::create($data);
+
+            // Create corresponding expense record
+            $expense = new \App\Models\Expense([
+                'user_id' => auth()->id(),
+                'proyek_id' => $purchasematerial->proyek_id,
+                'category_id' => $isService ? null : $purchasematerial->category_id,
+                'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
+                'amount' => $purchasematerial->total_harga,
+                'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
+                'transaction_date' => now(),
+                'status' => 'Pending',
+                'payment_method' => null,
+                'prepared_fund' => $purchasematerial->total_harga,
+                'source_type' => 'purchase',
+                'source_id' => $purchasematerial->id
+            ]);
+            $expense->save();
+
+            // Update purchase with expense_id
+            $purchasematerial->expense_id = $expense->id;
+            $purchasematerial->save();
             
             DB::commit();
             return response()->json($purchasematerial, 201);
@@ -213,6 +234,40 @@ class PurchasematerialController extends Controller
             }
 
             $purchasematerial->update($data);
+
+            // Update or create corresponding expense record
+            if ($purchasematerial->expense_id) {
+                $expense = \App\Models\Expense::find($purchasematerial->expense_id);
+                if ($expense) {
+                    $expense->update([
+                        'proyek_id' => $purchasematerial->proyek_id,
+                        'category_id' => $isService ? null : $purchasematerial->category_id,
+                        'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
+                        'amount' => $purchasematerial->total_harga,
+                        'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
+                        'prepared_fund' => $purchasematerial->total_harga
+                    ]);
+                } else {
+                    // Create new expense if the previous one was deleted
+                    $expense = new \App\Models\Expense([
+                        'user_id' => auth()->id(),
+                        'proyek_id' => $purchasematerial->proyek_id,
+                        'category_id' => $isService ? null : $purchasematerial->category_id,
+                        'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
+                        'amount' => $purchasematerial->total_harga,
+                        'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
+                        'transaction_date' => now(),
+                        'status' => 'Pending',
+                        'payment_method' => null,
+                        'prepared_fund' => $purchasematerial->total_harga,
+                        'source_type' => 'purchase',
+                        'source_id' => $purchasematerial->id
+                    ]);
+                    $expense->save();
+                    $purchasematerial->expense_id = $expense->id;
+                    $purchasematerial->save();
+                }
+            }
             
             DB::commit();
             return response()->json($purchasematerial);
@@ -231,10 +286,21 @@ class PurchasematerialController extends Controller
     public function destroy(string $id)
     {
         try {
+            DB::beginTransaction();
+            
             $purchasematerial = Purchasematerial::findOrFail($id);
+            
+            // Delete associated expense if exists
+            if ($purchasematerial->expense_id) {
+                \App\Models\Expense::where('id', $purchasematerial->expense_id)->delete();
+            }
+            
             $purchasematerial->delete();
+            
+            DB::commit();
             return response()->json(null, 204);
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error in PurchasematerialController@destroy: ' . $e->getMessage());
             return response()->json([
                 'error' => 'Gagal menghapus Pembelian material. Silakan coba lagi nanti.',
