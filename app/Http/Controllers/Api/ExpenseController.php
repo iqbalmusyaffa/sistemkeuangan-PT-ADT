@@ -151,7 +151,7 @@ class ExpenseController extends Controller
     {
         try {
             Log::info('Attempting to fetch expense with ID: ' . $id);
-            
+
             // First, get the expense without any relationships
             $expense = Expense::find($id);
 
@@ -185,9 +185,9 @@ class ExpenseController extends Controller
 
             // Transform status to match frontend expectations
             $expense->status = ucfirst($expense->status);
-            
+
             Log::info('Successfully fetched expense: ' . json_encode($expense->toArray()));
-            
+
             return response()->json([
                 'status' => 'success',
                 'data' => $expense
@@ -195,7 +195,7 @@ class ExpenseController extends Controller
         } catch (\Exception $e) {
             Log::error('Error in ExpenseController@show: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
-            
+
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil data pengeluaran',
@@ -265,7 +265,7 @@ class ExpenseController extends Controller
     {
         try {
             $expense = Expense::findOrFail($id);
-            
+
             if ($expense->source_type) {
                 return response()->json([
                     'status' => 'error',
@@ -323,8 +323,8 @@ class ExpenseController extends Controller
             'material_expenses' => $materialExpenses,
             'service_expenses' => $serviceExpenses,
             'project_budget' => $proyek->anggaran_kontrak,
-            'budget_percentage' => $proyek->anggaran_kontrak > 0 
-                ? ($totalExpenses / $proyek->anggaran_kontrak) * 100 
+            'budget_percentage' => $proyek->anggaran_kontrak > 0
+                ? ($totalExpenses / $proyek->anggaran_kontrak) * 100
                 : 0
         ];
     }
@@ -379,7 +379,7 @@ class ExpenseController extends Controller
     {
         try {
             $summaries = $this->calculateProjectSummaries($proyekId);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Project expense summary',

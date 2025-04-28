@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('purchasematerials', function (Blueprint $table) {
-            $table->unsignedBigInteger('expense_id')->nullable();
+        Schema::table('purchase_materials', function (Blueprint $table) {
+            $table->foreignId('termin_id')->nullable()->constrained('termins')->onDelete('set null');
         });
     }
 
@@ -21,8 +21,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('purchasematerials', function (Blueprint $table) {
-            $table->dropColumn('expense_id');
+        Schema::table('purchase_materials', function (Blueprint $table) {
+            $table->dropForeign(['termin_id']);
+            $table->dropColumn('termin_id');
         });
     }
 };

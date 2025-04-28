@@ -13,6 +13,9 @@ use App\Models\Unit;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Models\Invoice;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class PurchasematerialController extends Controller
 {
@@ -81,6 +84,7 @@ class PurchasematerialController extends Controller
                 'harga' => 'required|numeric|min:0',
                 'deskripsi' => 'nullable|string',
                 'proyek_id' => 'required|exists:proyeks,id',
+                'invoice_id' => 'nullable|exists:invoices,id'
             ];
 
             // Add category validation based on type
@@ -108,14 +112,13 @@ class PurchasematerialController extends Controller
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
                 'proyek_id' => $validatedData['proyek_id'],
-                'is_service' => $isService
+                'is_service' => $isService,
+                'invoice_id' => $validatedData['invoice_id'] ?? null
             ];
 
-            // Add category data based on type
             if ($isService) {
                 $data['service_category_id'] = $validatedData['service_category_id'];
                 $data['category_id'] = null;
-                
                 // Handle merek for service (use default '-' merek or null)
                 $defaultMerek = Merek::firstOrCreate(
                     ['name' => '-'],
@@ -186,6 +189,7 @@ class PurchasematerialController extends Controller
                 'harga' => 'required|numeric|min:0',
                 'deskripsi' => 'nullable|string',
                 'proyek_id' => 'required|exists:proyeks,id',
+                'invoice_id' => 'nullable|exists:invoices,id'
             ];
 
             // Add category validation based on type
@@ -213,14 +217,13 @@ class PurchasematerialController extends Controller
                 'total_harga' => $total_harga,
                 'deskripsi' => $validatedData['deskripsi'] ?? null,
                 'proyek_id' => $validatedData['proyek_id'],
-                'is_service' => $isService
+                'is_service' => $isService,
+                'invoice_id' => $validatedData['invoice_id'] ?? null
             ];
 
-            // Add category data based on type
             if ($isService) {
                 $data['service_category_id'] = $validatedData['service_category_id'];
                 $data['category_id'] = null;
-                
                 // Handle merek for service (use default '-' merek or null)
                 $defaultMerek = Merek::firstOrCreate(
                     ['name' => '-'],
@@ -313,5 +316,31 @@ class PurchasematerialController extends Controller
     {
         $proyeks = Proyek::all();
         return response()->json($proyeks);
+    }
+
+    public function getByProyek($proyekId)
+    {
+        $purchases = Purchasematerial::with(['proyek', 'invoice'])
+            ->where('proyek_id', $proyekId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $purchases
+        ]);
+    }
+
+    public function getByInvoice($invoiceId)
+    {
+        $purchases = Purchasematerial::with(['proyek', 'invoice'])
+            ->where('invoice_id', $invoiceId)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $purchases
+        ]);
     }
 }

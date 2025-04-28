@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\PurchasematerialController;
 use App\Http\Controllers\Api\ProyekController;
 use App\Http\Controllers\Api\TerminController;
 use App\Http\Controllers\Api\ServiceCategoryController;
+use App\Http\Controllers\Api\InvoiceController;
 
 use App\Http\Controllers\Api\ActivityController;
 /*
@@ -71,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [UserController::class, 'logout']);
 
+    Route::apiResource('invoices', InvoiceController::class);
     Route::apiResource('service-categories', ServiceCategoryController::class);
     Route::get('/activity-log', [ActivityController::class, 'index']);
 });

@@ -18,6 +18,10 @@ class ServiceCategoryController extends BaseController
         try {
             $query = ServiceCategory::with('unit');
             
+            if ($request->has('unit_id')) {
+                $query->where('unit_id', $request->unit_id);
+            }
+
             if ($request->ajax() && $request->has('datatables')) {
                 return DataTables::of($query)->make(true);
             }

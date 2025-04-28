@@ -233,8 +233,8 @@
                         <strong>Kategori:</strong>
                       </CCol>
                       <CCol sm="9">
-                        {{ expense.source.is_service ? 
-                           expense.source.serviceCategory?.nama_kategori : 
+                        {{ expense.source.is_service ?
+                           expense.source.serviceCategory?.nama_kategori :
                            expense.source.category?.nama_kategori || '-' }}
                       </CCol>
                     </CRow>
@@ -373,7 +373,7 @@
         await axios.delete(`/api/expenses/${route.params.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
-        
+
         Swal.fire({
           title: 'Berhasil!',
           text: 'Data pengeluaran berhasil dihapus.',
@@ -399,19 +399,19 @@
       loading.value = true
       error.value = ''
       const token = sessionStorage.getItem('token')
-      
+
       const res = await axios.get(`/api/expenses/${route.params.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      
+
       if (res.data.status === 'error') {
         throw new Error(res.data.message)
       }
-      
+
       if (!res.data.data) {
         throw new Error('Invalid response format from API')
       }
-      
+
       expense.value = res.data.data
       console.log('Expense details:', expense.value)
     } catch (err) {
