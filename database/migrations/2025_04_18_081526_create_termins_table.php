@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('termins', function (Blueprint $table) {
             $table->id();
             $table->foreignId('proyek_id')->constrained('proyeks')->onDelete('cascade');
+            $table->foreignId('invoice_id')->nullable()->constrained('invoices')->onDelete('set null');
             $table->string('nama_termin');
             $table->decimal('nilai_termin', 18, 2);
             $table->decimal('dp_percentage', 5, 2)->default(0);
