@@ -42,7 +42,7 @@ class TerminController extends Controller
         if (!isset($validated['nilai_dp']) || $validated['nilai_dp'] == 0) {
             $validated['nilai_dp'] = $validated['nilai_termin'] * ($validated['dp_percentage'] / 100);
         }
-        
+
         if (!isset($validated['nilai_pelunasan']) || $validated['nilai_pelunasan'] == 0) {
             $validated['nilai_pelunasan'] = $validated['nilai_termin'] - $validated['nilai_dp'];
         }
@@ -86,7 +86,7 @@ class TerminController extends Controller
         if (!isset($validated['nilai_dp']) || $validated['nilai_dp'] == 0) {
             $validated['nilai_dp'] = $validated['nilai_termin'] * ($validated['dp_percentage'] / 100);
         }
-        
+
         if (!isset($validated['nilai_pelunasan']) || $validated['nilai_pelunasan'] == 0) {
             $validated['nilai_pelunasan'] = $validated['nilai_termin'] - $validated['nilai_dp'];
         }
@@ -120,7 +120,7 @@ class TerminController extends Controller
             ->with('proyek')
             ->orderBy('created_at', 'desc')
             ->get();
-        
+
         return response()->json([
             'data' => $termins,
             'project' => Proyek::find($proyekId)
@@ -207,4 +207,4 @@ class TerminController extends Controller
             ], 500);
         }
     }
-} 
+}

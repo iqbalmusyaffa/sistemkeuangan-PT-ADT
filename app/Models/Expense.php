@@ -10,6 +10,7 @@ use App\Models\Kategori;
 use App\Models\ServiceCategory;
 use App\Models\Purchasematerial;
 use App\Models\Termin;
+use App\Models\Invoice;  // Add the Invoice model
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Traits\Trackable;
@@ -35,7 +36,8 @@ class Expense extends Model
         'source_type',
         'source_id',
         'prepared_fund',
-        'bukti'
+        'bukti',
+        'invoice_id' // Add invoice_id to the fillable array
     ];
 
     protected $casts = [
@@ -96,6 +98,12 @@ class Expense extends Model
             \Illuminate\Support\Facades\Log::error('Error in Expense source relationship: ' . $e->getMessage());
             return null;
         }
+    }
+
+    // Relationship with the Invoice model
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class);  // Define the relationship to Invoice
     }
 
     public function getActiveCategory()
@@ -168,7 +176,7 @@ class Expense extends Model
     public static function createFromPurchase($purchase)
     {
         $category = $purchase->is_service ? $purchase->serviceCategory : $purchase->category;
-        
+
         return self::create([
             'user_id' => auth()->id(),
             'proyek_id' => $purchase->proyek_id,
@@ -180,7 +188,8 @@ class Expense extends Model
             'status' => 'Lunas',
             'source_type' => 'purchase',
             'source_id' => $purchase->id,
-            'prepared_fund' => $purchase->total_harga
+            'prepared_fund' => $purchase->total_harga,
+            'invoice_id' => $purchase->invoice_id // Connect the expense to the invoice
         ]);
     }
 
@@ -197,7 +206,8 @@ class Expense extends Model
             'status' => $termin->status_pembayaran,
             'source_type' => 'termin',
             'source_id' => $termin->id,
-            'prepared_fund' => $termin->jumlah_pembayaran
+            'prepared_fund' => $termin->jumlah_pembayaran,
+            'invoice_id' => $termin->invoice_id // Connect the expense to the invoice
         ]);
     }
 }

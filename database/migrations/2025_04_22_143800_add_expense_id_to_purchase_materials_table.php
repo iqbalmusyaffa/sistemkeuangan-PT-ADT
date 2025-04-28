@@ -11,13 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('mereks', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->text('deskripsi')->nullable();
-            $table->timestamps();
-            // Index on name for faster searches
-            $table->index('name');
+        Schema::table('purchase_materials', function (Blueprint $table) {
+            $table->unsignedBigInteger('expense_id')->nullable();
         });
     }
 
@@ -26,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('mereks');
+        Schema::table('purchase_materials', function (Blueprint $table) {
+            $table->dropColumn('expense_id');
+        });
     }
 };

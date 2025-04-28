@@ -21,17 +21,19 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->date('transaction_date');
             $table->string('status')->default('pending');
-            $table->string('payment_method')->nullable();
+            $table->string('payment_method')->nullable();  
             $table->decimal('prepared_fund', 15, 2)->default(0);
             $table->string('kode_transaksi')->nullable();
             $table->string('bukti')->nullable();
             $table->string('source_type')->nullable();
             $table->unsignedBigInteger('source_id')->nullable();
+            $table->foreignId('invoice_id')->nullable()->constrained('invoices')->nullOnDelete();
             $table->timestamps();
-            
+
             // Add indexes for better query performance
             $table->index('transaction_date');
             $table->index(['source_type', 'source_id']);
+            $table->index('invoice_id');
         });
     }
 
