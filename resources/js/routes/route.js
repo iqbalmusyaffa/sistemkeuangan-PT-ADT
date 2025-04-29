@@ -64,6 +64,12 @@ const routes = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/base/invoice/show',
+        name: 'InvoiceShow',
+        component: () => import('@/views/base/invoice/InvoiceShowModal.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/base/unit',
         name: 'Unit',
         component: () => import('@/views/base/unit/Unit.vue'),

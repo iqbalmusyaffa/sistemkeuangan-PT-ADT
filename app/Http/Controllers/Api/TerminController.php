@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Termin;
 use App\Models\Proyek;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,9 +15,13 @@ class TerminController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $termins = Termin::with('proyek')->orderBy('created_at', 'desc')->get();
+        $query = Termin::with('proyek')->orderBy('created_at', 'desc');
+        if ($request->has('invoice_id')) {
+            $query->where('invoice_id', $request->invoice_id);
+        }
+        $termins = $query->get();
         return response()->json($termins);
     }
 
@@ -27,6 +32,7 @@ class TerminController extends Controller
     {
         $validated = $request->validate([
             'proyek_id' => 'required|exists:proyeks,id',
+            'invoice_id' => 'required|exists:invoices,id',
             'nama_termin' => 'required|string|max:255',
             'nilai_termin' => 'required|numeric|min:0',
             'dp_percentage' => 'required|numeric|min:0|max:100',
@@ -92,6 +98,10 @@ class TerminController extends Controller
         }
 
         $termin->update($validated);
+        // Tambahkan update status invoice
+        if ($termin->invoice_id) {
+            $termin->invoice->updateStatusFromTermins();
+        }
 
         return response()->json([
             'message' => 'Termin berhasil diupdate',
@@ -104,8 +114,12 @@ class TerminController extends Controller
      */
     public function destroy(Termin $termin)
     {
+        $invoice = $termin->invoice;
         $termin->delete();
-
+        // Tambahkan update status invoice
+        if ($invoice) {
+            $invoice->updateStatusFromTermins();
+        }
         return response()->json([
             'message' => 'Termin berhasil dihapus',
         ]);
@@ -136,7 +150,7 @@ class TerminController extends Controller
             DB::beginTransaction();
 
             $validatedData = $request->validate([
-                'status_termin' => 'required|in:Pending,DP Dibayar,Lunas',
+                'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
                 'tanggal_dp' => 'nullable|date',
                 'tanggal_pelunasan' => 'nullable|date'
             ]);
@@ -153,6 +167,12 @@ class TerminController extends Controller
                 $termin->tanggal_pelunasan = $validatedData['tanggal_pelunasan'] ?? now();
             }
             $termin->save();
+
+            // Update status invoice otomatis setelah update termin
+            if ($termin->invoice_id) {
+                $invoice = $termin->invoice;
+                $invoice->updateStatusFromTermins();
+            }
 
             // Create expense records based on status changes
             if ($oldStatus !== $newStatus) {

@@ -116,6 +116,11 @@ export default [
             name: 'Pencatatan invoice',
             to: '/base/invoice',
           },
+        // {
+        //   component: 'CNavItem',
+        //   name: 'Detail Invoice',
+        //   to: '/base/invoice/show',
+        // },
         {
           component: 'CNavItem',
           name: 'Pencatatan Pengeluaran',

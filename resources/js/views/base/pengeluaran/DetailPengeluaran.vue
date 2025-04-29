@@ -198,10 +198,26 @@
                     </CRow>
                     <CRow class="mb-3">
                       <CCol sm="3">
+                        <strong>Type:</strong>
+                      </CCol>
+                      <CCol sm="9">
+                        {{ expense.source.type }}
+                      </CCol>
+                    </CRow>
+                    <CRow class="mb-3">
+                      <CCol sm="3">
+                        <strong>Spesifikasi:</strong>
+                      </CCol>
+                      <CCol sm="9">
+                        {{ expense.source.spesifikasi || '-' }}
+                      </CCol>
+                    </CRow>
+                    <CRow class="mb-3">
+                      <CCol sm="3">
                         <strong>Jumlah:</strong>
                       </CCol>
                       <CCol sm="9">
-                        {{ expense.source.jumlah }} {{ expense.source.unit?.nama_unit || '-' }}
+                        {{ expense.source.qty }} {{ expense.source.unit?.unit_name || '-' }}
                       </CCol>
                     </CRow>
                     <CRow class="mb-3">
@@ -209,7 +225,7 @@
                         <strong>Harga Satuan:</strong>
                       </CCol>
                       <CCol sm="9">
-                        Rp {{ formatCurrency(expense.source.harga_satuan) }}
+                        Rp {{ formatCurrency(expense.source.harga) }}
                       </CCol>
                     </CRow>
                     <CRow class="mb-3">
@@ -225,7 +241,7 @@
                         <strong>Merek:</strong>
                       </CCol>
                       <CCol sm="9">
-                        {{ expense.source.merek?.nama_merek || '-' }}
+                        {{ expense.source.merek?.name || '-' }}
                       </CCol>
                     </CRow>
                     <CRow class="mb-3">
@@ -236,6 +252,22 @@
                         {{ expense.source.is_service ?
                            expense.source.serviceCategory?.nama_kategori :
                            expense.source.category?.nama_kategori || '-' }}
+                      </CCol>
+                    </CRow>
+                    <CRow class="mb-3">
+                      <CCol sm="3">
+                        <strong>Deskripsi:</strong>
+                      </CCol>
+                      <CCol sm="9">
+                        {{ expense.source.deskripsi || '-' }}
+                      </CCol>
+                    </CRow>
+                    <CRow class="mb-3" v-if="expense.source.invoice">
+                      <CCol sm="3">
+                        <strong>No. Invoice:</strong>
+                      </CCol>
+                      <CCol sm="9">
+                        {{ expense.source.invoice?.invoice_number || '-' }}
                       </CCol>
                     </CRow>
                   </div>

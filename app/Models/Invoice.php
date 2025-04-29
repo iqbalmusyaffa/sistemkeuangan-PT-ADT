@@ -40,7 +40,7 @@ class Invoice extends Model
     // Relasi ke termin pembayaran (kalau pakai termin)
     public function termins()
     {
-        return $this->hasMany(Termin::class);
+        return $this->hasMany(Termin::class, 'invoice_id');
     }
 
     // Relasi ke expenses (pencatatan pengeluaran berdasarkan invoice)
@@ -68,5 +68,22 @@ class Invoice extends Model
     {
         $this->attributes['amount_paid'] = $value;
         $this->attributes['status'] = $this->determineStatus(); // Update status setelah amount_paid diubah
+    }
+
+    public function updateStatusFromTermins()
+    {
+        $termins = $this->termins;
+        if ($termins->count() === 0) {
+            $this->status = 'unpaid';
+        } elseif ($termins->every(fn($t) => $t->status_termin === 'Lunas')) {
+            $this->status = 'paid';
+        } elseif ($termins->every(fn($t) => $t->status_termin === 'Belum Dibayar')) {
+            $this->status = 'unpaid';
+        } elseif ($termins->every(fn($t) => $t->status_termin === 'DP Dibayar')) {
+            $this->status = 'partially_paid';
+        } else {
+            $this->status = 'partially_paid';
+        }
+        $this->save();
     }
 }

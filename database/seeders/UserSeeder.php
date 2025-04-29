@@ -22,6 +22,16 @@ class UserSeeder extends Seeder
             'status' => 'active',
             'profile_picture' => null,
         ]);
+         // Superadmin
+         $superadmin = User::create([
+            'name' => 'Admincobaiqbal',
+            'email' => 'admincobaiqbal@gmail.com',
+            'username' => 'admincobaiqbal',
+            'password' => Hash::make('1234556789'),
+            'role' => 'superadmin',
+            'status' => 'active',
+            'profile_picture' => null,
+        ]);
 
         // Membuat token untuk Superadmin
         $superadminToken = $superadmin->createToken('Superadmin Token')->plainTextToken;

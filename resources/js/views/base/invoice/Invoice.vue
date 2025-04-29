@@ -110,7 +110,7 @@
               <CFormSelect
                 id="project_id"
                 v-model="form.proyek_id"
-                :disabled="editingId"
+                :disabled="modalMode === 'view'"
                 required
               >
                 <option value="">Pilih Proyek</option>
@@ -132,6 +132,7 @@
                 type="date"
                 id="invoice_date"
                 v-model="form.invoice_date"
+                :readonly="modalMode === 'view'"
                 required
               />
             </CCol>
@@ -140,6 +141,7 @@
               <CFormSelect
                 id="status"
                 v-model="form.status"
+                :disabled="modalMode === 'view'"
                 required
               >
                 <option value="unpaid">Belum Dibayar</option>
@@ -156,9 +158,48 @@
                 id="notes"
                 v-model="form.notes"
                 rows="3"
+                :readonly="modalMode === 'view'"
               />
             </CCol>
           </CRow>
+
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel>Metode Pembayaran</CFormLabel>
+              <CFormCheck
+                type="radio"
+                label="Cash (Tanpa Termin)"
+                v-model="form.is_cash"
+                :value="true"
+              />
+              <CFormCheck
+                type="radio"
+                label="Termin"
+                v-model="form.is_cash"
+                :value="false"
+              />
+            </CCol>
+          </CRow>
+
+          <div v-if="!form.is_cash">
+            <div v-for="(termin, idx) in form.termins" :key="idx" class="border p-2 mb-2">
+              <CRow>
+                <CCol md="4">
+                  <CFormInput v-model="termin.nama_termin" placeholder="Nama Termin" />
+                </CCol>
+                <CCol md="3">
+                  <CFormInput v-model.number="termin.nilai_termin" type="number" placeholder="Nilai Termin" />
+                </CCol>
+                <CCol md="3">
+                  <CFormInput v-model.number="termin.dp_percentage" type="number" placeholder="Persentase DP" />
+                </CCol>
+                <CCol md="2">
+                  <CButton color="danger" @click="form.termins.splice(idx,1)" v-if="form.termins.length > 1">Hapus</CButton>
+                </CCol>
+              </CRow>
+            </div>
+            <CButton color="success" @click="form.termins.push({nama_termin:'',nilai_termin:0,dp_percentage:0})">Tambah Termin</CButton>
+          </div>
 
           <CRow class="mb-3">
             <CCol md="12">
@@ -167,12 +208,13 @@
                 <CRow>
                   <CCol md="4">
                     <CFormLabel>Item</CFormLabel>
-                    <CFormInput v-model="item.item" required />
+                    <CFormInput v-model="item.item" :readonly="modalMode === 'view'" required />
                   </CCol>
                   <CCol md="2">
                     <CFormLabel>Type</CFormLabel>
                     <CFormInput
                       v-model="item.type"
+                      :readonly="modalMode === 'view'"
                       required
                       placeholder="Masukkan tipe, contoh: Lithium"
                     />
@@ -182,6 +224,7 @@
                     <CFormInput
                       type="number"
                       v-model="item.qty"
+                      :readonly="modalMode === 'view'"
                       required
                       min="1"
                       @input="calculateTotalHarga(item)"
@@ -195,9 +238,8 @@
                         type="text"
                         :value="item.harga"
                         @input="onHargaInput($event, item)"
-                        required
+                        :readonly="modalMode === 'view'"
                         min="0"
-                        :readonly="isServiceType(item)"
                         :class="{ 'bg-light': isServiceType(item) }"
                       />
                     </div>
@@ -211,6 +253,7 @@
                     <CFormLabel>Unit</CFormLabel>
                     <CFormSelect
                       v-model="item.unit_id"
+                      :readonly="modalMode === 'view'"
                       required
                       @change="handleUnitChange(item)"
                     >
@@ -225,6 +268,7 @@
                     <CFormSelect
                       v-if="isServiceType(item)"
                       v-model="item.service_category_id"
+                      :readonly="modalMode === 'view'"
                       required
                       :disabled="!item.unit_id"
                       @change="handleCategoryChange(item)"
@@ -237,6 +281,7 @@
                     <CFormSelect
                       v-else
                       v-model="item.category_id"
+                      :readonly="modalMode === 'view'"
                       required
                       :disabled="!item.unit_id"
                     >
@@ -253,7 +298,7 @@
                     <CFormLabel>Merek</CFormLabel>
                     <CFormSelect
                       v-model="item.merek_id"
-                      :required="!isServiceType(item)"
+                      :readonly="modalMode === 'view'"
                       :disabled="isServiceType(item)"
                       :class="{ 'bg-light': isServiceType(item) }"
                     >
@@ -270,11 +315,11 @@
                 <CRow class="mt-3">
                   <CCol md="6">
                     <CFormLabel>Spesifikasi</CFormLabel>
-                    <CFormTextarea v-model="item.spesifikasi" rows="2" />
+                    <CFormTextarea v-model="item.spesifikasi" rows="2" :readonly="modalMode === 'view'" />
                   </CCol>
                   <CCol md="6">
                     <CFormLabel>Deskripsi</CFormLabel>
-                    <CFormTextarea v-model="item.deskripsi" rows="2" />
+                    <CFormTextarea v-model="item.deskripsi" rows="2" :readonly="modalMode === 'view'" />
                   </CCol>
                 </CRow>
                 <CRow class="mt-3">
@@ -283,6 +328,7 @@
                   </CCol>
                   <CCol md="6" class="text-end">
                     <CButton
+                      v-if="modalMode !== 'view'"
                       color="danger"
                       size="sm"
                       @click="removeItem(index)"
@@ -293,14 +339,14 @@
                   </CCol>
                 </CRow>
               </div>
-              <CButton color="success" size="sm" @click="addItem">
+              <CButton v-if="modalMode !== 'view'" color="success" size="sm" @click="addItem">
                 <CIcon icon="cil-plus" /> Tambah Item
               </CButton>
             </CCol>
           </CRow>
         </CForm>
       </CModalBody>
-      <CModalFooter>
+      <CModalFooter v-if="modalMode !== 'view'">
         <CButton color="secondary" @click="closeModal">
           Batal
         </CButton>
@@ -308,12 +354,13 @@
           {{ editingId ? 'Update' : 'Simpan' }}
         </CButton>
       </CModalFooter>
+      <CModalFooter v-else><CButton color="secondary" @click="closeModal">Tutup</CButton></CModalFooter>
     </CModal>
   </CRow>
 </template>
 
 <script>
-import { ref, onMounted, watch, computed, nextTick } from "vue";
+import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import axios from "axios";
 import $ from "jquery";
 import Swal from "sweetalert2";
@@ -322,6 +369,7 @@ import 'datatables.net-dt/css/dataTables.dataTables.min.css';
 import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css';
 import 'datatables.net';
 import 'datatables.net-responsive';
+import { useRoute } from 'vue-router'
 
 export default {
   name: 'Invoice',
@@ -337,6 +385,9 @@ export default {
     const mereks = ref([])
     const serviceCategories = ref([])
     const selectedUnitType = ref(null)
+    const invoices = ref([])
+    const modalMode = ref('add') // 'add', 'edit', 'view'
+    const route = useRoute()
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -434,7 +485,9 @@ export default {
         expense_id: null,
         is_service: false,
         serviceCategories: []
-      }]
+      }],
+      is_cash: true,
+      termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
     })
     const modalTitle = ref('Tambah Invoice')
     const editingId = ref(null)
@@ -486,8 +539,12 @@ export default {
           }
         })
 
+        console.log('Invoices API response:', response.data);
+        invoices.value = response.data.data || [];
+
         if (dataTable) {
-          dataTable.clear().destroy()
+          dataTable.clear().destroy();
+          dataTable = null;
         }
 
         if (invoiceTableRef.value) {
@@ -564,23 +621,20 @@ export default {
     }
 
     const totalInvoice = computed(() => {
-      if (!selectedProject.value || !dataTable) return 0
-      return dataTable.data().toArray().reduce((sum, row) => sum + parseFloat(row.total_amount || 0), 0)
+      return invoices.value.reduce((sum, row) => sum + parseFloat(row.total_amount || 0), 0)
     })
 
     const totalPaid = computed(() => {
-      if (!selectedProject.value || !dataTable) return 0
-      return dataTable.data().toArray().reduce((sum, row) => sum + parseFloat(row.amount_paid || 0), 0)
+      return invoices.value.reduce((sum, row) => sum + parseFloat(row.amount_paid || 0), 0)
     })
 
-    const totalUnpaid = computed(() => {
-      return totalInvoice.value - totalPaid.value
-    })
+    const totalUnpaid = computed(() => totalInvoice.value - totalPaid.value)
 
     const overallStatus = computed(() => {
-      if (totalUnpaid.value === 0) return 'Lunas'
+      if (totalUnpaid.value === 0 && totalInvoice.value > 0) return 'Lunas'
       if (totalPaid.value === 0) return 'Belum Dibayar'
-      return 'Dibayar Sebagian'
+      if (totalUnpaid.value > 0) return 'Dibayar Sebagian'
+      return '-'
     })
 
     const setHargaFromServiceCategory = (item) => {
@@ -595,12 +649,17 @@ export default {
       }
     }
 
-    const openModal = (mode, id = null) => {
+    const openModal = async (mode, id = null) => {
+      modalMode.value = mode
       editingId.value = id
-      modalTitle.value = mode === 'tambah' ? 'Tambah Invoice' : 'Edit Invoice'
-      if (mode === 'edit' && id) {
-        loadInvoice(id)
+      modalTitle.value = mode === 'tambah' ? 'Tambah Invoice' : (mode === 'edit' ? 'Edit Invoice' : 'Detail Invoice')
+      if ((mode === 'edit' || mode === 'view') && id) {
+        await loadMasterData();
+        await loadProjects();
+        await loadInvoice(id);
       } else {
+        await loadMasterData();
+        await loadProjects();
         resetForm()
         form.value.purchase_materials.forEach(item => handleCategoryChange(item))
       }
@@ -633,7 +692,9 @@ export default {
           expense_id: null,
           is_service: false,
           serviceCategories: []
-        }]
+        }],
+        is_cash: true,
+        termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
       }
       editingId.value = null
       form.value.purchase_materials.forEach(item => handleCategoryChange(item))
@@ -733,7 +794,20 @@ export default {
           calculateTotalHarga(item)
         })
         const token = sessionStorage.getItem('token')
-        const response = await axios.post('/api/invoices', form.value, {
+        const payload = {
+          ...form.value,
+          is_cash: form.value.is_cash,
+          termins: form.value.is_cash ? [] : form.value.termins,
+          purchase_materials: form.value.purchase_materials.map(item => ({
+            ...item,
+            harga: item.harga ? Number(String(item.harga).replace(/\./g, '')) : 0
+          })),
+          total_amount: totalInvoice.value,
+          amount_paid: totalPaid.value,
+          total_unpaid: totalUnpaid.value,
+          overall_status: overallStatus.value
+        }
+        const response = await axios.post('/api/invoices', payload, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (response.data.status === 'error') {
@@ -765,14 +839,48 @@ export default {
             Authorization: `Bearer ${token}`
           }
         })
-        form.value = response.data
+        console.log('API response:', response.data);
+        const invoice = response.data.data;
+        console.log('Invoice yang akan di-assign:', invoice);
+        form.value = {
+          ...form.value,
+          proyek_id: invoice.proyek?.id || '',
+          invoice_date: invoice.invoice_date ? invoice.invoice_date.substring(0, 10) : '',
+          status: invoice.status || 'unpaid',
+          notes: invoice.notes || '',
+          purchase_materials: Array.isArray(invoice.purchase_materials) && invoice.purchase_materials.length > 0
+            ? invoice.purchase_materials
+            : [{
+                item: '',
+                type: '',
+                qty: 1,
+                harga: '',
+                unit_id: '',
+                total_harga: 0,
+                spesifikasi: '',
+                deskripsi: '',
+                category_id: '',
+                service_category_id: '',
+                merek_id: '',
+                expense_id: null,
+                is_service: false,
+                serviceCategories: []
+              }]
+        }
+        console.log('Invoice loaded:', form.value);
+        console.log('projects.value:', projects.value);
+        console.log('form.value.proyek_id:', form.value.proyek_id);
       } catch (err) {
+        let errorMsg = 'Gagal memuat data invoice';
+        if (err.response && err.response.data && err.response.data.message) {
+          errorMsg += ': ' + err.response.data.message;
+        }
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Gagal memuat data invoice'
-        })
-        console.error(err)
+          text: errorMsg
+        });
+        console.error(err);
       }
     }
 
@@ -915,6 +1023,12 @@ export default {
       loadMasterData()
       loadProjects()
       loadInvoices()
+      const handler = () => loadInvoices()
+      window.addEventListener('termin-updated', handler)
+      // Bersihkan event listener saat komponen di-unmount
+      onUnmounted(() => {
+        window.removeEventListener('termin-updated', handler)
+      })
     })
 
     // Watch for changes in selectedProject
@@ -923,6 +1037,16 @@ export default {
         loadInvoices()
       }
     })
+
+    // Tambahkan watcher pada perubahan route untuk auto-refresh invoice
+    watch(
+      () => route.fullPath,
+      (newPath, oldPath) => {
+        if (newPath.includes('/invoice')) {
+          loadInvoices()
+        }
+      }
+    )
 
     return {
       invoiceTableRef,

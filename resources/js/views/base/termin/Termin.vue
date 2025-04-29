@@ -16,31 +16,21 @@
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
-              <CFormSelect
-                v-model="selectedProject"
-                id="project_filter"
-                @change="filterByProject"
-              >
+              <CFormSelect v-model="selectedProject" id="project_filter" @change="filterByProject">
                 <option value="">-- Pilih Proyek --</option>
-                <option
-                  v-for="project in projects"
-                  :key="project.id"
-                  :value="project.id"
-                >
+                <option v-for="project in projects" :key="project.id" :value="project.id">
                   {{ project.nama_customer }} - {{ project.nama_proyek }}
                 </option>
               </CFormSelect>
             </CCol>
-            <!-- Ganti Project Button -->
-            <CCol md="6" class="text-end">
-              <CButton
-                color="secondary"
-                v-if="selectedProject"
-                @click="changeProject"
-                class="mt-2"
-              >
-                Ganti Proyek
-              </CButton>
+            <CCol md="6">
+              <CFormLabel for="invoice_filter">Pilih Invoice</CFormLabel>
+              <CFormSelect v-model="selectedInvoice" id="invoice_filter" @change="filterByInvoice" :disabled="!selectedProject || !!selectedInvoice">
+                <option value="">-- Pilih Invoice --</option>
+                <option v-for="invoice in invoices" :key="invoice.id" :value="invoice.id">
+                  {{ invoice.invoice_number }} - {{ invoice.invoice_date }}
+                </option>
+              </CFormSelect>
             </CCol>
           </CRow>
 
@@ -248,6 +238,7 @@ import "datatables.net-responsive-dt";
 const terminTableRef = ref(null);
 const form = ref({
   project_id: "",
+  invoice_id: "",
   nama_termin: "",
   nilai_termin: 0,
   dp_percentage: 50,
@@ -282,6 +273,8 @@ const editingId = ref(null);
 const updatingStatusId = ref(null);
 const selectedProject = ref("");
 const selectedProjectDetails = ref(null);
+const selectedInvoice = ref("");
+const invoices = ref([]);
 
 // Add groupedProjects computed property
 const groupedProjects = computed(() => {
@@ -361,42 +354,34 @@ const fetchProjects = async () => {
 
 const fetchTermins = async () => {
   error.value = "";
-
+  if (!selectedInvoice.value) {
+    termins.value = [];
+    nextTick(() => {
+      initDataTable();
+    });
+    return;
+  }
   try {
     const token = sessionStorage.getItem("token");
-    console.log("Fetching termins for project:", selectedProject.value);
-
+    const params = { proyek_id: selectedProject.value };
+    if (selectedInvoice.value) params.invoice_id = selectedInvoice.value;
     const response = await axios.get("/api/termins", {
       headers: { Authorization: `Bearer ${token}` },
-      params: { proyek_id: selectedProject.value }
+      params
     });
-
-    console.log("Termins response:", response.data);
-
-    // Handle array response directly
     if (Array.isArray(response.data)) {
       termins.value = response.data;
-    }
-    // Handle response with data property
-    else if (response.data && Array.isArray(response.data.data)) {
+    } else if (response.data && Array.isArray(response.data.data)) {
       termins.value = response.data.data;
-    }
-    // Handle other response formats
-    else if (response.data) {
+    } else if (response.data) {
       termins.value = [response.data];
     } else {
       termins.value = [];
     }
-
-    console.log("Processed termins:", termins.value);
-
-    // Initialize DataTable after data is loaded
     nextTick(() => {
       initDataTable();
     });
-
   } catch (err) {
-    console.error('Error fetching termins:', err);
     error.value = "Gagal memuat data termin: " + (err.response?.data?.message || err.message);
     termins.value = [];
   }
@@ -519,12 +504,13 @@ const initDataTable = () => {
         data: null,
         orderable: false,
         className: 'text-center align-middle',
-        width: '100px',
+        width: '150px',
         render: (data, type, row) => {
           if (!row || !row.id) return '';
           return `
             <div class="d-flex justify-content-center" style="gap: 4px;">
               <button type="button" class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
+              <button type="button" class="btn btn-sm btn-info status-btn" data-id="${row.id}">Status</button>
               <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
             </div>
           `;
@@ -569,6 +555,19 @@ const initDataTable = () => {
         });
       });
 
+      // Add event handler for status buttons
+      $(this).find('.status-btn').each(function() {
+        $(this).off('click').on('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = $(this).data('id');
+          const termin = termins.value.find(t => t.id === parseInt(id));
+          if (termin) {
+            openStatusModal(termin);
+          }
+        });
+      });
+
       // Reattach event handlers for delete buttons
       $(this).find('.delete-btn').each(function() {
         $(this).off('click').on('click', function(e) {
@@ -595,65 +594,50 @@ const initDataTable = () => {
 };
 
 const filterByProject = async () => {
-  if (selectedProject.value) {
-    loading.value = true;
-    error.value = "";
-    try {
-      console.log("Filtering by project:", selectedProject.value); // Debug log
-      await Promise.all([
-        fetchTermins(),
-        fetchPurchases(selectedProject.value)
-      ]);
-    } catch (err) {
-      console.error('Error filtering by project:', err);
-      error.value = "Gagal memuat data";
-    } finally {
-      loading.value = false;
-    }
-  } else {
-    termins.value = [];
-    purchases.value = [];
-    if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
-      $(terminTableRef.value).DataTable().destroy();
-      $(terminTableRef.value).empty();
-    }
-  }
+  await fetchInvoices(selectedProject.value);
+  selectedInvoice.value = "";
+  termins.value = [];
+  nextTick(() => {
+    initDataTable();
+  });
 };
 
-// Watch for changes in selectedProject
-watch(selectedProject, async (newValue, oldValue) => {
-  if (newValue !== oldValue) {
-    if (newValue) {
-      loading.value = true;
-      error.value = "";
-      try {
-        await Promise.all([
-          fetchTermins(),
-          fetchPurchases(newValue)
-        ]);
-      } catch (err) {
-        console.error('Error on project change:', err);
-        error.value = "Gagal memuat data untuk proyek yang dipilih";
-        termins.value = [];
-        purchases.value = [];
-        if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
-          $(terminTableRef.value).DataTable().destroy();
-          $(terminTableRef.value).empty();
-        }
-      } finally {
-        loading.value = false;
-      }
-    } else {
-      termins.value = [];
-      purchases.value = [];
-      if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
-        $(terminTableRef.value).DataTable().destroy();
-        $(terminTableRef.value).empty();
-      }
-      error.value = "";
-    }
+const filterByInvoice = async () => {
+  await fetchTermins();
+};
+
+watch(selectedProject, async (newVal) => {
+  await fetchInvoices(newVal);
+  selectedInvoice.value = "";
+  await fetchTermins();
+});
+
+watch(selectedInvoice, (newVal) => {
+  if (newVal) {
+    fetchTermins();
+  } else {
+    termins.value = [];
+    nextTick(() => {
+      initDataTable();
+    });
   }
-}, { immediate: true });
+});
+
+watch(selectedInvoice, (newVal) => {
+  if (!newVal) return;
+  const invoice = invoices.value.find(inv => inv.id == newVal);
+  if (invoice) {
+    form.value.invoice_id = invoice.id;
+    form.value.nilai_termin = Number(invoice.total_amount) || 0;
+    form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
+    // Default DP 50%
+    form.value.dp_percentage = 50;
+    form.value.nilai_dp = form.value.nilai_termin * 0.5;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+  }
+});
 
 // Open Modal for Add/Edit
 const openModal = async (mode, termin = null) => {
@@ -668,8 +652,9 @@ const openModal = async (mode, termin = null) => {
 
     form.value = {
       project_id: termin.proyek_id || selectedProject.value,
+      invoice_id: termin.invoice_id || selectedInvoice.value || "",
       nama_termin: termin.nama_termin,
-      nilai_termin: totalPurchases.value,
+      nilai_termin: termin.nilai_termin,
       dp_percentage: termin.dp_percentage,
       nilai_dp: termin.nilai_dp,
       nilai_pelunasan: termin.nilai_pelunasan,
@@ -677,7 +662,7 @@ const openModal = async (mode, termin = null) => {
       tanggal_pelunasan: formatDateForInput(termin.tanggal_pelunasan),
       status_termin: termin.status_termin,
       keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(totalPurchases.value),
+      displayNilaiTermin: formatCurrency(termin.nilai_termin),
       displayNilaiDP: formatCurrency(termin.nilai_dp),
       displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan)
     };
@@ -685,22 +670,27 @@ const openModal = async (mode, termin = null) => {
     modalTitle.value = "Edit Termin";
     modalButtonText.value = "Update";
   } else {
-    // Set project_id to the currently selected project
+    // Set nilai dari invoice yang dipilih
+    const invoice = invoices.value.find(inv => inv.id == selectedInvoice.value);
+    const nilai_termin = invoice ? Number(invoice.total_amount) : 0;
+    const dp = nilai_termin * 0.5;
+    const pelunasan = nilai_termin - dp;
     const today = new Date().toISOString().split('T')[0];
     form.value = {
       project_id: selectedProject.value,
+      invoice_id: selectedInvoice.value || "",
       nama_termin: "",
-      nilai_termin: totalPurchases.value,
+      nilai_termin: nilai_termin,
       dp_percentage: 50,
-      nilai_dp: totalPurchases.value * 0.5,
-      nilai_pelunasan: totalPurchases.value * 0.5,
+      nilai_dp: dp,
+      nilai_pelunasan: pelunasan,
       tanggal_dp: today,
       tanggal_pelunasan: "",
       status_termin: "Belum Dibayar",
       keterangan: "",
-      displayNilaiTermin: formatCurrency(totalPurchases.value),
-      displayNilaiDP: formatCurrency(totalPurchases.value * 0.5),
-      displayNilaiPelunasan: formatCurrency(totalPurchases.value * 0.5)
+      displayNilaiTermin: formatCurrency(nilai_termin),
+      displayNilaiDP: formatCurrency(dp),
+      displayNilaiPelunasan: formatCurrency(pelunasan)
     };
     editingId.value = null;
     modalTitle.value = "Tambah Termin";
@@ -773,6 +763,7 @@ const handleSubmit = async () => {
 
     const payload = {
       proyek_id: form.value.project_id,
+      invoice_id: form.value.invoice_id,
       nama_termin: form.value.nama_termin,
       nilai_termin: form.value.nilai_termin,
       dp_percentage: form.value.dp_percentage,
@@ -784,8 +775,9 @@ const handleSubmit = async () => {
       keterangan: form.value.keterangan || ""
     };
 
+    let response;
     if (modalMode.value === "edit") {
-      await axios.put(`/api/termins/${editingId.value}`, payload, {
+      response = await axios.put(`/api/termins/${editingId.value}`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -793,7 +785,7 @@ const handleSubmit = async () => {
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin diperbarui." });
     } else {
-      await axios.post("/api/termins", payload, {
+      response = await axios.post("/api/termins", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -802,8 +794,59 @@ const handleSubmit = async () => {
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin ditambahkan." });
     }
 
+    // Update invoice status after termin operation
+    if (form.value.invoice_id) {
+      try {
+        // Get current invoice with termins
+        const invoiceResponse = await axios.get(`/api/invoices/${form.value.invoice_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const invoice = invoiceResponse.data.data;
+        const termins = invoice.termins || [];
+        
+        // Calculate total paid amount and check termin statuses
+        let totalPaid = 0;
+        let allTerminsPaid = true;
+        let hasTermins = termins.length > 0;
+
+        termins.forEach(termin => {
+          if (termin.status_termin === "Lunas") {
+            totalPaid += parseFloat(termin.nilai_termin);
+          } else if (termin.status_termin === "DP Dibayar") {
+            totalPaid += parseFloat(termin.nilai_dp);
+            allTerminsPaid = false;
+          } else {
+            allTerminsPaid = false;
+          }
+        });
+
+        // Determine new invoice status
+        let newStatus = 'unpaid';
+        if (hasTermins) {
+          if (allTerminsPaid && totalPaid >= parseFloat(invoice.total_amount)) {
+            newStatus = 'paid';
+          } else if (totalPaid > 0) {
+            newStatus = 'partially_paid';
+          }
+        }
+
+        // Update invoice status and amount_paid
+        await axios.put(`/api/invoices/${form.value.invoice_id}`, {
+          status: newStatus,
+          amount_paid: totalPaid
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (err) {
+        console.error("Error updating invoice status:", err);
+      }
+    }
+
     closeModal();
     await fetchTermins();
+    // Dispatch event to notify invoice component
+    window.dispatchEvent(new Event('termin-updated'));
   } catch (err) {
     console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
@@ -856,6 +899,24 @@ const handleStatusUpdate = async () => {
     const token = sessionStorage.getItem("token");
     const termin = termins.value.find(t => t.id === updatingStatusId.value);
 
+    // Format dates for API
+    const formatDateForAPI = (dateString) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+
+    const payload = {
+      status_termin: statusForm.value.status_termin,
+      tanggal_dp: formatDateForAPI(statusForm.value.tanggal_dp),
+      tanggal_pelunasan: formatDateForAPI(statusForm.value.tanggal_pelunasan)
+    };
+
+    // Update termin status
+    await axios.put(`/api/termins/${updatingStatusId.value}/status`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
     // Create expense entry based on status
     if (statusForm.value.status_termin === "DP Dibayar" || statusForm.value.status_termin === "Lunas") {
       const today = new Date();
@@ -874,11 +935,6 @@ const handleStatusUpdate = async () => {
         headers: { Authorization: `Bearer ${token}` }
       });
     }
-
-    // Update termin status
-    await axios.put(`/api/termins/${updatingStatusId.value}/status`, statusForm.value, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
 
     Swal.fire({
       icon: "success",
@@ -986,6 +1042,24 @@ const fetchPurchases = async (projectId) => {
   } catch (err) {
     console.error('Error fetching purchases:', err);
     error.value = 'Gagal memuat data pembelian';
+  }
+};
+
+// Fetch invoices by project
+const fetchInvoices = async (projectId) => {
+  if (!projectId) {
+    invoices.value = [];
+    return;
+  }
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/invoices", {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { proyek_id: projectId }
+    });
+    invoices.value = response.data.data || [];
+  } catch (err) {
+    invoices.value = [];
   }
 };
 

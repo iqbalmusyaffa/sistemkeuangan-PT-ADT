@@ -13,6 +13,7 @@ class Termin extends Model
 
     protected $fillable = [
         'proyek_id',
+        'invoice_id',
         'nama_termin',
         'nilai_termin',
         'dp_percentage',
@@ -39,6 +40,11 @@ class Termin extends Model
     public function proyek()
     {
         return $this->belongsTo(Proyek::class);
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class, 'invoice_id');
     }
 
     public function purchaseMaterials()
