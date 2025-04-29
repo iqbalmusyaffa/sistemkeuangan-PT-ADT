@@ -84,7 +84,7 @@ class InvoiceController extends Controller
                 $totalPurchaseAmount = 0;
                 foreach ($request->purchase_materials as $item) {
                     $totalHarga = $item['qty'] * $item['harga'];
-                    PurchaseMaterial::create([
+                    $purchaseMaterial = PurchaseMaterial::create([
                         'proyek_id' => $request->proyek_id,
                         'invoice_id' => $invoice->id,
                         'item' => $item['item'],
@@ -100,11 +100,68 @@ class InvoiceController extends Controller
                         'deskripsi' => $item['deskripsi'] ?? null,
                         'is_service' => isset($item['service_category_id']) && $item['service_category_id'] ? 1 : 0,
                     ]);
+
+                    // Create expense for each purchase material
+                    $expense = new \App\Models\Expense([
+                        'user_id' => auth()->id(),
+                        'proyek_id' => $request->proyek_id,
+                        'category_id' => $purchaseMaterial->is_service ? null : $purchaseMaterial->category_id,
+                        'service_category_id' => $purchaseMaterial->is_service ? $purchaseMaterial->service_category_id : null,
+                        'amount' => $purchaseMaterial->total_harga,
+                        'description' => "Pembelian " . $purchaseMaterial->item . " - " . $purchaseMaterial->deskripsi,
+                        'transaction_date' => $request->invoice_date,
+                        'status' => 'Pending',
+                        'payment_method' => null,
+                        'prepared_fund' => $purchaseMaterial->total_harga,
+                        'source_type' => 'purchase',
+                        'source_id' => $purchaseMaterial->id,
+                        'invoice_id' => $invoice->id
+                    ]);
+                    $expense->save();
+
+                    // Update purchase material with expense_id
+                    $purchaseMaterial->expense_id = $expense->id;
+                    $purchaseMaterial->save();
+
                     $totalPurchaseAmount += $totalHarga;
                 }
 
                 $invoice->total_amount = $totalPurchaseAmount;
                 $invoice->save();
+
+                // Logika termin fleksibel
+                if ($request->has('termins') && is_array($request->termins) && count($request->termins) > 0) {
+                    foreach ($request->termins as $i => $terminData) {
+                        \App\Models\Termin::create([
+                            'proyek_id' => $request->proyek_id,
+                            'invoice_id' => $invoice->id,
+                            'nama_termin' => $terminData['nama_termin'] ?? 'Termin ' . ($i+1),
+                            'nilai_termin' => $terminData['nilai_termin'],
+                            'dp_percentage' => $terminData['dp_percentage'] ?? 0,
+                            'nilai_dp' => $terminData['nilai_dp'] ?? 0,
+                            'nilai_pelunasan' => $terminData['nilai_pelunasan'] ?? $terminData['nilai_termin'],
+                            'tanggal_dp' => $terminData['tanggal_dp'] ?? null,
+                            'tanggal_pelunasan' => $terminData['tanggal_pelunasan'] ?? null,
+                            'status_termin' => $terminData['status_termin'] ?? 'Belum Dibayar',
+                            'keterangan' => $terminData['keterangan'] ?? ($request->notes ?? '-')
+                        ]);
+                    }
+                } elseif (!$request->has('is_cash') || !$request->is_cash) {
+                    // Jika tidak cash dan tidak ada data termin, buat 1 termin default
+                    \App\Models\Termin::create([
+                        'proyek_id' => $request->proyek_id,
+                        'invoice_id' => $invoice->id,
+                        'nama_termin' => 'Termin 1',
+                        'nilai_termin' => $invoice->total_amount,
+                        'dp_percentage' => 0,
+                        'nilai_dp' => 0,
+                        'nilai_pelunasan' => $invoice->total_amount,
+                        'tanggal_dp' => null,
+                        'tanggal_pelunasan' => null,
+                        'status_termin' => 'Belum Dibayar',
+                        'keterangan' => $request->notes ?? '-'
+                    ]);
+                }
 
                 DB::commit();
                 \Log::info('Invoice created successfully:', ['invoice_id' => $invoice->id]);

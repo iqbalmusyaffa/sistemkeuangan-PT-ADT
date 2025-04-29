@@ -165,6 +165,44 @@
 
           <CRow class="mb-3">
             <CCol md="12">
+              <CFormLabel>Metode Pembayaran</CFormLabel>
+              <CFormCheck
+                type="radio"
+                label="Cash (Tanpa Termin)"
+                v-model="form.is_cash"
+                :value="true"
+              />
+              <CFormCheck
+                type="radio"
+                label="Termin"
+                v-model="form.is_cash"
+                :value="false"
+              />
+            </CCol>
+          </CRow>
+
+          <div v-if="!form.is_cash">
+            <div v-for="(termin, idx) in form.termins" :key="idx" class="border p-2 mb-2">
+              <CRow>
+                <CCol md="4">
+                  <CFormInput v-model="termin.nama_termin" placeholder="Nama Termin" />
+                </CCol>
+                <CCol md="3">
+                  <CFormInput v-model.number="termin.nilai_termin" type="number" placeholder="Nilai Termin" />
+                </CCol>
+                <CCol md="3">
+                  <CFormInput v-model.number="termin.dp_percentage" type="number" placeholder="Persentase DP" />
+                </CCol>
+                <CCol md="2">
+                  <CButton color="danger" @click="form.termins.splice(idx,1)" v-if="form.termins.length > 1">Hapus</CButton>
+                </CCol>
+              </CRow>
+            </div>
+            <CButton color="success" @click="form.termins.push({nama_termin:'',nilai_termin:0,dp_percentage:0})">Tambah Termin</CButton>
+          </div>
+
+          <CRow class="mb-3">
+            <CCol md="12">
               <h5>Items</h5>
               <div v-for="(item, index) in form.purchase_materials" :key="index" class="border p-3 mb-3">
                 <CRow>
@@ -447,7 +485,9 @@ export default {
         expense_id: null,
         is_service: false,
         serviceCategories: []
-      }]
+      }],
+      is_cash: true,
+      termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
     })
     const modalTitle = ref('Tambah Invoice')
     const editingId = ref(null)
@@ -652,7 +692,9 @@ export default {
           expense_id: null,
           is_service: false,
           serviceCategories: []
-        }]
+        }],
+        is_cash: true,
+        termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
       }
       editingId.value = null
       form.value.purchase_materials.forEach(item => handleCategoryChange(item))
@@ -752,7 +794,20 @@ export default {
           calculateTotalHarga(item)
         })
         const token = sessionStorage.getItem('token')
-        const response = await axios.post('/api/invoices', form.value, {
+        const payload = {
+          ...form.value,
+          is_cash: form.value.is_cash,
+          termins: form.value.is_cash ? [] : form.value.termins,
+          purchase_materials: form.value.purchase_materials.map(item => ({
+            ...item,
+            harga: item.harga ? Number(String(item.harga).replace(/\./g, '')) : 0
+          })),
+          total_amount: totalInvoice.value,
+          amount_paid: totalPaid.value,
+          total_unpaid: totalUnpaid.value,
+          overall_status: overallStatus.value
+        }
+        const response = await axios.post('/api/invoices', payload, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (response.data.status === 'error') {

@@ -504,12 +504,13 @@ const initDataTable = () => {
         data: null,
         orderable: false,
         className: 'text-center align-middle',
-        width: '100px',
+        width: '150px',
         render: (data, type, row) => {
           if (!row || !row.id) return '';
           return `
             <div class="d-flex justify-content-center" style="gap: 4px;">
               <button type="button" class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
+              <button type="button" class="btn btn-sm btn-info status-btn" data-id="${row.id}">Status</button>
               <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
             </div>
           `;
@@ -550,6 +551,19 @@ const initDataTable = () => {
           const termin = termins.value.find(t => t.id === parseInt(id));
           if (termin) {
             openModal('edit', termin);
+          }
+        });
+      });
+
+      // Add event handler for status buttons
+      $(this).find('.status-btn').each(function() {
+        $(this).off('click').on('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = $(this).data('id');
+          const termin = termins.value.find(t => t.id === parseInt(id));
+          if (termin) {
+            openStatusModal(termin);
           }
         });
       });
@@ -761,28 +775,78 @@ const handleSubmit = async () => {
       keterangan: form.value.keterangan || ""
     };
 
+    let response;
     if (modalMode.value === "edit") {
-      await axios.put(`/api/termins/${editingId.value}`, payload, {
+      response = await axios.put(`/api/termins/${editingId.value}`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin diperbarui." });
-      window.dispatchEvent(new Event('termin-updated'));
     } else {
-      await axios.post("/api/termins", payload, {
+      response = await axios.post("/api/termins", payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin ditambahkan." });
-      window.dispatchEvent(new Event('termin-updated'));
+    }
+
+    // Update invoice status after termin operation
+    if (form.value.invoice_id) {
+      try {
+        // Get current invoice with termins
+        const invoiceResponse = await axios.get(`/api/invoices/${form.value.invoice_id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const invoice = invoiceResponse.data.data;
+        const termins = invoice.termins || [];
+        
+        // Calculate total paid amount and check termin statuses
+        let totalPaid = 0;
+        let allTerminsPaid = true;
+        let hasTermins = termins.length > 0;
+
+        termins.forEach(termin => {
+          if (termin.status_termin === "Lunas") {
+            totalPaid += parseFloat(termin.nilai_termin);
+          } else if (termin.status_termin === "DP Dibayar") {
+            totalPaid += parseFloat(termin.nilai_dp);
+            allTerminsPaid = false;
+          } else {
+            allTerminsPaid = false;
+          }
+        });
+
+        // Determine new invoice status
+        let newStatus = 'unpaid';
+        if (hasTermins) {
+          if (allTerminsPaid && totalPaid >= parseFloat(invoice.total_amount)) {
+            newStatus = 'paid';
+          } else if (totalPaid > 0) {
+            newStatus = 'partially_paid';
+          }
+        }
+
+        // Update invoice status and amount_paid
+        await axios.put(`/api/invoices/${form.value.invoice_id}`, {
+          status: newStatus,
+          amount_paid: totalPaid
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (err) {
+        console.error("Error updating invoice status:", err);
+      }
     }
 
     closeModal();
     await fetchTermins();
+    // Dispatch event to notify invoice component
+    window.dispatchEvent(new Event('termin-updated'));
   } catch (err) {
     console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
@@ -835,6 +899,24 @@ const handleStatusUpdate = async () => {
     const token = sessionStorage.getItem("token");
     const termin = termins.value.find(t => t.id === updatingStatusId.value);
 
+    // Format dates for API
+    const formatDateForAPI = (dateString) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+
+    const payload = {
+      status_termin: statusForm.value.status_termin,
+      tanggal_dp: formatDateForAPI(statusForm.value.tanggal_dp),
+      tanggal_pelunasan: formatDateForAPI(statusForm.value.tanggal_pelunasan)
+    };
+
+    // Update termin status
+    await axios.put(`/api/termins/${updatingStatusId.value}/status`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
     // Create expense entry based on status
     if (statusForm.value.status_termin === "DP Dibayar" || statusForm.value.status_termin === "Lunas") {
       const today = new Date();
@@ -853,11 +935,6 @@ const handleStatusUpdate = async () => {
         headers: { Authorization: `Bearer ${token}` }
       });
     }
-
-    // Update termin status
-    await axios.put(`/api/termins/${updatingStatusId.value}/status`, statusForm.value, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
 
     Swal.fire({
       icon: "success",
