@@ -607,6 +607,17 @@
         return Swal.fire('Peringatan', 'Kode transaksi harus diisi jika menggunakan kode manual', 'warning');
       }
 
+      // Validasi anggaran sebelum submit
+      const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
+      if (form.value.amount > sisaAnggaran) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Anggaran Melebihi Batas!',
+          text: 'Jumlah pengeluaran melebihi sisa anggaran proyek. Silakan cek kembali nilai pengeluaran.',
+        });
+        return;
+      }
+
       const token = sessionStorage.getItem('token');
       const payload = {
         proyek_id: form.value.proyek_id,

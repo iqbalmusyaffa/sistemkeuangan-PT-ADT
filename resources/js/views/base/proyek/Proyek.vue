@@ -71,7 +71,15 @@
             <CRow class="mb-3">
               <CCol md="6">
                 <CFormLabel for="anggaran_kontrak">Nilai Kontrak</CFormLabel>
-                <CFormInput type="number" v-model.number="form.anggaran_kontrak" id="anggaran_kontrak" required min="0" />
+                <div class="input-group">
+                  <span class="input-group-text">Rp</span>
+                  <CFormInput
+                    id="anggaran_kontrak"
+                    :value="displayAnggaranKontrak"
+                    @input="onAnggaranInput"
+                    required
+                  />
+                </div>
               </CCol>
               <CCol md="6">
                 <CFormLabel for="status_project">Status Proyek</CFormLabel>
@@ -97,7 +105,7 @@
   </template>
 
   <script setup>
-  import { ref, onMounted, nextTick } from "vue";
+  import { ref, onMounted, nextTick, watch } from "vue";
   import axios from "axios";
   import $ from "jquery";
   import Swal from "sweetalert2";
@@ -132,6 +140,25 @@
   const modalMode = ref("tambah");
   const editingId = ref(null);
   const router = useRouter();
+  const displayAnggaranKontrak = ref('');
+
+  function formatRupiah(value) {
+    if (!value) return '';
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  }
+  function unformatRupiah(value) {
+    return Number(String(value).replace(/\./g, ''));
+  }
+
+  watch(() => form.value.anggaran_kontrak, (val) => {
+    displayAnggaranKontrak.value = formatRupiah(val);
+  });
+
+  function onAnggaranInput(e) {
+    const raw = e.target.value.replace(/[^0-9]/g, '');
+    form.value.anggaran_kontrak = Number(raw);
+    displayAnggaranKontrak.value = formatRupiah(raw);
+  }
 
   const fetchProyeks = async () => {
     loading.value = true;
@@ -333,6 +360,20 @@
   };
 
   const handleSubmit = async () => {
+    // Ambil total pengeluaran proyek (misal dari selectedProjectDetails atau proyeks)
+    let totalPengeluaran = 0;
+    if (modalMode.value === "edit") {
+      const proyek = proyeks.value.find((p) => p.id == editingId.value);
+      totalPengeluaran = proyek?.total_expenses || 0;
+    }
+    if (form.value.anggaran_kontrak < totalPengeluaran) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Anggaran Tidak Valid!',
+        text: 'Nilai kontrak lebih kecil dari total pengeluaran proyek. Silakan periksa kembali.',
+      });
+      return;
+    }
     try {
       const token = sessionStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };

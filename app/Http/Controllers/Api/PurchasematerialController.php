@@ -101,6 +101,16 @@ class PurchasematerialController extends Controller
             // Calculate total_harga
             $total_harga = $validatedData['qty'] * $validatedData['harga'];
 
+            // Validasi anggaran proyek
+            $proyek = \App\Models\Proyek::find($validatedData['proyek_id']);
+            $totalPembelian = \App\Models\Purchasematerial::where('proyek_id', $validatedData['proyek_id'])->sum('total_harga');
+            if ($proyek && ($totalPembelian + $total_harga) > $proyek->anggaran_kontrak) {
+                DB::rollBack();
+                return response()->json([
+                    'error' => 'Total pembelian melebihi anggaran proyek'
+                ], 422);
+            }
+
             // Prepare base data
             $data = [
                 'item' => $validatedData['item'],

@@ -46,4 +46,9 @@ class Proyek extends Model
     {
         return $this->hasMany(PurchaseMaterial::class);
     }
+
+    public function expenses()
+    {
+        return $this->hasMany(\App\Models\Expense::class, 'proyek_id');
+    }
 }

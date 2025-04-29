@@ -780,6 +780,19 @@ export default {
 
     const handleSubmit = async () => {
       if (!validateForm()) return;
+      // Validasi anggaran proyek sebelum submit
+      const selectedProj = projects.value.find(p => String(p.id) === String(form.value.proyek_id));
+      if (selectedProj) {
+        const sisaAnggaran = Number(selectedProj.anggaran_kontrak || 0) - Number(selectedProj.total_expenses || 0);
+        if (totalInvoice.value > sisaAnggaran) {
+          await Swal.fire({
+            icon: 'warning',
+            title: 'Anggaran Melebihi Batas!',
+            text: 'Jumlah invoice melebihi sisa anggaran proyek. Silakan cek kembali nilai invoice.'
+          });
+          return;
+        }
+      }
       try {
         // Penyesuaian agar data jasa selalu konsisten
         form.value.purchase_materials.forEach(item => {

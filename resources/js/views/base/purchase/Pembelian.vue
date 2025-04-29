@@ -821,6 +821,20 @@ const handleSubmit = async () => {
       service_category_id: null
     };
 
+    // Validasi anggaran proyek sebelum submit
+    const selectedProj = projects.value.find(p => String(p.id) === String(form.value.proyek_id));
+    if (selectedProj) {
+      const sisaAnggaran = Number(selectedProj.anggaran_kontrak || 0) - Number(selectedProj.total_expenses || 0);
+      if (payload.total_harga > sisaAnggaran) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Anggaran Melebihi Batas!',
+          text: 'Jumlah pembelian melebihi sisa anggaran proyek. Silakan cek kembali nilai pembelian.'
+        });
+        return;
+      }
+    }
+
     // Add category data based on type
     if (isService) {
       payload.service_category_id = form.value.category_id;

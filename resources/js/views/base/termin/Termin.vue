@@ -749,6 +749,18 @@ const handleSubmit = async () => {
     return;
   }
 
+  const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
+  const totalTerminBaru = form.value.nilai_termin || 0;
+  if (totalTerminBaru > sisaAnggaran) {
+    await Swal.fire({
+      icon: 'warning',
+      title: 'Anggaran Melebihi Batas!',
+      text: 'Jumlah termin melebihi sisa anggaran proyek. Silakan cek kembali nilai termin.',
+    });
+    loading.value = false;
+    return;
+  }
+
   calculateValues();
 
   try {

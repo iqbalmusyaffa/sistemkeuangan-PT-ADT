@@ -76,6 +76,14 @@ class ProyekController extends Controller
             'deskripsi' => 'nullable|string',
         ]);
 
+        // Validasi backend: anggaran_kontrak tidak boleh lebih kecil dari total expenses
+        $totalExpenses = $proyek->expenses()->sum('amount');
+        if ($validated['anggaran_kontrak'] < $totalExpenses) {
+            return response()->json([
+                'error' => 'Nilai kontrak lebih kecil dari total pengeluaran proyek. Silakan periksa kembali.'
+            ], 422);
+        }
+
         $proyek->update($validated);
 
         return response()->json([
