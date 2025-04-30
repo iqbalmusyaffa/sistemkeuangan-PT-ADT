@@ -23,7 +23,7 @@ FinanceHub adalah aplikasi web berbasis Laravel yang dirancang untuk membantu pe
 
 1. Clone repository:
 ```bash
-git clone https://github.com/iqbalmusyaffa/sistemkeuangan-PT-ADT.git
+git clone [https://github.com/iqbalmusyaffa/sistemkeuangan-PT-ADT.git]
 cd codeta-finacehub
 ```
 
