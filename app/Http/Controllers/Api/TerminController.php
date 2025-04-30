@@ -44,6 +44,36 @@ class TerminController extends Controller
             'keterangan' => 'nullable|string',
         ]);
 
+        // Validasi invoice milik proyek yang sama
+        $invoice = \App\Models\Invoice::where('id', $validated['invoice_id'])
+            ->where('proyek_id', $validated['proyek_id'])
+            ->first();
+        if (!$invoice) {
+            return response()->json(['message' => 'Invoice tidak valid untuk proyek ini'], 422);
+        }
+
+        // Validasi anggaran proyek
+        $proyek = \App\Models\Proyek::find($validated['proyek_id']);
+        $totalTermin = \App\Models\Termin::where('proyek_id', $validated['proyek_id'])->sum('nilai_termin');
+        if ($proyek && ($totalTermin + $validated['nilai_termin']) > $proyek->anggaran_kontrak) {
+            return response()->json(['message' => 'Total termin melebihi anggaran proyek'], 422);
+        }
+
+        // Nilai termin tidak boleh melebihi total invoice
+        if ($validated['nilai_termin'] > $invoice->total_amount) {
+            return response()->json(['message' => 'Nilai termin tidak boleh melebihi total invoice'], 422);
+        }
+
+        // Nilai DP tidak boleh lebih besar dari nilai termin
+        if ($validated['nilai_dp'] > $validated['nilai_termin']) {
+            return response()->json(['message' => 'Nilai DP tidak boleh lebih besar dari nilai termin'], 422);
+        }
+
+        // Nilai pelunasan harus sesuai
+        if ($validated['nilai_pelunasan'] != ($validated['nilai_termin'] - $validated['nilai_dp'])) {
+            return response()->json(['message' => 'Nilai pelunasan harus sama dengan nilai termin dikurangi nilai DP'], 422);
+        }
+
         // Calculate DP and Pelunasan values if not provided
         if (!isset($validated['nilai_dp']) || $validated['nilai_dp'] == 0) {
             $validated['nilai_dp'] = $validated['nilai_termin'] * ($validated['dp_percentage'] / 100);

@@ -5,8 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\User;
-use App\Models\Company;
 use App\Models\Kategori;
+use App\Models\PaymentMethod;
+use App\Models\Proyek;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -14,38 +15,60 @@ class Income extends Model
 {
     use HasFactory;
 
+    protected $table = 'incomes';
+
     protected $fillable = [
         'kode_transaksi',
-        'user_id',
-        'company_id',
-        'category_id',
-        'amount',
-        'description',
-        'transaction_date',
-        'status'
+        'tanggal',
+        'jumlah',
+        'kategori_id',
+        'deskripsi',
+        'payment_method_id',
+        'status',
+        'bukti_pembayaran',
+        'proyek_id',
+        'created_by',
+        'updated_by',
     ];
 
-    protected $casts = [
-        'status' => 'boolean',
-        'transaction_date' => 'date',
-    ];
-
-    // =====================
-    // == RELATIONSHIPS ===
-    // =====================
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    public function company()
-    {
-        return $this->belongsTo(Company::class);
-    }
-
-    public function category()
+    /**
+     * Relasi ke kategori pemasukan.
+     */
+    public function kategori()
     {
         return $this->belongsTo(Kategori::class);
+    }
+
+    /**
+     * Relasi ke metode pembayaran.
+     */
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class);
+    }
+
+    /**
+     * Relasi ke proyek.
+     */
+    public function proyek()
+    {
+        return $this->belongsTo(Proyek::class);
+    }
+
+    /**
+     * Relasi ke user yang membuat data.
+     */
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Relasi ke user yang terakhir mengubah data.
+     */
+    public function updatedBy()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     // =====================
@@ -53,12 +76,12 @@ class Income extends Model
     // =====================
     public function getFormattedDateAttribute()
     {
-        return $this->transaction_date ? $this->transaction_date->format('d-m-Y') : null;
+        return $this->tanggal ? Carbon::parse($this->tanggal)->format('d-m-Y') : null;
     }
 
     public function getFormattedAmountAttribute()
     {
-        return number_format($this->amount, 0, ',', '.');
+        return number_format($this->jumlah, 0, ',', '.');
     }
 
     // =====================
@@ -66,13 +89,13 @@ class Income extends Model
     // =====================
     public function scopeByMonth($query, $year, $month)
     {
-        return $query->whereYear('transaction_date', $year)
-                     ->whereMonth('transaction_date', $month);
+        return $query->whereYear('tanggal', $year)
+                     ->whereMonth('tanggal', $month);
     }
 
     public function scopeActive($query)
     {
-        return $query->where('status', true);
+        return $query->where('status', 'Diterima');
     }
 
     // =====================
@@ -92,7 +115,7 @@ class Income extends Model
     protected static function generateKodeTransaksi(&$income)
     {
         try {
-            $date = Carbon::parse($income->transaction_date);
+            $date = Carbon::parse($income->tanggal);
             $year = substr($date->format('Y'), -2);
             $month = str_pad($date->format('m'), 2, "0", STR_PAD_LEFT);
 

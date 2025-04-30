@@ -9,6 +9,7 @@ use App\Models\PurchaseMaterial;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\InvoiceResource;
+use App\Models\Proyek;
 
 class InvoiceController extends Controller
 {
@@ -61,6 +62,20 @@ class InvoiceController extends Controller
 
             DB::beginTransaction();
             try {
+                // Validasi anggaran proyek
+                $proyek = Proyek::find($request->proyek_id);
+                $totalInvoice = Invoice::where('proyek_id', $request->proyek_id)->sum('total_amount');
+                $totalBaru = 0;
+                foreach ($request->purchase_materials as $item) {
+                    $totalBaru += $item['qty'] * $item['harga'];
+                }
+                if ($proyek && ($totalInvoice + $totalBaru) > $proyek->anggaran_kontrak) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Total invoice melebihi anggaran proyek'
+                    ], 422);
+                }
+
                 // Generate invoice number
                 $date = now()->format('Ymd');
                 $lastInvoice = Invoice::where('invoice_number', 'like', "INV-{$date}-%")->latest()->first();

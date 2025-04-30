@@ -116,6 +116,52 @@ class ExpenseController extends Controller
 
             DB::beginTransaction();
 
+            // Validasi khusus jika source_type diisi
+            if (!empty($validated['source_type']) && !empty($validated['source_id'])) {
+                if ($validated['source_type'] === 'termin') {
+                    $termin = \App\Models\Termin::find($validated['source_id']);
+                    if (!$termin) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Termin tidak ditemukan'
+                        ], 422);
+                    }
+                    if ($validated['amount'] > $termin->nilai_termin) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran tidak boleh melebihi nilai termin'
+                        ], 422);
+                    }
+                } elseif ($validated['source_type'] === 'purchase') {
+                    $purchase = \App\Models\Purchasematerial::find($validated['source_id']);
+                    if (!$purchase) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Purchase material tidak ditemukan'
+                        ], 422);
+                    }
+                    if ($validated['amount'] > $purchase->total_harga) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran tidak boleh melebihi total harga pembelian material'
+                        ], 422);
+                    }
+                }
+            } else {
+                // Validasi anggaran proyek
+                $proyek = \App\Models\Proyek::find($validated['proyek_id']);
+                if ($proyek) {
+                    $totalExpenses = $proyek->expenses()->sum('amount');
+                    $sisaAnggaran = $proyek->anggaran_kontrak - $totalExpenses;
+                    if ($validated['amount'] > $sisaAnggaran) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran melebihi sisa anggaran proyek'
+                        ], 422);
+                    }
+                }
+            }
+
             $expense = Expense::create($validated);
 
             // Load necessary relations
@@ -225,7 +271,51 @@ class ExpenseController extends Controller
 
             DB::beginTransaction();
 
-            $expense->update($validated);
+            // Validasi khusus jika source_type diisi
+            if (!empty($validated['source_type']) && !empty($validated['source_id'])) {
+                if ($validated['source_type'] === 'termin') {
+                    $termin = \App\Models\Termin::find($validated['source_id']);
+                    if (!$termin) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Termin tidak ditemukan'
+                        ], 422);
+                    }
+                    if ($validated['amount'] > $termin->nilai_termin) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran tidak boleh melebihi nilai termin'
+                        ], 422);
+                    }
+                } elseif ($validated['source_type'] === 'purchase') {
+                    $purchase = \App\Models\Purchasematerial::find($validated['source_id']);
+                    if (!$purchase) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Purchase material tidak ditemukan'
+                        ], 422);
+                    }
+                    if ($validated['amount'] > $purchase->total_harga) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran tidak boleh melebihi total harga pembelian material'
+                        ], 422);
+                    }
+                }
+            } else if (!empty($validated['proyek_id'])) {
+                // Validasi anggaran proyek
+                $proyek = \App\Models\Proyek::find($validated['proyek_id']);
+                if ($proyek) {
+                    $totalExpenses = $proyek->expenses()->sum('amount');
+                    $sisaAnggaran = $proyek->anggaran_kontrak - $totalExpenses;
+                    if ($validated['amount'] > $sisaAnggaran) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Jumlah pengeluaran melebihi sisa anggaran proyek'
+                        ], 422);
+                    }
+                }
+            }
 
             // Load necessary relations
             $expense->load(['proyek', 'category', 'serviceCategory']);
