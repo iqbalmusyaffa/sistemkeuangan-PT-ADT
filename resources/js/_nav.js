@@ -112,6 +112,11 @@ export default [
           to: '/base/pemasukan',
         },
         {
+          component: 'CNavItem',
+          name: 'Metode Pembayaran',
+          to: '/base/paymentmethod',
+        },
+        {
             component: 'CNavItem',
             name: 'Pencatatan invoice',
             to: '/base/invoice',
@@ -121,6 +126,7 @@ export default [
         //   name: 'Detail Invoice',
         //   to: '/base/invoice/show',
         // },
+        
         {
           component: 'CNavItem',
           name: 'Pencatatan Pengeluaran',

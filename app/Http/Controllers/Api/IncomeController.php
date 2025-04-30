@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Income;
+use App\Models\PaymentMethod;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -17,7 +18,10 @@ class IncomeController extends Controller
     public function index()
     {
         try {
-            $incomes = Income::with(['user', 'company', 'category'])->latest()->get();
+            $incomes = Income::with(['kategori', 'paymentMethod', 'proyek', 'createdBy', 'updatedBy'])
+                ->latest()
+                ->get();
+            
             return response()->json([
                 'success' => true,
                 'message' => 'List data pemasukan',
@@ -32,58 +36,54 @@ class IncomeController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-{
-    try {
-        \Log::info('Income store request: ' . json_encode($request->all()));
+    {
+        try {
+            \Log::info('Income store request: ' . json_encode($request->all()));
 
-        $validated = $request->validate([
-            'company_id' => 'required|exists:companies,id',
-            'category_id' => 'required|exists:kategoris,id',
-            'amount' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'transaction_date' => 'required|date',
-            'status' => 'required|boolean',
-            'kode_transaksi' => 'nullable|string|max:255|unique:incomes,kode_transaksi',
-        ]);
+            $validated = $request->validate([
+                'kategori_id' => 'required|exists:kategoris,id',
+                'payment_method_id' => 'required|exists:payment_methods,id',
+                'proyek_id' => 'nullable|exists:proyeks,id',
+                'jumlah' => 'required|numeric|min:0',
+                'deskripsi' => 'nullable|string',
+                'tanggal' => 'required|date',
+                'status' => 'required|in:Pending,Diterima,Ditolak',
+                'kode_transaksi' => 'nullable|string|max:255|unique:incomes,kode_transaksi',
+                'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
+            ]);
 
-        $kodeTransaksi = $validated['kode_transaksi'] ?? null;
+            $income = new Income();
+            $income->fill($validated);
+            $income->created_by = Auth::id();
+            $income->updated_by = Auth::id();
 
-        if (!$kodeTransaksi) {
-            $today = now()->format('d.m');
-            $lastIncome = Income::latest()->first();
-            $lastId = $lastIncome ? $lastIncome->id + 1 : 1;
-            $kodeTransaksi = $today . '.' . str_pad($lastId, 3, '0', STR_PAD_LEFT);
+            if ($request->hasFile('bukti_pembayaran')) {
+                $file = $request->file('bukti_pembayaran');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
+                $income->bukti_pembayaran = $path;
+            }
+
+            $income->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pemasukan berhasil ditambahkan',
+                'data' => $income
+            ], 201);
+        } catch (\Throwable $e) {
+            \Log::error('Income store exception: ' . json_encode([
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]));
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menambahkan pemasukan',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        $status = $validated['status'] ? 'Lunas' : 'Pending';
-
-        $income = Income::create([
-            'user_id' => auth()->id(),
-            'company_id' => $validated['company_id'],
-            'category_id' => $validated['category_id'],
-            'amount' => $validated['amount'],
-            'description' => $validated['description'] ?? null,
-            'transaction_date' => $validated['transaction_date'],
-            'status' => $status,
-            'kode_transaksi' => $kodeTransaksi,
-        ]);
-
-        return response()->json([
-            'message' => 'Income created successfully',
-            'data' => $income
-        ], 201);
-    } catch (\Throwable $e) {
-        \Log::error('Income store exception: ' . json_encode([
-            'message' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]));
-
-        return response()->json([
-            'message' => 'Failed to create income',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
     /**
      * Display the specified resource.
@@ -91,7 +91,9 @@ class IncomeController extends Controller
     public function show($id)
     {
         try {
-            $income = Income::with(['user', 'company', 'category'])->findOrFail($id);
+            $income = Income::with(['kategori', 'paymentMethod', 'proyek', 'createdBy', 'updatedBy'])
+                ->findOrFail($id);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Detail pemasukan ditemukan',
@@ -111,36 +113,37 @@ class IncomeController extends Controller
             $income = Income::findOrFail($id);
 
             $validated = $request->validate([
-                'company_id' => 'required|exists:companies,id',
-                'category_id' => 'required|exists:kategoris,id',
-                'amount' => 'required|numeric|min:0',
-                'description' => 'nullable|string',
-                'transaction_date' => 'required|date',
-                'status' => 'required|boolean',
+                'kategori_id' => 'required|exists:kategoris,id',
+                'payment_method_id' => 'required|exists:payment_methods,id',
+                'proyek_id' => 'nullable|exists:proyeks,id',
+                'jumlah' => 'required|numeric|min:0',
+                'deskripsi' => 'nullable|string',
+                'tanggal' => 'required|date',
+                'status' => 'required|in:Pending,Diterima,Ditolak',
                 'kode_transaksi' => 'nullable|string|max:255|unique:incomes,kode_transaksi,' . $id,
+                'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
             ]);
 
-            $kodeTransaksi = $validated['kode_transaksi'] ?? $income->kode_transaksi;
+            $income->fill($validated);
+            $income->updated_by = Auth::id();
 
-            if (!$kodeTransaksi) {
-                $today = now()->format('d.m');
-                $kodeTransaksi = $today . '.' . str_pad($income->id, 3, '0', STR_PAD_LEFT);
+            if ($request->hasFile('bukti_pembayaran')) {
+                // Delete old file if exists
+                if ($income->bukti_pembayaran) {
+                    Storage::disk('public')->delete($income->bukti_pembayaran);
+                }
+
+                $file = $request->file('bukti_pembayaran');
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
+                $income->bukti_pembayaran = $path;
             }
 
-            $status = $validated['status'] ? 'Lunas' : 'Pending';
-
-            $income->update([
-                'company_id' => $validated['company_id'],
-                'category_id' => $validated['category_id'],
-                'amount' => $validated['amount'],
-                'description' => $validated['description'] ?? null,
-                'transaction_date' => $validated['transaction_date'],
-                'status' => $status,
-                'kode_transaksi' => $kodeTransaksi,
-            ]);
+            $income->save();
 
             return response()->json([
-                'message' => 'Income updated successfully',
+                'success' => true,
+                'message' => 'Pemasukan berhasil diperbarui',
                 'data' => $income
             ]);
         } catch (\Throwable $e) {
@@ -150,12 +153,12 @@ class IncomeController extends Controller
             ]));
 
             return response()->json([
-                'message' => 'Failed to update income',
+                'success' => false,
+                'message' => 'Gagal memperbarui pemasukan',
                 'error' => $e->getMessage()
             ], 500);
         }
     }
-
 
     /**
      * Remove the specified resource from storage.
@@ -164,6 +167,12 @@ class IncomeController extends Controller
     {
         try {
             $income = Income::findOrFail($id);
+
+            // Delete bukti pembayaran file if exists
+            if ($income->bukti_pembayaran) {
+                Storage::disk('public')->delete($income->bukti_pembayaran);
+            }
+
             $income->delete();
 
             return response()->json([

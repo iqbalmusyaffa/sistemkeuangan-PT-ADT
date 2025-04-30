@@ -390,8 +390,12 @@ const fetchTermins = async () => {
 // Calculate DP and Pelunasan values
 const calculateValues = () => {
   if (form.value.dp_percentage) {
-    form.value.nilai_dp = totalPurchases.value * (form.value.dp_percentage / 100);
-    form.value.nilai_pelunasan = totalPurchases.value - form.value.nilai_dp;
+    // Calculate DP based on percentage
+    form.value.nilai_dp = form.value.nilai_termin * (form.value.dp_percentage / 100);
+    // Calculate final payment as total minus DP
+    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+    
+    // Update display values
     form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
     form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
   }
@@ -749,6 +753,13 @@ const handleSubmit = async () => {
     return;
   }
 
+  // Add validation for total termin amount
+  if (!validateTerminTotal()) {
+    error.value = "Total nilai termin tidak boleh melebihi total invoice!";
+    loading.value = false;
+    return;
+  }
+
   const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
   const totalTerminBaru = form.value.nilai_termin || 0;
   if (totalTerminBaru > sisaAnggaran) {
@@ -1073,6 +1084,12 @@ const fetchInvoices = async (projectId) => {
   } catch (err) {
     invoices.value = [];
   }
+};
+
+const validateTerminTotal = () => {
+  const totalTermin = termins.value.reduce((sum, t) => sum + Number(t.nilai_termin), 0);
+  const totalInvoice = selectedInvoice.value ? Number(selectedInvoice.value.total_amount) : 0;
+  return totalTermin <= totalInvoice;
 };
 
 </script>

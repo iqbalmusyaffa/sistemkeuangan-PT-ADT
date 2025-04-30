@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ServiceCategoryController;
 use App\Http\Controllers\Api\InvoiceController;
 
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\PaymentMethodController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -48,7 +49,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('companies', CompanyController::class);
     // Income routes
     Route::apiResource('incomes', IncomeController::class);
-// Pengeluaran (Expense)
+    // Route::get('/incomes', [IncomeController::class, 'index']);
+    // Route::post('/incomes', [IncomeController::class, 'store']);
+    // Route::get('/incomes/{id}', [IncomeController::class, 'show']);
+    // Route::post('/incomes/{id}', [IncomeController::class, 'update']);
+    // Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
+
+    // Pengeluaran (Expense)
     Route::apiResource('expenses', ExpenseController::class);
     Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
     Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
@@ -75,5 +82,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('invoices', InvoiceController::class);
     Route::apiResource('service-categories', ServiceCategoryController::class);
     Route::get('/activity-log', [ActivityController::class, 'index']);
+
+    // Payment Method Routes
+    Route::apiResource('payment-methods', PaymentMethodController::class);
+    // Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
+    // Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
+    // Route::get('/payment-methods/{id}', [PaymentMethodController::class, 'show']);
+    // Route::put('/payment-methods/{id}', [PaymentMethodController::class, 'update']);
+    // Route::delete('/payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

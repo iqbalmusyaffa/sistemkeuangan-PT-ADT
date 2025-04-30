@@ -555,6 +555,12 @@ export default {
               { title: 'Tanggal', data: 'invoice_date', render: data => moment(data).format('DD/MM/YYYY') },
               { title: 'Total Amount', data: 'total_amount', render: data => formatCurrency(data) },
               { title: 'Amount Paid', data: 'amount_paid', render: data => formatCurrency(data) },
+              { 
+                title: 'Jumlah Item', 
+                data: 'purchase_materials',
+                render: data => data ? data.length : 0,
+                className: 'text-center'
+              },
               {
                 title: 'Status',
                 data: 'status',
