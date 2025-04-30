@@ -19,6 +19,46 @@ FinanceHub adalah aplikasi web berbasis Laravel yang dirancang untuk membantu pe
 - Database (MySQL/PostgreSQL/SQLite)
 - Web Server (Apache/Nginx)
 
+## 🛠️ Tech Stack & Dependencies
+
+### 📦 Frontend
+- **Vue.js 3.5** – JavaScript framework (Composition API)
+- **CoreUI Vue** – UI components & layout
+- **Vue Router 4.5** – Routing
+- **Pinia** – State management
+- **Tailwind CSS** – Utility-first CSS framework
+- **Sass & PostCSS** – CSS preprocessing
+- **Bootstrap 5.3 + Bootstrap Vue** – Additional UI styling
+- **SweetAlert2** – Beautiful alerts and modals
+- **Chart.js + CoreUI Chart.js** – Data visualization
+- **Simplebar Vue** – Custom scrollbars
+- **Day.js / Moment.js** – Date handling
+
+### 📊 Table/Data Display
+- **DataTables (Vue 3 integration)** – Interactive data tables
+- `datatables.net`, `datatables.net-vue3`, `datatables.net-buttons-dt`, `datatables.net-responsive`
+
+### 🔧 Build Tools & Utilities
+- **Vite 6** – Next-gen frontend tooling
+- **Laravel Vite Plugin** – For Laravel integration
+- **ESLint + eslint-plugin-vue** – Linting and code quality
+- **Autoprefixer & PostCSS** – CSS tooling
+- **Concurrently** – Run multiple npm scripts simultaneously
+
+### 🌐 Networking
+- **Axios** – HTTP client for API communication
+
+### 🗂️ Backend
+- **Laravel 11** – Backend framework
+- **Sanctum** – Authentication
+- **MySQL** – Database
+
+### Tools & Deployment
+- 🧰 Git & GitHub
+- 🧪 Postman (API Testing)
+- 🐧 Linux/Ubuntu Server
+- 🌐 Domain: `#`
+
 ## Instalasi
 
 1. Clone repository:
