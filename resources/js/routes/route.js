@@ -135,30 +135,30 @@ const routes = [
         component: () => import('@/views/base/pengeluaran/DetailPengeluaran.vue'),
         meta: { requiresAuth: true },
       },
-      {
-        path: '/base',
-        name: 'Base',
-        component: { render: () => h(resolveComponent('router-view')) },
-        redirect: '/base/breadcrumbs',
-        meta: { requiresAuth: true },
-        children: [
-          {
-            path: 'accordion',
-            name: 'Accordion',
-            component: () => import('@/views/base/Accordion.vue'),
-          },
-          {
-            path: 'breadcrumbs',
-            name: 'Breadcrumbs',
-            component: () => import('@/views/base/Breadcrumbs.vue'),
-          },
-          {
-            path: 'cards',
-            name: 'Cards',
-            component: () => import('@/views/base/Cards.vue'),
-          },
-        ],
-      },
+    //   {
+    //     path: '/base',
+    //     name: 'Base',
+    //     component: { render: () => h(resolveComponent('router-view')) },
+    //     redirect: '/base/breadcrumbs',
+    //     meta: { requiresAuth: true },
+    //     children: [
+    //       {
+    //         path: 'accordion',
+    //         name: 'Accordion',
+    //         component: () => import('@/views/base/Accordion.vue'),
+    //       },
+    //       {
+    //         path: 'breadcrumbs',
+    //         name: 'Breadcrumbs',
+    //         component: () => import('@/views/base/Breadcrumbs.vue'),
+    //       },
+    //       {
+    //         path: 'cards',
+    //         name: 'Cards',
+    //         component: () => import('@/views/base/Cards.vue'),
+    //       },
+    //     ],
+    //   },
       {
         path: '/charts',
         name: 'Charts',

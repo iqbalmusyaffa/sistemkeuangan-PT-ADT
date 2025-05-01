@@ -18,6 +18,10 @@ use App\Http\Controllers\Api\InvoiceController;
 
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\PaymentMethodController;
+use App\Http\Controllers\Api\ProfitLossReportController;
+use App\Http\Controllers\Api\BudgetController;
+use App\Http\Controllers\Api\KasbonController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -90,5 +94,30 @@ Route::middleware('auth:sanctum')->group(function () {
     // Route::get('/payment-methods/{id}', [PaymentMethodController::class, 'show']);
     // Route::put('/payment-methods/{id}', [PaymentMethodController::class, 'update']);
     // Route::delete('/payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
+
+    // Profit Loss Report Routes
+    Route::get('/profit-loss-reports', [ProfitLossReportController::class, 'index']);
+    //generate report
+    Route::post('/profit-loss-reports/generate', [ProfitLossReportController::class, 'generateReport']);
+    //get report by id
+    Route::get('/profit-loss-reports/{report}', [ProfitLossReportController::class, 'show']);
+
+    // Budget Routes
+    Route::get('/budgets', [BudgetController::class, 'index']);
+    Route::post('/budgets', [BudgetController::class, 'store']);
+    Route::get('/budgets/{budget}', [BudgetController::class, 'show']);
+    Route::put('/budgets/{budget}', [BudgetController::class, 'update']);
+    Route::post('/budgets/{budget}/transactions', [BudgetController::class, 'addTransaction']);
+    Route::post('/budget-transactions/{transaction}/approve', [BudgetController::class, 'approveTransaction']);
+    Route::post('/budget-transactions/{transaction}/reject', [BudgetController::class, 'rejectTransaction']);
+
+    // Kasbon Routes
+    Route::get('/kasbons', [KasbonController::class, 'index']);
+    Route::post('/kasbons', [KasbonController::class, 'store']);
+    Route::get('/kasbons/{kasbon}', [KasbonController::class, 'show']);
+    Route::post('/kasbons/{kasbon}/approve', [KasbonController::class, 'approve']);
+    Route::post('/kasbons/{kasbon}/reject', [KasbonController::class, 'reject']);
+    Route::post('/kasbons/{kasbon}/payments', [KasbonController::class, 'addPayment']);
+    Route::get('/kasbon-attachments/{attachment}/download', [KasbonController::class, 'downloadAttachment']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

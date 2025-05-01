@@ -126,7 +126,7 @@ export default [
         //   name: 'Detail Invoice',
         //   to: '/base/invoice/show',
         // },
-        
+
         {
           component: 'CNavItem',
           name: 'Pencatatan Pengeluaran',
@@ -164,31 +164,5 @@ export default [
       to: '/profile',
       icon: 'cil-user',
     },
-    {
-      component: 'CNavItem',
-      name: 'Widgets',
-      to: '/widgets',
-      icon: 'cil-calculator',
-      badge: {
-        color: 'primary',
-        text: 'NEW',
-        shape: 'pill',
-      },
-    },
-    {
-      component: 'CNavTitle',
-      name: 'Halaman Error',
-    },
-    {
-      component: 'CNavItem',
-      name: 'Error 404',
-      to: '/pages/404',
-      icon: 'cil-ban',
-    },
-    {
-      component: 'CNavItem',
-      name: 'Error 500',
-      to: '/pages/500',
-      icon: 'cil-ban',
-    },
+
   ]
