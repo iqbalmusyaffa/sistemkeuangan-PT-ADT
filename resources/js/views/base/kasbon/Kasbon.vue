@@ -1,726 +1,531 @@
 <template>
-  <CRow>
-    <CCol>
-      <CCard>
-        <CCardHeader>
-          <CIcon icon="cil-money" /> Manajemen Kasbon
-          <CButton color="primary" @click="showCreateModal = true" class="float-end">
-            Buat Kasbon Baru
-          </CButton>
-        </CCardHeader>
-        <CCardBody>
-          <div v-if="error" class="alert alert-danger">{{ error }}</div>
-          <div v-if="loading" class="alert alert-info">Loading...</div>
-          <div class="w-100">
-            <table ref="kasbonTableRef" class="display nowrap"></table>
-          </div>
-        </CCardBody>
-      </CCard>
-    </CCol>
+    <CRow>
+      <CCol>
+        <CCard>
+          <CCardHeader>
+            <CIcon icon="cil-wallet" /> Kasbon
+            <CButton color="primary" @click="openModal('tambah')" class="float-end">
+              Tambah Kasbon
+            </CButton>
+            <CButton color="danger" class="me-2 float-end" @click="downloadKasbonPdf">
+              Download PDF
+            </CButton>
+            <CButton color="success" class="me-2 float-end" @click="downloadKasbonExcel">
+              Download Excel
+            </CButton>
+          </CCardHeader>
+          <CCardBody>
+            <div v-if="error" class="alert alert-danger">{{ error }}</div>
+            <div v-if="loading" class="alert alert-info">Loading...</div>
+            <div style="overflow-x:auto;">
+              <table ref="kasbonTableRef" class="display nowrap w-100"></table>
+            </div>
+          </CCardBody>
+        </CCard>
+      </CCol>
 
-    <!-- Create Kasbon Modal -->
-    <CModal :visible="showCreateModal" @close="showCreateModal = false" size="lg">
-      <CModalHeader>
-        <CModalTitle>Buat Kasbon Baru</CModalTitle>
-      </CModalHeader>
-      <CModalBody>
-        <CForm @submit.prevent="createKasbon">
-          <CFormSelect v-model="form.proyek_id" label="Proyek" class="mb-3">
-            <option value="">Pilih Proyek</option>
-            <option v-for="proyek in proyeks" :key="proyek.id" :value="proyek.id">
-              {{ proyek.name }}
-            </option>
-          </CFormSelect>
+      <!-- Modal Form -->
+      <CModal :visible="showModal" @close="closeModal" :title="modalTitle" size="lg">
+        <CModalBody>
+          <CForm @submit.prevent="handleSubmit">
+            <CFormInput
+              v-model="form.user_name"
+              label="Nama Pengaju"
+              placeholder="Masukkan nama pengaju"
+              required
+            />
+            <CFormSelect
+              v-model="form.proyek_id"
+              label="Proyek"
+              :options="projects.map((project) => ({
+                label: project.nama_proyek,
+                value: project.id,
+              }))"
+              required
+            />
+            <CFormSelect
+              v-model="form.payment_method"
+              label="Metode Pembayaran"
+              :options="paymentMethods.map((method) => ({
+                label: method.nama_metode,
+                value: method.id,
+              }))"
+              required
+            />
+            <CFormInput
+              v-model="form.bank_account"
+              label="Rekening Bank"
+              placeholder="Masukkan rekening bank"
+            />
+            <CFormInput
+              v-model="form.amount"
+              label="Jumlah"
+              placeholder="Masukkan jumlah"
+              type="number"
+              required
+            />
+            <CFormTextarea
+              v-model="form.description"
+              label="Deskripsi"
+              placeholder="Masukkan deskripsi"
+              required
+            />
+            <CFormSelect
+              v-model="form.status"
+              label="Status"
+              :options="['pending', 'approved', 'disbursed', 'settled'].map((status) => ({
+                label: status.charAt(0).toUpperCase() + status.slice(1),
+                value: status,
+              }))"
+              required
+            />
+            <CFormInput
+              v-model="form.kasbon_date"
+              label="Tanggal Permintaan"
+              type="date"
+              required
+            />
+            <CFormInput
+              v-model="form.approval_date"
+              label="Tanggal Persetujuan"
+              type="date"
+            />
+            <CFormInput
+              v-model="form.disbursement_date"
+              label="Tanggal Pencairan"
+              type="date"
+            />
+            <CFormInput
+              v-model="form.settlement_date"
+              label="Tanggal Pelunasan"
+              type="date"
+            />
+            <CFormTextarea
+              v-model="form.notes"
+              label="Catatan"
+              placeholder="Masukkan catatan"
+            />
+            <CFormInput
+              type="file"
+              label="Lampiran"
+              multiple
+              @change="handleFileChange"
+            />
+            <CButton type="submit" color="primary" class="float-end">
+              {{ modalButtonText }}
+            </CButton>
+          </CForm>
+        </CModalBody>
+      </CModal>
+    </CRow>
+  </template>
 
-          <CFormInput
-            v-model="form.amount"
-            type="number"
-            label="Jumlah"
-            required
-            class="mb-3"
-          />
+  <script setup>
+import { ref, onMounted, nextTick, watch, computed } from "vue";
+import axios from "axios";
+import $ from "jquery";
+import Swal from "sweetalert2";
+import "datatables.net-dt/css/dataTables.dataTables.min.css";
+import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
+import "datatables.net-responsive-dt";
 
-          <CFormTextarea
-            v-model="form.description"
-            label="Deskripsi"
-            placeholder="Masukkan deskripsi kasbon"
-            class="mb-3"
-          />
 
-          <CRow>
-            <CCol md="6">
-              <CFormInput
-                v-model="form.kasbon_date"
-                type="date"
-                label="Tanggal Kasbon"
-                required
-                class="mb-3"
-              />
-            </CCol>
-            <CCol md="6">
-              <CFormInput
-                v-model="form.due_date"
-                type="date"
-                label="Jatuh Tempo"
-                required
-                class="mb-3"
-              />
-            </CCol>
-          </CRow>
 
-          <CFormSelect
-            v-model="form.payment_method"
-            label="Metode Pembayaran"
-            :options="[
-              { value: 'cash', label: 'Tunai' },
-              { value: 'transfer', label: 'Transfer' }
-            ]"
-            required
-            class="mb-3"
-          />
+  const kasbonTableRef = ref(null);
+  const showModal = ref(false);
+  const modalTitle = ref("Tambah Kasbon");
+  const modalButtonText = ref("Simpan");
+  const modalMode = ref("tambah");
+  const editingId = ref(null);
+  const error = ref("");
+  const loading = ref(false);
+  const paymentMethods = ref([]);
+  const projects = ref([]);
+  const kasbons = ref([]);
+  const attachments = ref([]);
 
-          <CFormInput
-            v-if="form.payment_method === 'transfer'"
-            v-model="form.bank_info"
-            label="Informasi Bank"
-            placeholder="Masukkan informasi bank"
-            class="mb-3"
-          />
+  const form = ref({
+    user_name: "",
+    proyek_id: "",
+    amount: 0,
+    description: "",
+    status: "pending",
+    kasbon_date: "",
+    due_date: null,
+    approval_date: null,
+    disbursement_date: null,
+    settlement_date: null,
+    payment_method: "",
+    bank_account: "",
+    bank_name: "",
+    account_number: "",
+    account_holder: "",
+    notes: "",
+  });
 
-          <CFormInput
-            type="file"
-            multiple
-            @change="handleFileUpload"
-            label="Lampiran"
-            class="mb-3"
-          />
-        </CForm>
-      </CModalBody>
-      <CModalFooter>
-        <CButton color="secondary" @click="showCreateModal = false">Batal</CButton>
-        <CButton color="primary" @click="createKasbon">Simpan</CButton>
-      </CModalFooter>
-    </CModal>
+  // Fetch projects from API
+  const fetchProjects = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get("/api/proyeks", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.status === "success") {
+        projects.value = response.data.data;
+      } else {
+        error.value = "Gagal memuat data proyek";
+      }
+    } catch (err) {
+      error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
+    }
+  };
 
-    <!-- Kasbon Details Modal -->
-    <CModal :visible="!!selectedKasbon" @close="selectedKasbon = null" size="lg">
-      <CModalHeader>
-        <CModalTitle>Detail Kasbon</CModalTitle>
-      </CModalHeader>
-      <CModalBody v-if="selectedKasbon">
-        <CRow>
-          <CCol md="6">
-            <p><strong>Proyek:</strong> {{ selectedKasbon.project?.name }}</p>
-            <p><strong>Jumlah:</strong> {{ formatCurrency(selectedKasbon.amount) }}</p>
-            <p><strong>Deskripsi:</strong> {{ selectedKasbon.description }}</p>
-          </CCol>
-          <CCol md="6">
-            <p><strong>Tanggal Kasbon:</strong> {{ formatDate(selectedKasbon.kasbon_date) }}</p>
-            <p><strong>Jatuh Tempo:</strong> {{ formatDate(selectedKasbon.due_date) }}</p>
-            <p><strong>Status:</strong> 
-              <CBadge :color="getStatusColor(selectedKasbon.status)">
-                {{ getStatusText(selectedKasbon.status) }}
-              </CBadge>
-            </p>
-          </CCol>
-        </CRow>
+  // Fetch payment methods from API
+  const fetchPaymentMethods = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get("/api/payment-methods", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      paymentMethods.value = response.data.data || [];
+    } catch (err) {
+      error.value = "Gagal memuat metode pembayaran: " + (err.response?.data?.message || err.message);
+    }
+  };
 
-        <h6 class="mt-4">Lampiran</h6>
-        <div v-if="selectedKasbon.attachments?.length">
-          <CButton
-            v-for="attachment in selectedKasbon.attachments"
-            :key="attachment.id"
-            color="info"
-            size="sm"
-            class="me-2"
-            @click="downloadAttachment(attachment)"
-          >
-            <CIcon icon="cil-download" /> {{ attachment.name }}
-          </CButton>
-        </div>
-        <p v-else>Tidak ada lampiran</p>
+  // Fetch kasbons and initialize DataTable
+  const fetchKasbons = async () => {
+    loading.value = true;
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get("/api/kasbons", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      kasbons.value = response.data.data || [];
+    } catch (err) {
+      error.value = "Gagal memuat data kasbon: " + (err.response?.data?.message || err.message);
+    } finally {
+      loading.value = false;
+    }
+  };
 
-        <h6 class="mt-4">Riwayat Pembayaran</h6>
-        <CTable hover responsive>
-          <CTableHead>
-            <CTableRow>
-              <CTableHeaderCell>Tanggal</CTableHeaderCell>
-              <CTableHeaderCell>Jumlah</CTableHeaderCell>
-              <CTableHeaderCell>Metode</CTableHeaderCell>
-              <CTableHeaderCell>Referensi</CTableHeaderCell>
-              <CTableHeaderCell>Catatan</CTableHeaderCell>
-            </CTableRow>
-          </CTableHead>
-          <CTableBody>
-            <CTableRow v-for="payment in selectedKasbon.payments" :key="payment.id">
-              <CTableDataCell>{{ formatDate(payment.payment_date) }}</CTableDataCell>
-              <CTableDataCell>{{ formatCurrency(payment.amount) }}</CTableDataCell>
-              <CTableDataCell>{{ payment.payment_method }}</CTableDataCell>
-              <CTableDataCell>{{ payment.reference_number }}</CTableDataCell>
-              <CTableDataCell>{{ payment.notes }}</CTableDataCell>
-            </CTableRow>
-          </CTableBody>
-        </CTable>
-
-        <div v-if="selectedKasbon.status === 'pending'" class="mt-3">
-          <CButton color="success" @click="approveKasbon(selectedKasbon)">
-            Setujui
-          </CButton>
-          <CButton color="danger" class="ms-2" @click="showRejectModal = true">
-            Tolak
-          </CButton>
-        </div>
-      </CModalBody>
-    </CModal>
-
-    <!-- Add Payment Modal -->
-    <CModal :visible="showPaymentModal" @close="showPaymentModal = false">
-      <CModalHeader>
-        <CModalTitle>Tambah Pembayaran</CModalTitle>
-      </CModalHeader>
-      <CModalBody>
-        <CForm @submit.prevent="addPayment">
-          <CFormInput
-            v-model="paymentForm.amount"
-            type="number"
-            label="Jumlah"
-            required
-            class="mb-3"
-          />
-
-          <CFormInput
-            v-model="paymentForm.payment_date"
-            type="date"
-            label="Tanggal Pembayaran"
-            required
-            class="mb-3"
-          />
-
-          <CFormSelect
-            v-model="paymentForm.payment_method"
-            label="Metode Pembayaran"
-            :options="[
-              { value: 'cash', label: 'Tunai' },
-              { value: 'transfer', label: 'Transfer' }
-            ]"
-            required
-            class="mb-3"
-          />
-
-          <CFormInput
-            v-if="paymentForm.payment_method === 'transfer'"
-            v-model="paymentForm.reference_number"
-            label="Nomor Referensi"
-            placeholder="Masukkan nomor referensi"
-            class="mb-3"
-          />
-
-          <CFormTextarea
-            v-model="paymentForm.notes"
-            label="Catatan"
-            placeholder="Masukkan catatan pembayaran"
-            class="mb-3"
-          />
-        </CForm>
-      </CModalBody>
-      <CModalFooter>
-        <CButton color="secondary" @click="showPaymentModal = false">Batal</CButton>
-        <CButton color="primary" @click="addPayment">Simpan</CButton>
-      </CModalFooter>
-    </CModal>
-
-    <!-- Reject Modal -->
-    <CModal :visible="showRejectModal" @close="showRejectModal = false">
-      <CModalHeader>
-        <CModalTitle>Tolak Kasbon</CModalTitle>
-      </CModalHeader>
-      <CModalBody>
-        <CForm @submit.prevent="rejectKasbon">
-          <CFormTextarea
-            v-model="rejectReason"
-            label="Alasan Penolakan"
-            placeholder="Masukkan alasan penolakan"
-            required
-            class="mb-3"
-          />
-        </CForm>
-      </CModalBody>
-      <CModalFooter>
-        <CButton color="secondary" @click="showRejectModal = false">Batal</CButton>
-        <CButton color="danger" @click="rejectKasbon">Tolak</CButton>
-      </CModalFooter>
-    </CModal>
-  </CRow>
-</template>
-
-<script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import axios from 'axios'
-import $ from 'jquery'
-import Swal from 'sweetalert2'
-import 'datatables.net-dt/css/dataTables.dataTables.min.css'
-import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css'
-import 'datatables.net'
-import 'datatables.net-responsive'
-import { useRouter } from 'vue-router'
-import {
-  CCard,
-  CCardHeader,
-  CCardBody,
-  CButton,
-  CForm,
-  CFormInput,
-  CFormSelect,
-  CFormTextarea,
-  CTable,
-  CTableHead,
-  CTableBody,
-  CTableRow,
-  CTableHeaderCell,
-  CTableDataCell,
-  CModal,
-  CModalHeader,
-  CModalTitle,
-  CModalBody,
-  CModalFooter,
-  CRow,
-  CCol,
-  CBadge,
-  CIcon
-} from '@coreui/vue'
-
-const kasbonTableRef = ref(null)
-const kasbons = ref([])
-const proyeks = ref([])
-const selectedKasbon = ref(null)
-const showCreateModal = ref(false)
-const showPaymentModal = ref(false)
-const showRejectModal = ref(false)
-const error = ref('')
-const loading = ref(false)
-const form = ref({
-  proyek_id: '',
-  amount: '',
-  description: '',
-  kasbon_date: '',
-  due_date: '',
-  payment_method: 'cash',
-  bank_info: '',
-  attachments: []
-})
-const paymentForm = ref({
-  kasbon_id: '',
-  amount: '',
-  payment_date: '',
-  payment_method: 'cash',
-  reference_number: '',
-  notes: ''
-})
-const rejectReason = ref('')
-
-const fetchKasbons = async () => {
-  loading.value = true
-  error.value = ''
-
-  try {
-    const response = await axios.get('/api/kasbons')
-    if (response.data && response.data.status === 'success') {
-      kasbons.value = response.data.data
-    } else {
-      kasbons.value = []
-      error.value = 'Data tidak valid'
+  // Initialize DataTable with proper clean up
+  const initDataTable = () => {
+    if ($.fn.DataTable.isDataTable(kasbonTableRef.value)) {
+      $(kasbonTableRef.value).DataTable().clear().destroy();
     }
 
-    nextTick(() => {
-      initDataTable()
-    })
-  } catch (err) {
-    console.error('Error fetching kasbons:', err)
-    error.value = 'Gagal memuat data kasbon: ' + (err.response?.data?.message || err.message)
-    Swal.fire({
-      icon: 'error',
-      title: 'Oops...',
-      text: error.value
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchProyeks = async () => {
-  try {
-    const response = await axios.get('/api/proyeks')
-    proyeks.value = response.data
-  } catch (error) {
-    console.error('Error fetching proyeks:', error)
-  }
-}
-
-const initDataTable = () => {
-  if ($.fn.DataTable.isDataTable(kasbonTableRef.value)) {
-    $(kasbonTableRef.value).DataTable().destroy()
-  }
-
-  if (!kasbons.value || kasbons.value.length === 0) {
-    return
-  }
-
-  $(kasbonTableRef.value).DataTable({
-    data: kasbons.value,
-    columns: [
-      {
-        title: 'No',
-        data: null,
-        render: (data, type, row, meta) => meta.row + 1
-      },
-      {
-        title: 'Proyek',
-        data: 'project.name'
-      },
-      {
-        title: 'Pemohon',
-        data: 'applicant.name'
-      },
-      {
-        title: 'Jumlah',
-        data: 'amount',
-        render: (data) => formatCurrency(data)
-      },
-      {
-        title: 'Tanggal',
-        data: 'kasbon_date',
-        render: (data) => formatDate(data)
-      },
-      {
-        title: 'Jatuh Tempo',
-        data: 'due_date',
-        render: (data) => formatDate(data)
-      },
-      {
-        title: 'Status',
-        data: 'status',
-        render: (data) => {
-          const colors = {
-            pending: 'warning',
-            approved: 'success',
-            rejected: 'danger',
-            paid: 'info'
+    $(kasbonTableRef.value).DataTable({
+      data: kasbons.value,
+      columns: [
+        { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
+        { title: "Nomor Kasbon", data: "nomor_kasbon" },
+        { title: "Nama Pengaju", data: "user_name" },
+        { title: "Proyek", data: "proyek", render: (data) => data ? `${data.nama_proyek}` : "-" },
+        { title: "Jumlah (Rp)", data: "amount", render: (data) => `Rp ${new Intl.NumberFormat("id-ID").format(data)}` },
+        { title: "Deskripsi", data: "description" },
+        { title: "Status", data: "status_label" },
+        { title: "Tanggal Permintaan", data: "kasbon_date", render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-" },
+        { title: "Tanggal Jatuh Tempo", data: "due_date", render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-" },
+        { title: "Tanggal Persetujuan", data: "approval_date", render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-" },
+        { title: "Tanggal Pencairan", data: "disbursement_date", render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-" },
+        { title: "Tanggal Pelunasan", data: "settlement_date", render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-" },
+        { title: "Metode Pembayaran", data: "payment_method", render: (data) => {
+          if (data && typeof data === 'object' && data.nama_metode) {
+            return data.nama_metode;
           }
-          const texts = {
-            pending: 'Menunggu',
-            approved: 'Disetujui',
-            rejected: 'Ditolak',
-            paid: 'Lunas'
-          }
-          return `<span class="badge bg-${colors[data]}">${texts[data]}</span>`
-        }
-      },
-      {
-        title: 'Aksi',
-        data: null,
-        render: (data, type, row) => {
-          let buttons = `
-            <button class="btn btn-sm btn-info detail-btn" data-id="${row.id}">
-              <i class="cil-list"></i> Detail
+          const method = paymentMethods.value.find(m => m.id == data);
+          return method ? method.nama_metode : "-";
+        } },
+        { title: "Lampiran", data: "attachments", render: (data) => data && data.length > 0 ? data.map(a => `<a href='${a.file_url}' target='_blank'>${a.file_name}</a>`).join('<br>') : "-" },
+        {
+          title: "Aksi",
+          data: null,
+          render: (data, type, row) =>
+            `<button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">
+              <i class="cil-pencil"></i>
             </button>
-          `
-          if (row.status === 'approved') {
-            buttons += `
-              <button class="btn btn-sm btn-primary payment-btn" data-id="${row.id}">
-                <i class="cil-plus"></i> Bayar
-              </button>
-            `
-          }
-          return buttons
+            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
+              <i class="cil-trash"></i>
+            </button>`,
+        },
+      ],
+      scrollX: true,
+      autoWidth: false,
+      responsive: false,
+    });
+
+    // Add event handlers for edit and delete buttons
+    $(kasbonTableRef.value).on('click', '.edit-btn', function() {
+      const id = $(this).data('id');
+      openModal('edit', id);
+    });
+
+    $(kasbonTableRef.value).on('click', '.delete-btn', function() {
+      const id = $(this).data('id');
+      confirmDelete(id);
+    });
+  };
+
+  // Confirm delete dialog
+  const confirmDelete = (id) => {
+    Swal.fire({
+      title: 'Apakah Anda yakin?',
+      text: "Data kasbon akan dihapus permanen!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Ya, hapus!',
+      cancelButtonText: 'Batal'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        deleteKasbon(id);
+      }
+    });
+  };
+
+  // Delete kasbon
+  const deleteKasbon = async (id) => {
+    try {
+      const token = sessionStorage.getItem("token");
+      await axios.delete(`/api/kasbons/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      Swal.fire("Sukses", "Kasbon berhasil dihapus", "success");
+      await fetchKasbons();
+    } catch (err) {
+      console.error('Error deleting kasbon:', err);
+      Swal.fire("Error", err.response?.data?.message || err.message, "error");
+    }
+  };
+
+  // Open modal
+  const openModal = (mode, id = null) => {
+    modalMode.value = mode;
+    modalTitle.value = mode === "edit" ? "Edit Kasbon" : "Tambah Kasbon";
+    modalButtonText.value = mode === "edit" ? "Update" : "Simpan";
+
+    if (mode === "edit") {
+      editingId.value = id;
+      const kasbonToEdit = kasbons.value.find((kasbon) => kasbon.id === id);
+      if (kasbonToEdit) {
+        // Format dates to YYYY-MM-DD
+        const formatDate = (dateString) => {
+          if (!dateString) return null;
+          const date = new Date(dateString);
+          return date.toISOString().split('T')[0];
+        };
+
+        form.value = {
+          user_name: kasbonToEdit.user_name,
+          proyek_id: kasbonToEdit.proyek_id,
+          amount: kasbonToEdit.amount,
+          description: kasbonToEdit.description,
+          status: kasbonToEdit.status,
+          kasbon_date: formatDate(kasbonToEdit.kasbon_date),
+          due_date: formatDate(kasbonToEdit.due_date),
+          approval_date: formatDate(kasbonToEdit.approval_date),
+          disbursement_date: formatDate(kasbonToEdit.disbursement_date),
+          settlement_date: formatDate(kasbonToEdit.settlement_date),
+          payment_method: kasbonToEdit.payment_method,
+          bank_account: kasbonToEdit.bank_account,
+          bank_name: kasbonToEdit.bank_name,
+          account_number: kasbonToEdit.account_number,
+          account_holder: kasbonToEdit.account_holder,
+          notes: kasbonToEdit.notes,
+        };
+      }
+    } else {
+      form.value = {
+        user_name: "",
+        proyek_id: "",
+        amount: 0,
+        description: "",
+        status: "pending",
+        kasbon_date: "",
+        due_date: null,
+        approval_date: null,
+        disbursement_date: null,
+        settlement_date: null,
+        payment_method: "",
+        bank_account: "",
+        bank_name: "",
+        account_number: "",
+        account_holder: "",
+        notes: "",
+      };
+    }
+
+    showModal.value = true;
+  };
+
+  // Close modal
+  const closeModal = () => {
+    showModal.value = false;
+    modalMode.value = "tambah";
+    editingId.value = null;
+  };
+
+  // Handle file change
+  const handleFileChange = (e) => {
+    attachments.value = Array.from(e.target.files);
+  };
+
+  // Handle form submit
+  const handleSubmit = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      const formData = new FormData();
+      Object.entries(form.value).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) formData.append(key, value);
+      });
+      attachments.value.forEach(file => {
+        formData.append('attachments[]', file);
+      });
+
+      let response;
+      if (modalMode.value === "edit") {
+        response = await axios.post(`/api/kasbons/${editingId.value}?_method=PUT`, formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        Swal.fire("Sukses", "Data kasbon berhasil diupdate", "success");
+      } else {
+        response = await axios.post("/api/kasbons", formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        Swal.fire("Sukses", "Data kasbon berhasil ditambahkan", "success");
+      }
+
+      closeModal();
+      await fetchKasbons();
+    } catch (err) {
+      console.error('Error submitting form:', err);
+      const errorMessage = err.response?.data?.message || err.message;
+      const errorDetails = err.response?.data?.errors || err.response?.data?.error;
+
+      if (err.response?.status === 422) {
+        // Validation error
+        const errorMessages = Object.entries(errorDetails)
+          .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+          .join('\n');
+        Swal.fire("Validation Error", errorMessages, "error");
+      } else {
+        // Other errors
+        Swal.fire("Error", `${errorMessage}\n${errorDetails || ''}`, "error");
+      }
+    }
+  };
+
+  // Initial fetch on component mount
+  onMounted(() => {
+    fetchPaymentMethods();
+    fetchProjects();
+    fetchKasbons();
+  });
+
+  // Watch for kasbon changes to reinitialize DataTable
+  watch(kasbons, () => {
+    nextTick(initDataTable);
+  });
+
+  const downloadKasbonPdf = async () => {
+    const token = sessionStorage.getItem("token");
+    if (!token) {
+      Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+      return;
+    }
+
+    try {
+      const response = await axios.get('/api/kasbons/export-pdf', {
+        responseType: 'blob',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/pdf'
         }
+      });
+
+      if (response.data.size === 0) {
+        throw new Error('File PDF kosong');
       }
-    ],
-    scrollX: true,
-    scrollCollapse: true,
-    fixedColumns: {
-      left: 1,
-      right: 1
-    },
-    dom: '<"top"lf>rt<"bottom"ip><"clear">',
-    pageLength: 10,
-    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Semua']]
-  })
 
-  $(kasbonTableRef.value).off('click', '.detail-btn').on('click', '.detail-btn', function () {
-    const id = $(this).data('id')
-    const kasbon = kasbons.value.find((k) => k.id == id)
-    if (kasbon) viewDetails(kasbon)
-  })
-
-  $(kasbonTableRef.value).off('click', '.payment-btn').on('click', '.payment-btn', function () {
-    const id = $(this).data('id')
-    const kasbon = kasbons.value.find((k) => k.id == id)
-    if (kasbon) addPayment(kasbon)
-  })
-}
-
-const createKasbon = async () => {
-  try {
-    const formData = new FormData()
-    Object.keys(form.value).forEach(key => {
-      if (key !== 'attachments') {
-        formData.append(key, form.value[key])
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `kasbon_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+      if (err.response?.status === 401) {
+        Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+      } else {
+        Swal.fire('Error', err.response?.data?.message || 'Gagal download PDF', 'error');
       }
-    })
-    form.value.attachments.forEach(file => {
-      formData.append('attachments[]', file)
-    })
+    }
+  };
 
-    await axios.post('/api/kasbons', formData)
-    showCreateModal.value = false
-    resetForm()
-    fetchKasbons()
-    Swal.fire({
-      icon: 'success',
-      title: 'Sukses',
-      text: 'Kasbon berhasil dibuat'
-    })
-  } catch (error) {
-    console.error('Error creating kasbon:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal membuat kasbon'
-    })
+  const downloadKasbonExcel = async () => {
+    const token = sessionStorage.getItem("token");
+    if (!token) {
+      Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+      return;
+    }
+
+    try {
+      const response = await axios.get('/api/kasbons/export-excel', {
+        responseType: 'blob',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      });
+
+      if (response.data.size === 0) {
+        throw new Error('File Excel kosong');
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `kasbon_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading Excel:', err);
+      if (err.response?.status === 401) {
+        Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+      } else {
+        Swal.fire('Error', err.response?.data?.message || 'Gagal download Excel', 'error');
+      }
+    }
+  };
+  </script>
+
+  <style scoped>
+  table.display, table.dataTable {
+    min-width: 1200px !important;
+    width: 100% !important;
+    table-layout: auto !important;
   }
-}
 
-const viewDetails = (kasbon) => {
-  selectedKasbon.value = kasbon
-}
-
-const addPayment = (kasbon) => {
-  selectedKasbon.value = kasbon
-  paymentForm.value = {
-    kasbon_id: kasbon.id,
-    amount: '',
-    payment_date: new Date().toISOString().split('T')[0],
-    payment_method: 'cash',
-    reference_number: '',
-    notes: ''
+  .dataTables_wrapper {
+    width: 100%;
+    overflow-x: auto;
   }
-  showPaymentModal.value = true
-}
 
-const submitPayment = async () => {
-  try {
-    await axios.post('/api/kasbon-payments', paymentForm.value)
-    showPaymentModal.value = false
-    resetPaymentForm()
-    fetchKasbons()
-    Swal.fire({
-      icon: 'success',
-      title: 'Sukses',
-      text: 'Pembayaran berhasil ditambahkan'
-    })
-  } catch (error) {
-    console.error('Error adding payment:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal menambahkan pembayaran'
-    })
+  table.dataTable tbody td {
+    white-space: nowrap !important;
+    padding: 8px;
   }
-}
 
-const approveKasbon = async (kasbon) => {
-  try {
-    await axios.post(`/api/kasbons/${kasbon.id}/approve`)
-    fetchKasbons()
-    Swal.fire({
-      icon: 'success',
-      title: 'Sukses',
-      text: 'Kasbon berhasil disetujui'
-    })
-  } catch (error) {
-    console.error('Error approving kasbon:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal menyetujui kasbon'
-    })
+  .btn {
+    margin: 0 2px;
   }
-}
-
-const rejectKasbon = async () => {
-  try {
-    await axios.post(`/api/kasbons/${selectedKasbon.value.id}/reject`, {
-      reason: rejectReason.value
-    })
-    showRejectModal.value = false
-    rejectReason.value = ''
-    fetchKasbons()
-    Swal.fire({
-      icon: 'success',
-      title: 'Sukses',
-      text: 'Kasbon berhasil ditolak'
-    })
-  } catch (error) {
-    console.error('Error rejecting kasbon:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal menolak kasbon'
-    })
-  }
-}
-
-const downloadAttachment = async (attachment) => {
-  try {
-    const response = await axios.get(`/api/kasbon-attachments/${attachment.id}/download`, {
-      responseType: 'blob'
-    })
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', attachment.name)
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-  } catch (error) {
-    console.error('Error downloading attachment:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal mengunduh lampiran'
-    })
-  }
-}
-
-const handleFileUpload = (event) => {
-  form.value.attachments = Array.from(event.target.files)
-}
-
-const resetForm = () => {
-  form.value = {
-    proyek_id: '',
-    amount: '',
-    description: '',
-    kasbon_date: '',
-    due_date: '',
-    payment_method: 'cash',
-    bank_info: '',
-    attachments: []
-  }
-}
-
-const resetPaymentForm = () => {
-  paymentForm.value = {
-    kasbon_id: '',
-    amount: '',
-    payment_date: '',
-    payment_method: 'cash',
-    reference_number: '',
-    notes: ''
-  }
-}
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR'
-  }).format(value)
-}
-
-const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
-const getStatusColor = (status) => {
-  const colors = {
-    pending: 'warning',
-    approved: 'success',
-    rejected: 'danger',
-    paid: 'info'
-  }
-  return colors[status] || 'secondary'
-}
-
-const getStatusText = (status) => {
-  const texts = {
-    pending: 'Menunggu',
-    approved: 'Disetujui',
-    rejected: 'Ditolak',
-    paid: 'Lunas'
-  }
-  return texts[status] || status
-}
-
-onMounted(() => {
-  fetchKasbons()
-  fetchProyeks()
-})
-</script>
-
-<style scoped>
-.w-100 {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.dataTables_wrapper {
-  overflow-x: auto;
-  position: relative;
-}
-
-table.display {
-  width: 100% !important;
-  min-width: 1000px;
-}
-
-/* Fixed columns styles */
-.dataTables_scroll {
-  position: relative;
-  clear: both;
-  width: 100%;
-}
-
-.dataTables_scrollBody {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: none;
-}
-
-/* Fixed column styles */
-.fixed-columns {
-  position: sticky;
-  background: white;
-  z-index: 1;
-}
-
-.fixed-columns-left {
-  left: 0;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-}
-
-.fixed-columns-right {
-  right: 0;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-}
-
-/* Table cell styles */
-table.dataTable tbody td {
-  white-space: nowrap;
-  padding: 8px;
-}
-
-/* Button styles */
-.btn {
-  margin: 0 2px;
-}
-
-/* Status badge styles */
-.badge {
-  padding: 0.5em 0.75em;
-  font-size: 0.875em;
-}
-</style> 
+  </style>

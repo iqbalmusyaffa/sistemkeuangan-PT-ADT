@@ -112,12 +112,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/budget-transactions/{transaction}/reject', [BudgetController::class, 'rejectTransaction']);
 
     // Kasbon Routes
+    Route::get('/kasbons/export-pdf', [KasbonController::class, 'exportPdf']);
+    Route::get('/kasbons/export-excel', [KasbonController::class, 'exportExcel']);
     Route::get('/kasbons', [KasbonController::class, 'index']);
     Route::post('/kasbons', [KasbonController::class, 'store']);
     Route::get('/kasbons/{kasbon}', [KasbonController::class, 'show']);
+    Route::put('/kasbons/{kasbon}', [KasbonController::class, 'update']);
+    Route::delete('/kasbons/{kasbon}', [KasbonController::class, 'destroy']);
+    Route::post('/kasbons/{kasbon}/upload-attachment', [KasbonController::class, 'uploadAttachment']);
+    Route::delete('/kasbons/{kasbon}/attachments/{attachment}', [KasbonController::class, 'deleteAttachment']);
     Route::post('/kasbons/{kasbon}/approve', [KasbonController::class, 'approve']);
     Route::post('/kasbons/{kasbon}/reject', [KasbonController::class, 'reject']);
     Route::post('/kasbons/{kasbon}/payments', [KasbonController::class, 'addPayment']);
     Route::get('/kasbon-attachments/{attachment}/download', [KasbonController::class, 'downloadAttachment']);
+
+    // ini adalah route untuk download file excel
+    Route::get('/termins/export-pdf/{project}', [TerminController::class, 'exportPDF']);
+    Route::get('/termins/export-excel/{project}', [TerminController::class, 'exportExcel']);
+    Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

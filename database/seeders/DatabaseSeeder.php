@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             MerekSeeder::class, // Memanggil seeder merek
             ProjectSeeder::class, // Memanggil seeder proyek
             ServiceCategorySeeder::class, // Memanggil seeder kategori layanan
+            PaymentMethodSeeder::class, // Memanggil seeder metode pembayaran kasbon
         ]);
 
     }

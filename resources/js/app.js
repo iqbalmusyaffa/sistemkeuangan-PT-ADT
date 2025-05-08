@@ -9,6 +9,7 @@ import App from './App.vue';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min';
 import '@coreui/coreui/dist/css/coreui.min.css';
+import '@coreui/icons/css/all.min.css';
 
 // Import CoreUI Vue and Icon components
 import CoreuiVue from '@coreui/vue';

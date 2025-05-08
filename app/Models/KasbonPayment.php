@@ -28,4 +28,4 @@ class KasbonPayment extends Model
     {
         return $this->belongsTo(Kasbon::class);
     }
-} 
+}

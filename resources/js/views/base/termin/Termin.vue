@@ -4,6 +4,26 @@
       <CCard>
         <CCardHeader>
           <CIcon icon="cil-money" /> Manajemen Termin
+          <div class="float-end btn-group">
+            <!-- Tambah Tombol Export/Import -->
+            <CButton color="secondary" @click="exportToPDF" class="me-2">
+              <CIcon icon="cil-cloud-download" /> PDF
+            </CButton>
+            <CButton color="success" @click="exportToExcel" class="me-2">
+              <CIcon icon="cid-spreadsheet" /> Excel
+            </CButton>
+            <CButton color="warning" @click="$refs.fileInput.click()">
+              <CIcon icon="cil-cloud-upload" /> Import
+            </CButton>
+            <input
+              type="file"
+              ref="fileInput"
+              @change="handleExcelImport"
+              style="display: none"
+              accept=".xlsx, .xls"
+            >
+          </div>
+
           <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject">
             Tambah Termin
           </CButton>
@@ -18,16 +38,16 @@
               <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
               <CFormSelect v-model="selectedProject" id="project_filter" @change="filterByProject">
                 <option value="">-- Pilih Proyek --</option>
-                <option v-for="project in projects" :key="project.id" :value="project.id">
+                <option v-for="project in projects" :key="project.id" :value="String(project.id)">
                   {{ project.nama_customer }} - {{ project.nama_proyek }}
                 </option>
               </CFormSelect>
             </CCol>
             <CCol md="6">
               <CFormLabel for="invoice_filter">Pilih Invoice</CFormLabel>
-              <CFormSelect v-model="selectedInvoice" id="invoice_filter" @change="filterByInvoice" :disabled="!selectedProject || !!selectedInvoice">
+              <CFormSelect v-model="selectedInvoice" id="invoice_filter" :disabled="!selectedProject || !!selectedInvoice">
                 <option value="">-- Pilih Invoice --</option>
-                <option v-for="invoice in invoices" :key="invoice.id" :value="invoice.id">
+                <option v-for="invoice in invoices" :key="invoice.id" :value="String(invoice.id)">
                   {{ invoice.invoice_number }} - {{ invoice.invoice_date }}
                 </option>
               </CFormSelect>
@@ -36,50 +56,46 @@
 
           <!-- Tabel Termin -->
           <div v-if="selectedProject">
-            <div class="w-100">
-              <table ref="terminTableRef" class="display nowrap"></table>
-            </div>
-
-            <!-- Ringkasan Biaya -->
-            <CCard class="mt-3">
-              <CCardHeader>
-                <strong>Ringkasan Termin</strong>
-              </CCardHeader>
-              <CCardBody>
-                <CRow>
-                  <CCol md="6">
-                    <CTable>
-                      <CTableBody>
-                        <CTableRow>
-                          <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
-                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
-                        </CTableRow>
-                        <CTableRow>
-                          <CTableDataCell>Total Nilai Termin</CTableDataCell>
-                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalTermin) }}</CTableDataCell>
-                        </CTableRow>
-                        <CTableRow>
-                          <CTableDataCell>Total DP</CTableDataCell>
-                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalDP) }}</CTableDataCell>
-                        </CTableRow>
-                        <CTableRow>
-                          <CTableDataCell>Total Pelunasan</CTableDataCell>
-                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
-                        </CTableRow>
-                        <CTableRow class="fw-bold">
-                          <CTableDataCell>Total Keseluruhan</CTableDataCell>
-                          <CTableDataCell class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</CTableDataCell>
-                        </CTableRow>
-                      </CTableBody>
-                    </CTable>
-                  </CCol>
-                </CRow>
-              </CCardBody>
-            </CCard>
+            <table ref="terminTableRef" class="table table-striped table-bordered w-100"></table>
           </div>
           <CAlert v-else color="info">
             Silakan pilih proyek terlebih dahulu untuk melihat data termin
           </CAlert>
+        </CCardBody>
+      </CCard>
+      <CCard v-if="selectedProject" class="mt-3">
+        <CCardHeader>
+          <strong>Ringkasan Termin</strong>
+        </CCardHeader>
+        <CCardBody>
+          <CRow>
+            <CCol md="6">
+              <CTable>
+                <CTableBody>
+                  <CTableRow>
+                    <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
+                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow>
+                    <CTableDataCell>Total Nilai Termin</CTableDataCell>
+                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalTermin) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow>
+                    <CTableDataCell>Total DP</CTableDataCell>
+                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalDP) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow>
+                    <CTableDataCell>Total Pelunasan</CTableDataCell>
+                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
+                  </CTableRow>
+                  <CTableRow class="fw-bold">
+                    <CTableDataCell>Total Keseluruhan</CTableDataCell>
+                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</CTableDataCell>
+                  </CTableRow>
+                </CTableBody>
+              </CTable>
+            </CCol>
+          </CRow>
         </CCardBody>
       </CCard>
     </CCol>
@@ -98,7 +114,7 @@
                          :label="customer">
                   <option v-for="project in projectGroup"
                           :key="project.id"
-                          :value="project.id">
+                          :value="String(project.id)">
                     {{ project.nama_proyek }}
                   </option>
                 </optgroup>
@@ -275,6 +291,7 @@ const selectedProject = ref("");
 const selectedProjectDetails = ref(null);
 const selectedInvoice = ref("");
 const invoices = ref([]);
+const API_URL = ""; // Jika perlu, isi dengan base URL API kamu, misal: "http://localhost:8000/api"
 
 // Add groupedProjects computed property
 const groupedProjects = computed(() => {
@@ -312,7 +329,6 @@ const handleNilaiDPInput = (event) => {
 
 // Add onMounted hook
 onMounted(async () => {
-  console.log("Component mounted, fetching projects...");
   await fetchProjects();
 });
 
@@ -342,7 +358,6 @@ const fetchProjects = async () => {
       error.value = "Format data tidak sesuai";
     }
   } catch (err) {
-    console.error("Failed to load projects:", err);
     error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
     Swal.fire({
       icon: "error",
@@ -394,7 +409,7 @@ const calculateValues = () => {
     form.value.nilai_dp = form.value.nilai_termin * (form.value.dp_percentage / 100);
     // Calculate final payment as total minus DP
     form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-    
+
     // Update display values
     form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
     form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
@@ -403,8 +418,6 @@ const calculateValues = () => {
 
 // DataTable initialization
 const initDataTable = () => {
-  console.log("Initializing DataTable with data:", termins.value);
-
   // Destroy existing DataTable if it exists
   if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
     $(terminTableRef.value).DataTable().destroy();
@@ -413,192 +426,137 @@ const initDataTable = () => {
   // Clear the table contents
   $(terminTableRef.value).empty();
 
+
   const dataTableConfig = {
     data: termins.value,
-    language: {
-      emptyTable: "Tidak ada data yang tersedia",
-      info: "Menampilkan _START_ hingga _END_ dari _TOTAL_ entri",
-      infoEmpty: "Menampilkan 0 hingga 0 dari 0 entri",
-      infoFiltered: "(disaring dari _MAX_ total entri)",
-      lengthMenu: "Tampilkan _MENU_ entri",
-      loadingRecords: "Memuat...",
-      processing: "Memproses...",
-      search: "Cari:",
-      zeroRecords: "Tidak ditemukan data yang sesuai",
-      paginate: {
-        first: "Pertama",
-        last: "Terakhir",
-        next: "Selanjutnya",
-        previous: "Sebelumnya"
-      }
-    },
     columns: [
       {
         title: "No",
         data: null,
         render: (data, type, row, meta) => meta.row + 1,
-        className: 'text-center align-middle',
-        width: '40px'
+        className: "text-center",
+        width: "30px"
       },
       {
         title: "Nama Termin",
         data: "nama_termin",
-        render: (data) => data || "-",
-        className: 'text-start align-middle',
-        width: '120px'
+        render: data => data || "-",
+        className: "text-start"
       },
       {
         title: "Nilai Termin",
         data: "nilai_termin",
-        render: (data) => `Rp ${formatCurrency(data || 0)}`,
-        className: 'text-end align-middle',
-        width: '130px'
+        render: data => `Rp ${formatCurrency(data || 0)}`,
+        className: "text-end"
       },
       {
         title: "DP (%)",
         data: "dp_percentage",
-        render: (data) => `${data || 0}%`,
-        className: 'text-center align-middle',
-        width: '70px'
+        render: data => `${data || 0}%`,
+        className: "text-center"
       },
       {
         title: "Nilai DP",
         data: "nilai_dp",
-        render: (data) => `Rp ${formatCurrency(data || 0)}`,
-        className: 'text-end align-middle',
-        width: '130px'
+        render: data => `Rp ${formatCurrency(data || 0)}`,
+        className: "text-end"
       },
       {
         title: "Nilai Pelunasan",
         data: "nilai_pelunasan",
-        render: (data) => `Rp ${formatCurrency(data || 0)}`,
-        className: 'text-end align-middle',
-        width: '130px'
+        render: data => `Rp ${formatCurrency(data || 0)}`,
+        className: "text-end"
       },
       {
         title: "Tanggal DP",
         data: "tanggal_dp",
-        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-",
-        className: 'text-center align-middle',
-        width: '100px'
+        render: data => data ? new Date(data).toLocaleDateString("id-ID") : "-",
+        className: "text-center"
       },
       {
         title: "Tanggal Pelunasan",
         data: "tanggal_pelunasan",
-        render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : "-",
-        className: 'text-center align-middle',
-        width: '100px'
+        render: data => data ? new Date(data).toLocaleDateString("id-ID") : "-",
+        className: "text-center"
       },
       {
         title: "Status",
         data: "status_termin",
-        render: (data) => {
-          const statusClasses = {
-            'Belum Dibayar': 'danger',
-            'DP Dibayar': 'warning',
-            'Lunas': 'success'
+        render: data => {
+          const statusClass = {
+            "Belum Dibayar": "danger",
+            "DP Dibayar": "warning",
+            "Lunas": "success"
           };
-          return `<span class="badge bg-${statusClasses[data] || 'secondary'}">${data || '-'}</span>`;
+          return `<span class="badge bg-${statusClass[data] || "secondary"}">${data || "-"}</span>`;
         },
-        className: 'text-center align-middle',
-        width: '100px'
+        className: "text-center"
       },
       {
         title: "Aksi",
         data: null,
         orderable: false,
-        className: 'text-center align-middle',
-        width: '150px',
-        render: (data, type, row) => {
-          if (!row || !row.id) return '';
-          return `
-            <div class="d-flex justify-content-center" style="gap: 4px;">
-              <button type="button" class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">Edit</button>
-              <button type="button" class="btn btn-sm btn-info status-btn" data-id="${row.id}">Status</button>
-              <button type="button" class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
-            </div>
-          `;
-        }
+        className: "text-center",
+        render: (data, type, row) => `
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-primary btn-sm edit-btn" data-id="${row.id}" title="Edit">
+              <i class="cil-pencil"></i>
+            </button>
+            <button type="button" class="btn btn-info btn-sm status-btn" data-id="${row.id}" title="Status">
+              <i class="cil-task"></i>
+            </button>
+            <button type="button" class="btn btn-danger btn-sm delete-btn" data-id="${row.id}" title="Hapus">
+              <i class="cil-trash"></i>
+            </button>
+          </div>
+        `
       }
     ],
-    // Basic Configuration
     responsive: false,
-    processing: true,
-    serverSide: false,
-    searching: true,
-    
-    // Scrolling Configuration
-    scrollX: true,
-    scrollCollapse: true,
     autoWidth: false,
-    
-    // Fixed Columns Configuration
-    fixedColumns: {
-      right: 2 // Fix Status and Action columns
+    scrollX: true,
+    dom: '<"row mb-2"<"col-sm-6"l><"col-sm-6 text-end"f>>rt<"row mt-2"<"col-sm-6"i><"col-sm-6 text-end"p>>',
+    language: {
+      emptyTable: "Tidak ada data",
+      search: "Cari:",
+      lengthMenu: "Tampilkan _MENU_ entri",
+      info: "Menampilkan _START_ - _END_ dari _TOTAL_ entri",
+      paginate: {
+        previous: "&laquo;",
+        next: "&raquo;"
+      }
     },
-    
-    // Other configurations
-    dom: '<"top"lf>rt<"bottom"ip><"clear">',
-    pageLength: 10,
-    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]],
-    
-    // Event Handlers
-    drawCallback: function(settings) {
-      const api = this.api();
-      
-      // Reattach event handlers for edit buttons
-      $(this).find('.edit-btn').each(function() {
-        $(this).off('click').on('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const id = $(this).data('id');
-          const termin = termins.value.find(t => t.id === parseInt(id));
-          if (termin) {
-            openModal('edit', termin);
-          }
-        });
+    drawCallback: function() {
+      // Attach actions
+      $(this).find(".edit-btn").off().on("click", function () {
+        const id = $(this).data("id");
+        const termin = termins.value.find(t => t.id === id);
+        if (termin) openModal("edit", termin);
       });
 
-      // Add event handler for status buttons
-      $(this).find('.status-btn').each(function() {
-        $(this).off('click').on('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const id = $(this).data('id');
-          const termin = termins.value.find(t => t.id === parseInt(id));
-          if (termin) {
-            openStatusModal(termin);
-          }
-        });
+      $(this).find(".status-btn").off().on("click", function () {
+        const id = $(this).data("id");
+        const termin = termins.value.find(t => t.id === id);
+        if (termin) openStatusModal(termin);
       });
 
-      // Reattach event handlers for delete buttons
-      $(this).find('.delete-btn').each(function() {
-        $(this).off('click').on('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          const id = $(this).data('id');
-          if (id) {
-            deleteTermin(id);
-          }
-        });
+      $(this).find(".delete-btn").off().on("click", function () {
+        const id = $(this).data("id");
+        if (id) deleteTermin(id);
       });
     }
   };
 
-  // Initialize DataTable
   const table = $(terminTableRef.value).DataTable(dataTableConfig);
 
-  // Handle window resize
-  $(window).on('resize', function() {
-    table.columns.adjust().draw();
-  });
+  $(window).on("resize", () => table.columns.adjust());
 
   return table;
 };
 
 const filterByProject = async () => {
-  await fetchInvoices(selectedProject.value);
+  await fetchInvoices(String(selectedProject.value));
+  purchases.value = [];
   selectedInvoice.value = "";
   termins.value = [];
   nextTick(() => {
@@ -606,20 +564,24 @@ const filterByProject = async () => {
   });
 };
 
-const filterByInvoice = async () => {
+const filterByInvoice = async (...args) => {
+  await fetchPurchases(selectedProject.value, selectedInvoice.value);
   await fetchTermins();
 };
 
 watch(selectedProject, async (newVal) => {
-  await fetchInvoices(newVal);
+  await fetchInvoices(String(newVal));
+  purchases.value = [];
   selectedInvoice.value = "";
   await fetchTermins();
 });
 
 watch(selectedInvoice, (newVal) => {
   if (newVal) {
+    fetchPurchases(selectedProject.value, newVal);
     fetchTermins();
   } else {
+    purchases.value = [];
     termins.value = [];
     nextTick(() => {
       initDataTable();
@@ -729,6 +691,7 @@ const handleSubmit = async () => {
   loading.value = true;
   error.value = "";
 
+  // Basic validation for both modes
   if (!form.value.project_id) {
     error.value = "Proyek wajib dipilih!";
     loading.value = false;
@@ -753,23 +716,42 @@ const handleSubmit = async () => {
     return;
   }
 
-  // Add validation for total termin amount
-  if (!validateTerminTotal()) {
-    error.value = "Total nilai termin tidak boleh melebihi total invoice!";
-    loading.value = false;
-    return;
-  }
+  // Get the original termin data if we're editing
+  const originalTermin = modalMode.value === "edit" ? termins.value.find(t => t.id === editingId.value) : null;
 
-  const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
-  const totalTerminBaru = form.value.nilai_termin || 0;
-  if (totalTerminBaru > sisaAnggaran) {
-    await Swal.fire({
-      icon: 'warning',
-      title: 'Anggaran Melebihi Batas!',
-      text: 'Jumlah termin melebihi sisa anggaran proyek. Silakan cek kembali nilai termin.',
-    });
-    loading.value = false;
-    return;
+  // Check if we're only editing non-numeric fields
+  const isEditingNonNumeric = modalMode.value === "edit" && originalTermin &&
+    form.value.nilai_termin === originalTermin.nilai_termin &&
+    form.value.dp_percentage === originalTermin.dp_percentage;
+
+  // Skip validation for non-numeric field edits
+  if (!isEditingNonNumeric) {
+    // Validate total termin amount
+    const totalTermin = termins.value
+      .filter(t => t.id !== editingId.value)
+      .reduce((sum, t) => sum + Number(t.nilai_termin), 0);
+
+    const totalWithNewTermin = totalTermin + Number(form.value.nilai_termin);
+    const totalInvoice = selectedInvoice.value ? Number(selectedInvoice.value.total_amount) : 0;
+
+    if (totalWithNewTermin > totalInvoice) {
+      error.value = "Total nilai termin tidak boleh melebihi total invoice!";
+      loading.value = false;
+      return;
+    }
+
+    // Validate budget
+    const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
+    const totalTerminBaru = form.value.nilai_termin || 0;
+    if (totalTerminBaru > sisaAnggaran) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Anggaran Melebihi Batas!',
+        text: 'Jumlah termin melebihi sisa anggaran proyek. Silakan cek kembali nilai termin.',
+      });
+      loading.value = false;
+      return;
+    }
   }
 
   calculateValues();
@@ -824,10 +806,10 @@ const handleSubmit = async () => {
         const invoiceResponse = await axios.get(`/api/invoices/${form.value.invoice_id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
+
         const invoice = invoiceResponse.data.data;
         const termins = invoice.termins || [];
-        
+
         // Calculate total paid amount and check termin statuses
         let totalPaid = 0;
         let allTerminsPaid = true;
@@ -871,7 +853,6 @@ const handleSubmit = async () => {
     // Dispatch event to notify invoice component
     window.dispatchEvent(new Event('termin-updated'));
   } catch (err) {
-    console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
     Swal.fire({
       icon: "error",
@@ -908,7 +889,7 @@ watch(() => form.value.project_id, (newProjectId) => {
   if (newProjectId) {
     const project = projects.value.find(p => p.id === parseInt(newProjectId));
     if (project) {
-      selectedProject.value = project.id;
+      selectedProject.value = String(project.id);
     }
   }
 });
@@ -968,7 +949,6 @@ const handleStatusUpdate = async () => {
     closeStatusModal();
     await fetchTermins();
   } catch (err) {
-    console.error("Error updating status:", err);
     Swal.fire({
       icon: "error",
       title: "Error",
@@ -1041,7 +1021,6 @@ const deleteTermin = async (id) => {
       await fetchTermins();
     }
   } catch (err) {
-    console.error("Error deleting termin:", err);
     Swal.fire({
       icon: "error",
       title: "Error",
@@ -1050,21 +1029,29 @@ const deleteTermin = async (id) => {
   }
 };
 
-// Add new function to fetch purchases
-const fetchPurchases = async (projectId) => {
+// Update fetchPurchases to use rest parameters
+const fetchPurchases = async (...args) => {
+  const [projectId, invoiceId] = args;
+  if (!projectId || !invoiceId) {
+    purchases.value = [];
+    return;
+  }
   try {
     const token = sessionStorage.getItem("token");
     const response = await axios.get("/api/purchasematerials", {
       headers: { Authorization: `Bearer ${token}` },
       params: { proyek_id: projectId }
     });
-
+    let allPurchases = [];
     if (response.data && response.data.purchases) {
-      purchases.value = response.data.purchases;
+      allPurchases = response.data.purchases;
+    } else if (response.data && response.data.data) {
+      allPurchases = response.data.data;
     }
+    purchases.value = allPurchases.filter(p => String(p.invoice_id) === String(invoiceId));
   } catch (err) {
-    console.error('Error fetching purchases:', err);
     error.value = 'Gagal memuat data pembelian';
+    purchases.value = [];
   }
 };
 
@@ -1086,10 +1073,92 @@ const fetchInvoices = async (projectId) => {
   }
 };
 
-const validateTerminTotal = () => {
-  const totalTermin = termins.value.reduce((sum, t) => sum + Number(t.nilai_termin), 0);
-  const totalInvoice = selectedInvoice.value ? Number(selectedInvoice.value.total_amount) : 0;
-  return totalTermin <= totalInvoice;
+const exportToPDF = () => {
+  if (!selectedProject.value) {
+    Swal.fire('Peringatan!', 'Pilih proyek terlebih dahulu', 'warning');
+    return;
+  }
+  if (!selectedInvoice.value) {
+    Swal.fire('Peringatan!', 'Pilih invoice terlebih dahulu', 'warning');
+    return;
+  }
+  const token = sessionStorage.getItem("token");
+  if (!token) {
+    Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+    return;
+  }
+  axios.get(`/api/termins/export-pdf/${selectedProject.value}`, {
+    responseType: 'blob',
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(response => {
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `termin_${new Date().toISOString().split('T')[0]}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }).catch(err => {
+    Swal.fire('Error', err.response?.data?.message || 'Gagal download PDF', 'error');
+  });
+};
+
+const exportToExcel = () => {
+  if (!selectedProject.value) {
+    Swal.fire('Peringatan!', 'Pilih proyek terlebih dahulu', 'warning');
+    return;
+  }
+  if (!selectedInvoice.value) {
+    Swal.fire('Peringatan!', 'Pilih invoice terlebih dahulu', 'warning');
+    return;
+  }
+  const token = sessionStorage.getItem("token");
+  if (!token) {
+    Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+    return;
+  }
+  axios.get(`/api/termins/export-excel/${selectedProject.value}`, {
+    responseType: 'blob',
+    headers: { Authorization: `Bearer ${token}` }
+  }).then(response => {
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `termin_${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }).catch(err => {
+    Swal.fire('Error', err.response?.data?.message || 'Gagal download Excel', 'error');
+  });
+};
+
+const handleExcelImport = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('project_id', selectedProject.value);
+
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.post(`${API_URL}/termins/import-excel`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    Swal.fire('Sukses!', response.data.message, 'success');
+    await fetchTermins();
+  } catch (error) {
+    Swal.fire('Error!', error.response?.data?.message || 'Gagal mengimpor data', 'error');
+  } finally {
+    event.target.value = '';
+  }
 };
 
 </script>
@@ -1155,6 +1224,15 @@ table.dataTable tbody td {
 .badge {
   padding: 0.5em 0.75em;
   font-size: 0.875em;
+}
+
+.table .btn-group .btn i {
+  font-size: 1rem;
+  vertical-align: middle;
+}
+.table .btn-group .btn {
+  padding: 2px 6px;
+  line-height: 1;
 }
 </style>
 

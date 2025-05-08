@@ -9,6 +9,10 @@ use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\TerminExport;
+use App\Imports\TerminImport;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class TerminController extends Controller
 {
@@ -256,5 +260,26 @@ class TerminController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    public function exportPDF($projectId)
+    {
+        $termins = Termin::where('proyek_id', $projectId)->get();
+        $pdf = Pdf::loadView('exports.termin-pdf', compact('termins'));
+        $pdf->setPaper('a4', 'landscape');
+        return $pdf->download('termin.pdf');
+    }
+
+    public function exportExcel($projectId)
+    {
+        return Excel::download(new TerminExport($projectId), 'termin.xlsx');
+    }
+
+    public function importExcel(Request $request)
+    {
+        $request->validate(['file' => 'required|mimes:xlsx,xls']);
+
+        Excel::import(new TerminImport, $request->file('file'));
+
+        return response()->json(['message' => 'Data berhasil diimpor']);
     }
 }

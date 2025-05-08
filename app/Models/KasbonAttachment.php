@@ -16,9 +16,20 @@ class KasbonAttachment extends Model
         'file_name',
         'file_type'
     ];
+    protected $appends = ['file_url'];
+    protected $casts = [
+        'file_path' => 'string',
+        'file_name' => 'string',
+        'file_type' => 'string'
+    ];
 
     public function kasbon(): BelongsTo
     {
         return $this->belongsTo(Kasbon::class);
     }
-} 
+
+    public function getFileUrlAttribute(): string
+    {
+        return asset('storage/' . $this->file_path);
+    }
+}
