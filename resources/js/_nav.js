@@ -164,5 +164,11 @@ export default [
       to: '/profile',
       icon: 'cil-user',
     },
+    {
+      component: 'CNavItem',
+      name: 'Settings',
+      to: '/settings',
+      icon: 'cil-settings',
+    },
 
   ]

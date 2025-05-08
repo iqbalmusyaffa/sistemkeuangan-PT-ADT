@@ -8,6 +8,9 @@ import avatar6 from '@/assets/images/avatars/6.jpg'
 import MainChart from './MainChart.vue'
 import WidgetsStatsA from './../widgets/WidgetsStatsTypeA.vue'
 import WidgetsStatsD from './../widgets/WidgetsStatsTypeD.vue'
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+import dayjs from 'dayjs'
 
 const progressGroupExample1 = [
   { title: 'Monday', value1: 34, value2: 78 },
@@ -123,6 +126,25 @@ const tableExample = [
     activity: 'Last week',
   },
 ]
+
+const activityLogs = ref([])
+const formatTime = (datetime) => dayjs(datetime).format('DD MMM YYYY [pukul] HH:mm')
+
+const fetchActivityLogs = async () => {
+  const token = sessionStorage.getItem('token')
+  try {
+    const res = await axios.get('/api/activity-log', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    activityLogs.value = res.data.data || res.data // Handle both paginated and non-paginated responses
+  } catch (error) {
+    console.error('Error fetching activity logs:', error)
+  }
+}
+
+onMounted(() => {
+  fetchActivityLogs()
+})
 </script>
 
 <template>
@@ -191,6 +213,51 @@ const tableExample = [
               </CCol>
             </CRow>
           </CCardFooter>
+        </CCard>
+      </CCol>
+    </CRow>
+    <CRow>
+      <CCol :md="12">
+        <CCard class="mb-4">
+          <CCardHeader>
+            <CIcon icon="cil-history" /> Activity Log
+          </CCardHeader>
+          <CCardBody>
+            <div class="table-responsive">
+              <table class="table table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th style="width: 50px;">No</th>
+                    <th>User</th>
+                    <th>Activity</th>
+                    <th>Waktu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(log, idx) in activityLogs" :key="log.id">
+                    <td>{{ idx + 1 }}</td>
+                    <td>
+                      <span v-if="log.user && log.user.name">{{ log.user.name }}</span>
+                      <span v-else class="text-secondary">System</span>
+                    </td>
+                    <td>
+                      <span v-if="log.action">
+                        <b>{{ log.user?.name || 'System' }}</b>
+                        melakukan <b>{{ log.action }}</b>
+                        pada <b>{{ log.model_type?.split('\\').pop() }}</b>
+                        ID <b>{{ log.model_id }}</b>
+                      </span>
+                      <span v-else>{{ log.activity }}</span>
+                    </td>
+                    <td>{{ formatTime(log.created_at) }}</td>
+                  </tr>
+                  <tr v-if="activityLogs.length === 0">
+                    <td colspan="4" class="text-center text-secondary">Belum ada aktivitas.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CCardBody>
         </CCard>
       </CCol>
     </CRow>

@@ -44,6 +44,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('users', UserController::class);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/summary', [\App\Http\Controllers\Api\DashboardController::class, 'summary']);
+    Route::get('/dashboard/chart-summary', [\App\Http\Controllers\Api\DashboardController::class, 'chartSummary']);
 
     // Category routes
     Route::apiResource('categories', KategoriTransaksiController::class);
@@ -101,6 +103,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profit-loss-reports/generate', [ProfitLossReportController::class, 'generateReport']);
     //get report by id
     Route::get('/profit-loss-reports/{report}', [ProfitLossReportController::class, 'show']);
+    Route::get('/profit-loss', [\App\Http\Controllers\Api\ProfitLossReportController::class, 'summary']);
+    Route::get('/profit-loss/recap', [\App\Http\Controllers\Api\ProfitLossReportController::class, 'recap']);
 
     // Budget Routes
     Route::get('/budgets', [BudgetController::class, 'index']);

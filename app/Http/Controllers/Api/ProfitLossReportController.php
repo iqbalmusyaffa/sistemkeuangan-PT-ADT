@@ -112,4 +112,83 @@ class ProfitLossReportController extends Controller
     {
         return response()->json($report->load('proyek'));
     }
+
+    // Laba Rugi summary untuk periode tertentu
+    public function summary(Request $request)
+    {
+        $start = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $end = $request->input('end_date', now()->endOfMonth()->toDateString());
+
+        $totalIncome = \DB::table('incomes')->whereBetween('transaction_date', [$start, $end])->sum('amount');
+        $totalExpense = \DB::table('expenses')->whereBetween('transaction_date', [$start, $end])->sum('amount');
+        $profit = $totalIncome - $totalExpense;
+
+        return response()->json([
+            'start_date' => $start,
+            'end_date' => $end,
+            'total_income' => $totalIncome,
+            'total_expense' => $totalExpense,
+            'profit' => $profit,
+        ]);
+    }
+
+    // Rekap per bulan/tahun
+    public function recap(Request $request)
+    {
+        $type = $request->input('type', 'monthly'); // 'monthly' atau 'yearly'
+        $year = $request->input('year', now()->year);
+
+        if ($type === 'monthly') {
+            $income = \DB::table('incomes')
+                ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total_income')
+                ->whereYear('transaction_date', $year)
+                ->groupBy(\DB::raw('MONTH(transaction_date)'))
+                ->pluck('total_income', 'month');
+
+            $expense = \DB::table('expenses')
+                ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total_expense')
+                ->whereYear('transaction_date', $year)
+                ->groupBy(\DB::raw('MONTH(transaction_date)'))
+                ->pluck('total_expense', 'month');
+
+            $result = [];
+            for ($i = 1; $i <= 12; $i++) {
+                $inc = $income[$i] ?? 0;
+                $exp = $expense[$i] ?? 0;
+                $result[] = [
+                    'month' => $i,
+                    'total_income' => $inc,
+                    'total_expense' => $exp,
+                    'profit' => $inc - $exp,
+                ];
+            }
+            return response()->json($result);
+        } else { // yearly
+            $income = \DB::table('incomes')
+                ->selectRaw('YEAR(transaction_date) as year, SUM(amount) as total_income')
+                ->groupBy(\DB::raw('YEAR(transaction_date)'))
+                ->pluck('total_income', 'year');
+
+            $expense = \DB::table('expenses')
+                ->selectRaw('YEAR(transaction_date) as year, SUM(amount) as total_expense')
+                ->groupBy(\DB::raw('YEAR(transaction_date)'))
+                ->pluck('total_expense', 'year');
+
+            $years = array_unique(array_merge(array_keys($income->toArray()), array_keys($expense->toArray())));
+            sort($years);
+
+            $result = [];
+            foreach ($years as $y) {
+                $inc = $income[$y] ?? 0;
+                $exp = $expense[$y] ?? 0;
+                $result[] = [
+                    'year' => $y,
+                    'total_income' => $inc,
+                    'total_expense' => $exp,
+                    'profit' => $inc - $exp,
+                ];
+            }
+            return response()->json($result);
+        }
+    }
 } 

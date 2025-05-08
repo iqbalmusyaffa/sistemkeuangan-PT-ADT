@@ -11,6 +11,9 @@ const itemsCount = 42
 const goToProfile = () => {
   router.push('/profile')
 }
+const goToSettings = () => {
+  router.push('/settings')
+}
 const logout = async () => {
   try {
     const token = sessionStorage.getItem('token')
@@ -51,7 +54,7 @@ const logout = async () => {
       <CDropdownItem @click="goToProfile" class="d-flex align-items-center px-3 py-2">
         <CIcon icon="cil-user" class="me-2" /> Profile
       </CDropdownItem>
-      <CDropdownItem class="d-flex align-items-center px-3 py-2">
+      <CDropdownItem @click="goToSettings" class="d-flex align-items-center px-3 py-2">
         <CIcon icon="cil-settings" class="me-2" /> Settings
       </CDropdownItem>
       <CDropdownDivider class="my-1" />
