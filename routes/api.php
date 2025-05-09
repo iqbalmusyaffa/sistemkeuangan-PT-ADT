@@ -36,6 +36,8 @@ use App\Http\Controllers\Api\KasbonController;
 // Route::post('/register', [UserController::class, 'register']);
 Route::post('/login', [UserController::class, 'login']);
 
+// Kategori routes - moved outside auth middleware for testing
+Route::apiResource('kategori', KategoriTransaksiController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     // Route::get('/user', function (Request $request) {
@@ -47,19 +49,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/summary', [\App\Http\Controllers\Api\DashboardController::class, 'summary']);
     Route::get('/dashboard/chart-summary', [\App\Http\Controllers\Api\DashboardController::class, 'chartSummary']);
 
-    // Category routes
-    Route::apiResource('categories', KategoriTransaksiController::class);
     // Transaction routes
     Route::apiResource('transactions', TransactionController::class);
     // Company routes
     Route::apiResource('companies', CompanyController::class);
     // Income routes
     Route::apiResource('incomes', IncomeController::class);
-    // Route::get('/incomes', [IncomeController::class, 'index']);
-    // Route::post('/incomes', [IncomeController::class, 'store']);
-    // Route::get('/incomes/{id}', [IncomeController::class, 'show']);
-    // Route::post('/incomes/{id}', [IncomeController::class, 'update']);
-    // Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
 
     // Pengeluaran (Expense)
     Route::apiResource('expenses', ExpenseController::class);
@@ -91,11 +86,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Payment Method Routes
     Route::apiResource('payment-methods', PaymentMethodController::class);
-    // Route::get('/payment-methods', [PaymentMethodController::class, 'index']);
-    // Route::post('/payment-methods', [PaymentMethodController::class, 'store']);
-    // Route::get('/payment-methods/{id}', [PaymentMethodController::class, 'show']);
-    // Route::put('/payment-methods/{id}', [PaymentMethodController::class, 'update']);
-    // Route::delete('/payment-methods/{id}', [PaymentMethodController::class, 'destroy']);
 
     // Profit Loss Report Routes
     Route::get('/profit-loss-reports', [ProfitLossReportController::class, 'index']);
