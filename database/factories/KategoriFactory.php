@@ -32,4 +32,4 @@ class KategoriFactory extends Factory
             'updated_at' => now(),
         ];
     }
-} 
+}

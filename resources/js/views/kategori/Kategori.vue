@@ -86,7 +86,7 @@ const fetchCategories = async () => {
   try {
     const token = sessionStorage.getItem("token");
 
-    const response = await axios.get("/api/categories", {
+    const response = await axios.get("/api/kategori", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -197,12 +197,12 @@ const handleSubmit = async () => {
     const payload = { nama_kategori: kategori.value, jenis: jenis.value, deskripsi: deskripsi.value };
 
     if (modalMode.value === "edit") {
-      await axios.put(`/api/categories/${editingId.value}`, payload, {
+      await axios.put(`/api/kategori/${editingId.value}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil diperbarui." });
     } else {
-      await axios.post("/api/categories", payload, {
+      await axios.post("/api/kategori", payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil ditambahkan." });
@@ -230,8 +230,8 @@ const deleteCategory = async (id) => {
 
   if (result.isConfirmed) {
     try {
-        const token = sessionStorage.getItem('token')
-      await axios.delete(`/api/categories/${id}`, {
+      const token = sessionStorage.getItem('token')
+      await axios.delete(`/api/kategori/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       Swal.fire({ icon: "success", title: "Berhasil!", text: "Kategori berhasil dihapus." });

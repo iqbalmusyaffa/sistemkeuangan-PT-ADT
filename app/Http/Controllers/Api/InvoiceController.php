@@ -42,13 +42,16 @@ class InvoiceController extends Controller
                 'invoice_date' => 'required|date',
                 'purchase_materials' => 'required|array|min:1',
                 'purchase_materials.*.item' => 'required|string',
-                'purchase_materials.*.qty' => 'required|numeric',
-                'purchase_materials.*.harga' => 'required|numeric',
+                'purchase_materials.*.qty' => 'required|numeric|min:1',
+                'purchase_materials.*.harga' => 'required|numeric|min:0',
                 'purchase_materials.*.type' => 'required|string|max:255',
                 'purchase_materials.*.merek_id' => 'nullable|exists:mereks,id',
                 'purchase_materials.*.unit_id' => 'required|exists:units,id',
                 'purchase_materials.*.category_id' => 'nullable|exists:kategoris,id',
                 'purchase_materials.*.deskripsi' => 'nullable|string',
+                'use_ppn' => 'boolean',
+                'use_pph_non_final' => 'boolean',
+                'use_pph_final' => 'boolean',
             ]);
 
             if ($validator->fails()) {
@@ -94,29 +97,44 @@ class InvoiceController extends Controller
                     'total_amount' => 0,
                     'amount_paid' => 0,
                     'notes' => $request->notes,
+                    'use_ppn' => $request->use_ppn ?? false,
+                    'use_pph_non_final' => $request->use_pph_non_final ?? false,
+                    'use_pph_final' => $request->use_pph_final ?? false,
                 ]);
 
                 $totalPurchaseAmount = 0;
+                $totalBarangAmount = 0;
+                $totalJasaAmount = 0;
+
                 foreach ($request->purchase_materials as $item) {
                     $totalHarga = $item['qty'] * $item['harga'];
-                    $purchaseMaterial = PurchaseMaterial::create([
-                        'proyek_id' => $request->proyek_id,
-                        'invoice_id' => $invoice->id,
+                    $totalPurchaseAmount += $totalHarga;
+
+                    if (isset($item['is_service']) && $item['is_service']) {
+                        $totalJasaAmount += $totalHarga;
+                    } else {
+                        $totalBarangAmount += $totalHarga;
+                    }
+
+                    $purchaseMaterial = new PurchaseMaterial([
                         'item' => $item['item'],
-                        'merek_id' => $item['merek_id'] ?? null,
                         'type' => $item['type'],
                         'spesifikasi' => $item['spesifikasi'] ?? null,
                         'unit_id' => $item['unit_id'],
-                        'category_id' => $item['category_id'] ?? null,
-                        'service_category_id' => $item['service_category_id'] ?? null,
                         'qty' => $item['qty'],
                         'harga' => $item['harga'],
                         'total_harga' => $totalHarga,
                         'deskripsi' => $item['deskripsi'] ?? null,
-                        'is_service' => isset($item['service_category_id']) && $item['service_category_id'] ? 1 : 0,
+                        'proyek_id' => $request->proyek_id,
+                        'is_service' => $item['is_service'] ?? false,
+                        'category_id' => $item['category_id'] ?? null,
+                        'service_category_id' => $item['service_category_id'] ?? null,
+                        'merek_id' => $item['merek_id'] ?? null,
+                        'invoice_id' => $invoice->id
                     ]);
+                    $purchaseMaterial->save();
 
-                    // Create expense for each purchase material
+                    // Create expense record
                     $expense = new \App\Models\Expense([
                         'user_id' => auth()->id(),
                         'proyek_id' => $request->proyek_id,
@@ -134,17 +152,29 @@ class InvoiceController extends Controller
                     ]);
                     $expense->save();
 
-                    // Update purchase material with expense_id
                     $purchaseMaterial->expense_id = $expense->id;
                     $purchaseMaterial->save();
-
-                    $totalPurchaseAmount += $totalHarga;
                 }
 
-                $invoice->total_amount = $totalPurchaseAmount;
-                $invoice->save();
+                // Calculate taxes
+                $pphNonFinalBarang = $request->use_pph_non_final ? ($totalBarangAmount * 0.015) : 0;
+                $pphNonFinalJasa = $request->use_pph_non_final ? ($totalJasaAmount * 0.02) : 0;
+                $pphNonFinalTotal = $pphNonFinalBarang + $pphNonFinalJasa;
 
-                // Logika termin fleksibel
+                $ppnAmount = $request->use_ppn ? ($totalPurchaseAmount * 0.11) : 0;
+
+                $netProfit = $totalPurchaseAmount * 0.3;
+                $pphFinal = $request->use_pph_final ? ($netProfit * 0.22) : 0;
+
+                $invoice->update([
+                    'total_amount' => $totalPurchaseAmount,
+                    'pph_non_final_amount' => $pphNonFinalTotal,
+                    'pph_final_amount' => $pphFinal,
+                    'ppn_amount' => $ppnAmount,
+                    'net_profit' => $netProfit,
+                ]);
+
+                // Handle termins
                 if ($request->has('termins') && is_array($request->termins) && count($request->termins) > 0) {
                     foreach ($request->termins as $i => $terminData) {
                         \App\Models\Termin::create([
@@ -162,7 +192,6 @@ class InvoiceController extends Controller
                         ]);
                     }
                 } elseif (!$request->has('is_cash') || !$request->is_cash) {
-                    // Jika tidak cash dan tidak ada data termin, buat 1 termin default
                     \App\Models\Termin::create([
                         'proyek_id' => $request->proyek_id,
                         'invoice_id' => $invoice->id,
@@ -211,7 +240,7 @@ class InvoiceController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:unpaid,partially_paid,paid,cancelled',
-            'amount_paid' => 'required|numeric',
+            'amount_paid' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -219,12 +248,9 @@ class InvoiceController extends Controller
         }
 
         $invoice = Invoice::findOrFail($id);
-
         $invoice->status = $request->status;
         $invoice->amount_paid = $request->amount_paid;
-
-        // Update status berdasarkan amount_paid
-        $invoice->status = $invoice->determineStatus(); // Pastikan status diperbarui
+        $invoice->status = $invoice->determineStatus();
         $invoice->save();
 
         return new InvoiceResource($invoice);
@@ -240,15 +266,24 @@ class InvoiceController extends Controller
         }
 
         try {
-            // Pastikan tidak ada transaksi atau pembayaran yang terkait sebelum menghapus
-            if ($invoice->purchaseMaterials->isNotEmpty()) {
-                return response()->json(['error' => 'Cannot delete invoice with associated purchase materials.'], 400);
-            }
-
+            DB::beginTransaction();
+            
+            // Delete associated expenses first
+            $invoice->expenses()->delete();
+            
+            // Delete associated termins
+            $invoice->termins()->delete();
+            
+            // Delete associated purchase materials
             $invoice->purchaseMaterials()->delete();
+            
+            // Finally delete the invoice
             $invoice->delete();
-            return response()->json(['message' => 'Invoice deleted successfully.']);
+            
+            DB::commit();
+            return response()->json(['message' => 'Invoice and all associated records deleted successfully.']);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(['error' => 'Failed to delete invoice. ' . $e->getMessage()], 500);
         }
     }

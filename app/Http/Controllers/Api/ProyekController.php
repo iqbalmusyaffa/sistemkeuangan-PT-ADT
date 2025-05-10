@@ -11,19 +11,27 @@ class ProyekController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+   public function index()
     {
-        $proyeks = Proyek::all();
-        return response()->json([
-            'status' => 'success',
-            'data' => $proyeks
-        ]);
+        try {
+            $proyeks = Proyek::all();
+            return response()->json([
+                'status' => 'success',
+                'data' => $proyeks
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil data proyek.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+     public function store(Request $request)
     {
         $validated = $request->validate([
             'nama_customer' => 'required|string|max:255',
@@ -35,17 +43,26 @@ class ProyekController extends Controller
             'lokasi' => 'nullable|string',
             'anggaran_kontrak' => 'required|numeric|min:0',
             'tanggal_mulai' => 'nullable|date',
-            'tanggal_selesai' => 'nullable|date',
+            'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai', // memastikan tanggal_selesai setelah tanggal_mulai
             'status_project' => 'required|in:Berjalan,Selesai,Batal',
             'deskripsi' => 'nullable|string',
         ]);
 
-        $proyek = Proyek::create($validated);
+        try {
+            $proyek = Proyek::create($validated);
 
-        return response()->json([
-            'message' => 'Proyek berhasil dibuat',
-            'data' => $proyek,
-        ], 201);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Proyek berhasil dibuat',
+                'data' => $proyek,
+            ], 201);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal membuat proyek.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -53,7 +70,24 @@ class ProyekController extends Controller
      */
     public function show(Proyek $proyek)
     {
-        return response()->json($proyek);
+        try {
+            return response()->json([
+                'status' => 'success',
+                'data' => $proyek
+            ], 200);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Proyek tidak ditemukan.',
+                'details' => $e->getMessage()
+            ], 404);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil data proyek.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -71,7 +105,7 @@ class ProyekController extends Controller
             'lokasi' => 'nullable|string',
             'anggaran_kontrak' => 'required|numeric|min:0',
             'tanggal_mulai' => 'nullable|date',
-            'tanggal_selesai' => 'nullable|date',
+            'tanggal_selesai' => 'nullable|date|after_or_equal:tanggal_mulai', // pastikan tanggal_selesai setelah tanggal_mulai
             'status_project' => 'required|in:Berjalan,Selesai,Batal',
             'deskripsi' => 'nullable|string',
         ]);
@@ -80,16 +114,26 @@ class ProyekController extends Controller
         $totalExpenses = $proyek->expenses()->sum('amount');
         if ($validated['anggaran_kontrak'] < $totalExpenses) {
             return response()->json([
-                'error' => 'Nilai kontrak lebih kecil dari total pengeluaran proyek. Silakan periksa kembali.'
+                'status' => 'error',
+                'message' => 'Nilai kontrak lebih kecil dari total pengeluaran proyek. Silakan periksa kembali.'
             ], 422);
         }
 
-        $proyek->update($validated);
+        try {
+            $proyek->update($validated);
 
-        return response()->json([
-            'message' => 'Proyek berhasil diupdate',
-            'data' => $proyek,
-        ]);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Proyek berhasil diperbarui',
+                'data' => $proyek,
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memperbarui proyek.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -97,10 +141,19 @@ class ProyekController extends Controller
      */
     public function destroy(Proyek $proyek)
     {
-        $proyek->delete();
+        try {
+            $proyek->delete();
 
-        return response()->json([
-            'message' => 'Proyek berhasil dihapus',
-        ]);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Proyek berhasil dihapus',
+            ], 204);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menghapus proyek.',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 }

@@ -18,6 +18,13 @@ return new class extends Migration
             $table->date('invoice_date');
             $table->decimal('total_amount', 18, 2);
             $table->decimal('amount_paid', 18, 2)->default(0);
+            $table->decimal('pph_non_final_amount', 18, 2)->default(0);
+            $table->decimal('pph_final_amount', 18, 2)->default(0);
+            $table->decimal('ppn_amount', 18, 2)->default(0);
+            $table->decimal('net_profit', 18, 2)->default(0);
+            $table->boolean('use_ppn')->default(false);
+            $table->boolean('use_pph_non_final')->default(false);
+            $table->boolean('use_pph_final')->default(false);
             $table->text('notes')->nullable();
             $table->enum('status', ['unpaid', 'partially_paid', 'paid', 'cancelled'])->default('unpaid');
             $table->timestamps();
@@ -36,4 +43,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('invoices');
     }
-};
+}; 

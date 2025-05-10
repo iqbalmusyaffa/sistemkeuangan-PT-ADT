@@ -46,8 +46,8 @@
 
           <!-- Data Table for Invoices -->
           <div v-if="selectedProject">
-            <div style="overflow-x: auto; width: 100%;">
-              <table ref="invoiceTableRef" class="display nowrap"></table>
+            <div style="overflow-x:auto; width:100%">
+              <table ref="invoiceTableRef" class="display nowrap w-100"></table>
             </div>
 
             <div class="total-section mt-3">
@@ -344,6 +344,81 @@
               </CButton>
             </CCol>
           </CRow>
+
+          <!-- Tax Information -->
+          <CRow class="mb-3">
+            <CCol md="12">
+              <h5>Informasi Pajak</h5>
+              <div class="border p-3">
+                <CRow class="mb-3">
+                  <CCol md="12">
+                    <div class="d-flex gap-3">
+                      <CFormCheck
+                        type="checkbox"
+                        label="Gunakan PPN (11%)"
+                        v-model="form.use_ppn"
+                        id="use_ppn"
+                      />
+                      <CFormCheck
+                        type="checkbox"
+                        label="Gunakan PPH Non Final"
+                        v-model="form.use_pph_non_final"
+                        id="use_pph_non_final"
+                      />
+                      <CFormCheck
+                        type="checkbox"
+                        label="Gunakan PPH Final"
+                        v-model="form.use_pph_final"
+                        id="use_pph_final"
+                      />
+                    </div>
+                  </CCol>
+                </CRow>
+                <CRow>
+                  <CCol md="6">
+                    <div class="mb-2">
+                      <strong>Total Pembelian:</strong>
+                      <span class="float-end"> {{ formatCurrency(totalInvoice) }}</span>
+                    </div>
+                    <div class="mb-2" v-if="form.use_ppn">
+                      <strong>PPN (11%):</strong>
+                      <span class="float-end"> {{ formatCurrency(ppnAmount) }}</span>
+                    </div>
+                    <div class="mb-2" v-if="form.use_pph_non_final">
+                      <strong>PPH Non Final (Barang 1.5%):</strong>
+                      <span class="float-end"> {{ formatCurrency(pphNonFinalBarang) }}</span>
+                    </div>
+                    <div class="mb-2" v-if="form.use_pph_non_final">
+                      <strong>PPH Non Final (Jasa 2%):</strong>
+                      <span class="float-end"> {{ formatCurrency(pphNonFinalJasa) }}</span>
+                    </div>
+                    <div class="mb-2" v-if="form.use_pph_non_final">
+                      <strong>Total PPH Non Final:</strong>
+                      <span class="float-end"> {{ formatCurrency(pphNonFinalTotal) }}</span>
+                    </div>
+                  </CCol>
+                  <CCol md="6">
+                    <div class="mb-2">
+                      <strong>Laba Bersih (30%):</strong>
+                      <span class="float-end"> {{ formatCurrency(netProfit) }}</span>
+                    </div>
+                    <div class="mb-2" v-if="form.use_pph_final">
+                      <strong>PPH Final (22%):</strong>
+                      <span class="float-end"> {{ formatCurrency(pphFinal) }}</span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Total Pajak:</strong>
+                      <span class="float-end"> {{ formatCurrency(totalTax) }}</span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Total dengan Pajak:</strong>
+                      <span class="float-end"> {{ formatCurrency(totalWithTax) }}</span>
+                    </div>
+                  </CCol>
+                </CRow>
+              </div>
+            </CCol>
+          </CRow>
         </CForm>
       </CModalBody>
       <CModalFooter v-if="modalMode !== 'view'">
@@ -360,7 +435,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
+import { ref, onMounted, watch, computed, nextTick, onUnmounted, h, render } from "vue";
 import axios from "axios";
 import $ from "jquery";
 import Swal from "sweetalert2";
@@ -370,6 +445,8 @@ import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css';
 import 'datatables.net';
 import 'datatables.net-responsive';
 import { useRoute } from 'vue-router'
+import { CIcon } from '@coreui/icons-vue';
+import * as icons from '@coreui/icons';
 
 export default {
   name: 'Invoice',
@@ -438,7 +515,7 @@ export default {
           axios.get('/api/units', {
             headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get('/api/categories', {
+          axios.get('/api/kategori', {
             headers: { Authorization: `Bearer ${token}` }
           }),
           axios.get('/api/mereks', {
@@ -448,13 +525,29 @@ export default {
             headers: { Authorization: `Bearer ${token}` }
           })
         ])
-        units.value = unitsRes.data
-        categories.value = categoriesRes.data.map(cat => ({
+
+        // Handle  units data
+        units.value = Array.isArray(unitsRes.data) ? unitsRes.data : (unitsRes.data.data || [])
+
+        // Handle categories data
+        const categoriesData = Array.isArray(categoriesRes.data) ? categoriesRes.data : (categoriesRes.data.data || [])
+        categories.value = categoriesData.map(cat => ({
           ...cat,
           is_service: false
         }))
-        mereks.value = mereksRes.data
-        serviceCategories.value = serviceCategoriesRes.data
+
+        // Handle mereks data
+        mereks.value = Array.isArray(mereksRes.data) ? mereksRes.data : (mereksRes.data.data || [])
+
+        // Handle service categories data
+        serviceCategories.value = Array.isArray(serviceCategoriesRes.data) ? serviceCategoriesRes.data : (serviceCategoriesRes.data.data || [])
+
+        console.log('Master data loaded:', {
+          units: units.value,
+          categories: categories.value,
+          mereks: mereks.value,
+          serviceCategories: serviceCategories.value
+        })
       } catch (error) {
         console.error('Error loading master data:', error)
         Swal.fire({
@@ -470,6 +563,9 @@ export default {
       invoice_date: '',
       status: 'unpaid',
       notes: '',
+      use_ppn: false,
+      use_pph_non_final: false,
+      use_pph_final: false,
       purchase_materials: [{
         item: '',
         type: '',
@@ -555,8 +651,8 @@ export default {
               { title: 'Tanggal', data: 'invoice_date', render: data => moment(data).format('DD/MM/YYYY') },
               { title: 'Total Amount', data: 'total_amount', render: data => formatCurrency(data) },
               { title: 'Amount Paid', data: 'amount_paid', render: data => formatCurrency(data) },
-              { 
-                title: 'Jumlah Item', 
+              {
+                title: 'Jumlah Item',
                 data: 'purchase_materials',
                 render: data => data ? data.length : 0,
                 className: 'text-center'
@@ -577,21 +673,12 @@ export default {
               {
                 title: 'Actions',
                 data: null,
-                render: function(data) {
-                  return `
-                    <button class="btn btn-info btn-sm view-btn" data-id="${data.id}">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                    ${data.status === 'unpaid' ? `
-                      <button class="btn btn-warning btn-sm edit-btn" data-id="${data.id}">
-                        <i class="fas fa-edit"></i>
-                      </button>
-                      <button class="btn btn-danger btn-sm delete-btn" data-id="${data.id}">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    ` : ''}
-                  `
-                }
+                render: (data, type, row) => `
+                  <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><span class="cicon-eye" data-id="${row.id}"></span></button>
+                  <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><span class="cicon-pencil" data-id="${row.id}"></span></button>
+                  <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><span class="cicon-trash" data-id="${row.id}"></span></button>
+                `,
+                orderable: false
               }
             ],
             order: [[1, 'desc']],
@@ -627,21 +714,41 @@ export default {
     }
 
     const totalInvoice = computed(() => {
-      return invoices.value.reduce((sum, row) => sum + parseFloat(row.total_amount || 0), 0)
-    })
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        return form.value.purchase_materials.reduce((sum, item) => {
+          const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+          return sum + (item.qty * harga);
+        }, 0);
+      }
+      return invoices.value.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0);
+    });
 
     const totalPaid = computed(() => {
-      return invoices.value.reduce((sum, row) => sum + parseFloat(row.amount_paid || 0), 0)
-    })
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        return 0;
+      }
+      return invoices.value.reduce((sum, inv) => sum + parseFloat(inv.amount_paid || 0), 0);
+    });
 
-    const totalUnpaid = computed(() => totalInvoice.value - totalPaid.value)
+    const totalUnpaid = computed(() => {
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        return totalInvoice.value;
+      }
+      return totalInvoice.value - totalPaid.value;
+    });
 
     const overallStatus = computed(() => {
-      if (totalUnpaid.value === 0 && totalInvoice.value > 0) return 'Lunas'
-      if (totalPaid.value === 0) return 'Belum Dibayar'
-      if (totalUnpaid.value > 0) return 'Dibayar Sebagian'
-      return '-'
-    })
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        if (totalUnpaid.value === 0 && totalInvoice.value > 0) return 'Lunas';
+        if (totalPaid.value === 0) return 'Belum Dibayar';
+        if (totalUnpaid.value > 0) return 'Dibayar Sebagian';
+        return '-';
+      }
+      if (totalUnpaid.value === 0 && totalInvoice.value > 0) return 'Lunas';
+      if (totalPaid.value === 0) return 'Belum Dibayar';
+      if (totalUnpaid.value > 0) return 'Dibayar Sebagian';
+      return '-';
+    });
 
     const setHargaFromServiceCategory = (item) => {
       if (isServiceType(item) && item.category_id) {
@@ -683,6 +790,9 @@ export default {
         invoice_date: '',
         status: 'unpaid',
         notes: '',
+        use_ppn: false,
+        use_pph_non_final: false,
+        use_pph_final: false,
         purchase_materials: [{
           item: '',
           type: '',
@@ -786,69 +896,47 @@ export default {
 
     const handleSubmit = async () => {
       if (!validateForm()) return;
-      // Validasi anggaran proyek sebelum submit
-      const selectedProj = projects.value.find(p => String(p.id) === String(form.value.proyek_id));
-      if (selectedProj) {
-        const sisaAnggaran = Number(selectedProj.anggaran_kontrak || 0) - Number(selectedProj.total_expenses || 0);
-        if (totalInvoice.value > sisaAnggaran) {
-          await Swal.fire({
-            icon: 'warning',
-            title: 'Anggaran Melebihi Batas!',
-            text: 'Jumlah invoice melebihi sisa anggaran proyek. Silakan cek kembali nilai invoice.'
-          });
-          return;
-        }
-      }
+
       try {
-        // Penyesuaian agar data jasa selalu konsisten
-        form.value.purchase_materials.forEach(item => {
-          if (isServiceType(item)) {
-            item.service_category_id = item.service_category_id || item.category_id;
-            item.type = 'service';
-            item.category_id = null;
-          } else {
-            item.service_category_id = null;
-          }
-          item.harga = item.harga ? Number(String(item.harga).replace(/\./g, '')) : 0
-          calculateTotalHarga(item)
-        })
-        const token = sessionStorage.getItem('token')
+        const token = sessionStorage.getItem('token');
         const payload = {
           ...form.value,
           is_cash: form.value.is_cash,
           termins: form.value.is_cash ? [] : form.value.termins,
           purchase_materials: form.value.purchase_materials.map(item => ({
             ...item,
-            harga: item.harga ? Number(String(item.harga).replace(/\./g, '')) : 0
+            harga: typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga
           })),
-          total_amount: totalInvoice.value,
-          amount_paid: totalPaid.value,
-          total_unpaid: totalUnpaid.value,
-          overall_status: overallStatus.value
-        }
+          use_ppn: form.value.use_ppn,
+          use_pph_non_final: form.value.use_pph_non_final,
+          use_pph_final: form.value.use_pph_final
+        };
+
         const response = await axios.post('/api/invoices', payload, {
           headers: { Authorization: `Bearer ${token}` }
-        })
+        });
+
         if (response.data.status === 'error') {
-          throw new Error(response.data.message || 'Gagal membuat invoice')
+          throw new Error(response.data.message || 'Gagal membuat invoice');
         }
+
         Swal.fire({
           icon: 'success',
           title: 'Sukses',
           text: 'Invoice berhasil ditambahkan'
-        })
-        closeModal()
-        loadInvoices()
+        });
+        closeModal();
+        loadInvoices();
       } catch (error) {
-        console.error('Error submitting form:', error)
-        const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice'
+        console.error('Error submitting form:', error);
+        const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice';
         Swal.fire({
           icon: 'error',
           title: 'Error',
           text: errorMessage
-        })
+        });
       }
-    }
+    };
 
     const loadInvoice = async (id) => {
       try {
@@ -1038,10 +1126,127 @@ export default {
       { deep: true }
     )
 
+    // Update computed properties for tax calculations
+    const pphNonFinalBarang = computed(() => {
+      if (!form.value.use_pph_non_final) return 0;
+      const totalBarang = form.value.purchase_materials
+        .filter(item => !isServiceType(item))
+        .reduce((sum, item) => {
+          const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+          return sum + (item.qty * harga);
+        }, 0);
+      return totalBarang * 0.015; // 1.5% for goods
+    });
+
+    const pphNonFinalJasa = computed(() => {
+      if (!form.value.use_pph_non_final) return 0;
+      const totalJasa = form.value.purchase_materials
+        .filter(item => isServiceType(item))
+        .reduce((sum, item) => {
+          const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+          return sum + (item.qty * harga);
+        }, 0);
+      return totalJasa * 0.02; // 2% for services
+    });
+
+    const pphNonFinalTotal = computed(() => {
+      return pphNonFinalBarang.value + pphNonFinalJasa.value;
+    });
+
+    const netProfit = computed(() => {
+      return totalInvoice.value * 0.3; // 30% of total invoice amount
+    });
+
+    const pphFinal = computed(() => {
+      return form.value.use_pph_final ? (netProfit.value * 0.22) : 0; // 22% of net profit
+    });
+
+    const ppnAmount = computed(() => {
+      return form.value.use_ppn ? (totalInvoice.value * 0.11) : 0; // 11% PPN
+    });
+
+    const totalTax = computed(() => {
+      return pphNonFinalTotal.value + pphFinal.value + ppnAmount.value;
+    });
+
+    const totalWithTax = computed(() => {
+      return totalInvoice.value + totalTax.value;
+    });
+
+    const mountCoreUIIcons = () => {
+      document.querySelectorAll('.cicon-eye').forEach(el => {
+        const icon = h(CIcon, { icon: icons.cilEye, size: 'sm' });
+        render(icon, el);
+      });
+      document.querySelectorAll('.cicon-pencil').forEach(el => {
+        const icon = h(CIcon, { icon: icons.cilPencil, size: 'sm' });
+        render(icon, el);
+      });
+      document.querySelectorAll('.cicon-trash').forEach(el => {
+        const icon = h(CIcon, { icon: icons.cilTrash, size: 'sm' });
+        render(icon, el);
+      });
+    };
+
+    const initDataTable = () => {
+      if ($.fn.DataTable.isDataTable(invoiceTableRef.value)) {
+        $(invoiceTableRef.value).DataTable().clear().destroy();
+      }
+      $(invoiceTableRef.value).DataTable({
+        data: invoices.value,
+        columns: [
+          { title: 'No', data: null, render: (data, type, row, meta) => meta.row + 1 },
+          { title: 'No Invoice', data: 'invoice_number' },
+          { title: 'Tanggal', data: 'invoice_date', render: (data) => data ? new Date(data).toLocaleDateString('id-ID') : '-' },
+          { title: 'Total Amount', data: 'total_amount', render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}` },
+          { title: 'Amount Paid', data: 'amount_paid', render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}` },
+          { title: 'Jumlah Item', data: 'purchase_materials', render: (data) => data ? data.length : 0, className: 'text-center' },
+          { title: 'Status', data: 'status', render: (data) => {
+            const statusMap = {
+              unpaid: '<span class="badge bg-danger">Belum Dibayar</span>',
+              partially_paid: '<span class="badge bg-warning">Dibayar Sebagian</span>',
+              paid: '<span class="badge bg-success">Lunas</span>',
+              cancelled: '<span class="badge bg-secondary">Dibatalkan</span>'
+            };
+            return statusMap[data] || data;
+          }},
+          {
+            title: 'Actions',
+            data: null,
+            render: (data, type, row) => `
+              <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><span class="cicon-eye" data-id="${row.id}"></span></button>
+              <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><span class="cicon-pencil" data-id="${row.id}"></span></button>
+              <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><span class="cicon-trash" data-id="${row.id}"></span></button>
+            `,
+            orderable: false
+          }
+        ],
+        scrollX: true,
+        autoWidth: false,
+        responsive: false
+      });
+
+      // Add event handlers for action buttons
+      $(invoiceTableRef.value).on('click', '.view-btn', function() {
+        const id = $(this).data('id');
+        openModal('view', id);
+      });
+      $(invoiceTableRef.value).on('click', '.edit-btn', function() {
+        const id = $(this).data('id');
+        openModal('edit', id);
+      });
+      $(invoiceTableRef.value).on('click', '.delete-btn', function() {
+        const id = $(this).data('id');
+        deleteInvoice(id);
+      });
+      nextTick(mountCoreUIIcons);
+    };
+
     onMounted(() => {
       loadMasterData()
       loadProjects()
       loadInvoices()
+      nextTick(initDataTable)
       const handler = () => loadInvoices()
       window.addEventListener('termin-updated', handler)
       // Bersihkan event listener saat komponen di-unmount
@@ -1100,7 +1305,15 @@ export default {
       getServiceCategoriesByUnit,
       handleCategoryChange,
       onHargaInput,
-      validateForm
+      validateForm,
+      pphNonFinalBarang,
+      pphNonFinalJasa,
+      pphNonFinalTotal,
+      netProfit,
+      pphFinal,
+      totalTax,
+      ppnAmount,
+      totalWithTax
     }
   }
 }

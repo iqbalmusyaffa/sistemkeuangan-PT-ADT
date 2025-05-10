@@ -231,8 +231,8 @@ const fetchProyek = async () => {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    if (response.data) {
-    proyek.value = response.data;
+    if (response.data && response.data.data) {
+      proyek.value = response.data.data;
     }
   } catch (err) {
     console.error('Error fetching project:', err);

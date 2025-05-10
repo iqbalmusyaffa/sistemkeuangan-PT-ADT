@@ -15,6 +15,13 @@ class Invoice extends Model
         'invoice_date',
         'total_amount',
         'amount_paid',
+        'pph_non_final_amount',
+        'pph_final_amount',
+        'ppn_amount',
+        'net_profit',
+        'use_ppn',
+        'use_pph_non_final',
+        'use_pph_final',
         'notes',
         'status'
     ];
@@ -22,34 +29,39 @@ class Invoice extends Model
     protected $casts = [
         'total_amount' => 'decimal:2',
         'amount_paid' => 'decimal:2',
-        'invoice_date' => 'date'
+        'pph_non_final_amount' => 'decimal:2',
+        'pph_final_amount' => 'decimal:2',
+        'ppn_amount' => 'decimal:2',
+        'net_profit' => 'decimal:2',
+        'use_ppn' => 'boolean',
+        'use_pph_non_final' => 'boolean',
+        'use_pph_final' => 'boolean',
+        'invoice_date' => 'date',
+        'status' => 'string'
     ];
 
-    // Relasi ke proyek
+    // Relationships
     public function proyek()
     {
         return $this->belongsTo(Proyek::class);
     }
 
-    // Relasi ke purchase materials (jika invoice ini punya banyak item material)
     public function purchaseMaterials()
     {
         return $this->hasMany(PurchaseMaterial::class, 'invoice_id');
     }
 
-    // Relasi ke termin pembayaran (kalau pakai termin)
     public function termins()
     {
         return $this->hasMany(Termin::class, 'invoice_id');
     }
 
-    // Relasi ke expenses (pencatatan pengeluaran berdasarkan invoice)
     public function expenses()
     {
         return $this->hasMany(Expense::class, 'invoice_id');
     }
 
-    // Determining the status of the invoice based on the paid amount
+    // Status Management
     public function determineStatus()
     {
         if ($this->amount_paid == 0) {
@@ -63,11 +75,10 @@ class Invoice extends Model
         }
     }
 
-    // Mutator untuk `amount_paid` yang otomatis update status
     public function setAmountPaidAttribute($value)
     {
         $this->attributes['amount_paid'] = $value;
-        $this->attributes['status'] = $this->determineStatus(); // Update status setelah amount_paid diubah
+        $this->attributes['status'] = $this->determineStatus();
     }
 
     public function updateStatusFromTermins()
@@ -85,5 +96,51 @@ class Invoice extends Model
             $this->status = 'partially_paid';
         }
         $this->save();
+    }
+
+    // Query Scopes
+    public function scopeUnpaid($query)
+    {
+        return $query->where('status', 'unpaid');
+    }
+
+    public function scopePartiallyPaid($query)
+    {
+        return $query->where('status', 'partially_paid');
+    }
+
+    public function scopePaid($query)
+    {
+        return $query->where('status', 'paid');
+    }
+
+    public function scopeCancelled($query)
+    {
+        return $query->where('status', 'cancelled');
+    }
+
+    // Accessors
+    public function getTotalTaxAttribute()
+    {
+        return $this->pph_non_final_amount + $this->pph_final_amount + $this->ppn_amount;
+    }
+
+    public function getTotalWithTaxAttribute()
+    {
+        return $this->total_amount + $this->total_tax;
+    }
+
+    public function getTotalBarangAttribute()
+    {
+        return $this->purchaseMaterials()
+            ->where('is_service', false)
+            ->sum('total_harga');
+    }
+
+    public function getTotalJasaAttribute()
+    {
+        return $this->purchaseMaterials()
+            ->where('is_service', true)
+            ->sum('total_harga');
     }
 }
