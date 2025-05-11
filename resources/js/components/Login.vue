@@ -2,67 +2,53 @@
   <div class="wrapper min-vh-100 d-flex flex-row align-items-center">
     <CContainer>
       <CRow class="justify-content-center">
-        <CCol :md="8">
-          <CCardGroup>
-            <CCard class="p-4">
-              <CCardBody>
-                <CForm @submit.prevent="login">
-                  <h1>Login</h1>
-                  <p class="text-body-secondary">Sign In to your account</p>
-                  <CInputGroup class="mb-3">
-                    <CInputGroupText>
-                      <CIcon icon="cil-user" />
-                    </CInputGroupText>
-                    <CFormInput
-                      v-model="email"
-                      placeholder="Email"
-                      autocomplete="email"
-                      required
-                    />
-                  </CInputGroup>
-                  <CInputGroup class="mb-4">
-                    <CInputGroupText>
-                      <CIcon icon="cil-lock-locked" />
-                    </CInputGroupText>
-                    <CFormInput
-                      v-model="password"
-                      type="password"
-                      placeholder="Password"
-                      autocomplete="current-password"
-                      required
-                    />
-                  </CInputGroup>
-                  <CRow>
-                    <CCol :xs="6">
-                      <CButton color="primary" class="px-4" type="submit" :disabled="isLoading">
-                        {{ isLoading ? 'Loading...' : 'Login' }}
-                      </CButton>
-                    </CCol>
-                    <CCol :xs="6" class="text-right">
-                      <CButton color="link" class="px-0">
-                        Forgot password?
-                      </CButton>
-                    </CCol>
-                  </CRow>
-                </CForm>
-              </CCardBody>
-            </CCard>
-            <CCard class="text-white bg-primary py-5" style="width: 44%">
-              <CCardBody class="text-center">
-                <div>
-                  <h2>Sign up</h2>
-                  <p>
-                    Lorem ipsum dolor sit amet, consectetur adipisicing elit,
-                    sed do eiusmod tempor incididunt ut labore et dolore magna
-                    aliqua.
-                  </p>
-                  <CButton color="light" variant="outline" class="mt-3">
-                    Register Now!
+        <CCol :md="6" :sm="10" :xs="12">
+          <CCard class="p-4 shadow">
+            <CCardBody>
+              <!-- Logo -->
+              <div class="text-center mb-4">
+                <!-- <img src="@/assets/auth0-logo.png" alt="Logo" style="height: 48px;" /> -->
+              </div>
+              <!-- Judul -->
+               <h2 class="text-center mb-2">Login</h2>
+              <p class="text-center text-muted mb-4" style="font-size: 0.95rem;">
+                Masuk ke akun Anda untuk melanjutkan ke FinanceHub.
+              </p>
+              <CForm @submit.prevent="login">
+                <CInputGroup class="mb-3">
+                  <CInputGroupText>
+                    <CIcon icon="cil-user" />
+                  </CInputGroupText>
+                  <CFormInput
+                    v-model="email"
+                    placeholder="Email address"
+                    autocomplete="email"
+                    required
+                  />
+                </CInputGroup>
+                <CInputGroup class="mb-2">
+                  <CInputGroupText>
+                    <CIcon icon="cil-lock-locked" />
+                  </CInputGroupText>
+                  <CFormInput
+                    v-model="password"
+                    type="password"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                    required
+                  />
+                </CInputGroup>
+                <div class="d-flex justify-content-end mb-3">
+                  <CButton color="link" class="px-0" style="font-size: 0.95rem;">
+                    Forgot password?
                   </CButton>
                 </div>
-              </CCardBody>
-            </CCard>
-          </CCardGroup>
+                <CButton color="primary" class="w-100 mb-3" type="submit" :disabled="isLoading">
+                  {{ isLoading ? 'Loading...' : 'Login' }}
+                </CButton>
+              </CForm>
+            </CCardBody>
+          </CCard>
         </CCol>
       </CRow>
     </CContainer>
@@ -115,12 +101,84 @@ export default {
         this.isLoading = false;
       }
     },
+    loginWithGoogle() {
+      // Implementasikan login Google sesuai kebutuhan
+      Swal.fire({
+        icon: 'info',
+        title: 'Google Login',
+        text: 'Fitur login dengan Google belum diimplementasikan.',
+      });
+    },
   },
 };
 </script>
 
 <style scoped>
 .wrapper {
-  background-color: #f5f5f5;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #23272f; /* warna gelap */
+  padding: 0 !important;
+}
+
+.shadow {
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  background: #fff;
+  border: none;
+}
+
+.CCardBody {
+  padding: 2.5rem 2rem;
+}
+
+h2 {
+  font-weight: 700;
+  font-size: 2rem;
+  color: #23272f;
+}
+
+.text-muted {
+  color: #6c757d !important;
+}
+
+.CButton, button[type=\"submit\"] {
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: #5a54ea;
+  border: none;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.CButton:active, .CButton:focus, .CButton:hover {
+  background: #4338ca;
+}
+
+.CFormInput, input[type=\"text\"], input[type=\"password\"] {
+  font-size: 1rem;
+  border-radius: 8px;
+}
+
+@media (max-width: 576px) {
+  .shadow {
+    max-width: 98vw;
+    padding: 1.5rem 0.5rem !important;
+    border-radius: 8px;
+  }
+  .CCardBody {
+    padding: 1.2rem 0.5rem;
+  }
+  h2 {
+    font-size: 1.4rem !important;
+  }
+  p {
+    font-size: 1rem !important;
+  }
 }
 </style>

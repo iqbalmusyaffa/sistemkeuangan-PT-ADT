@@ -214,44 +214,49 @@ const router = createRouter({
 // Middleware untuk proteksi halaman dengan token
 router.beforeEach(async (to, from, next) => {
   const token = sessionStorage.getItem('token')
-  const role = sessionStorage.getItem('role');  // Ambil role dari sessionStorage
+  const role = sessionStorage.getItem('role')
 
-  // Jika sudah login, redirect dari login ke dashboard
-  if (token && (to.path === '/login')) {
+  // Jika sudah login dan mencoba akses login, redirect ke dashboard
+  if (token && to.path === '/login') {
     return next('/dashboard')
   }
 
   // Jika route membutuhkan autentikasi
   if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!token) return next('/login') // Jika token tidak ada, arahkan ke login
+    if (!token) {
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('role')
+      return next('/login')
+    }
 
     try {
-      // Cek apakah token valid dan apakah user ada di database
+      // Cek token valid
       const response = await api.get('/profile', {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }
       })
 
-      // Jika user tidak ada atau tidak aktif, redirect ke login atau halaman lain
+      // Jika user tidak valid
       if (!response.data || response.data.status !== 'active') {
-        sessionStorage.removeItem('token') // Hapus token jika user tidak valid
-        sessionStorage.removeItem('role');  // Hapus role jika user tidak valid
+        sessionStorage.removeItem('token')
+        sessionStorage.removeItem('role')
         return next('/login')
       }
- // Cek apakah role sesuai untuk route ini
- if (to.meta.requiresSuperadmin && role !== 'superadmin') {
-    return next('/dashboard');  // Arahkan ke dashboard jika bukan superadmin
-  }
-      // Jika user valid, lanjutkan ke route yang diminta
+
+      // Cek role untuk route yang membutuhkan superadmin
+      if (to.meta.requiresSuperadmin && role !== 'superadmin') {
+        return next('/dashboard')
+      }
+
       return next()
     } catch (error) {
-      // Jika ada error pada pengecekan profil (misalnya token expired)
+      console.error('Auth error:', error)
       sessionStorage.removeItem('token')
-      sessionStorage.removeItem('role');
+      sessionStorage.removeItem('role')
       return next('/login')
     }
   }
 
-  return next() // Lanjutkan jika tidak perlu autentikasi
+  return next()
 })
 
 export default router

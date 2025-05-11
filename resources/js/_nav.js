@@ -1,174 +1,184 @@
 export default [
-    {
-      component: 'CNavItem',
-      name: 'Dashboard',
-      to: '/dashboard',
-      icon: 'cil-speedometer',
-      badge: {
-        color: 'primary',
-        text: 'NEW',
-      },
+  {
+    component: 'CNavItem',
+    name: 'Dashboard',
+    to: '/dashboard',
+    icon: 'cil-speedometer', // Lebih representatif untuk dashboard
+    badge: {
+      color: 'primary',
     },
+  },
 
-    {
-      component: 'CNavTitle',
-      name: 'Manajemen Pengguna',
-      roles: ['superadmin'], // Role yang bisa mengakses
+  {
+    component: 'CNavTitle',
+    name: 'Administrasi',
+    roles: ['superadmin'],
+  },
 
-    },
-    {
-      component: 'CNavItem',
-      name: 'User',
-      to: '/user',
-      icon: 'cil-user',
-      roles: ['superadmin'], // Role yang bisa mengakses
-
-    },
-    {
-      component: 'CNavItem',
-      name: 'Kategori',
-      to: '/kategori',
-      icon: 'cil-list',
-      roles: ['superadmin'], // Role yang bisa mengakses
-
-    },
-    {
+  {
+    component: 'CNavGroup',
+    name: 'Manajemen Pengguna',
+    icon: 'cil-people',
+    roles: ['superadmin'],
+    items: [
+      {
         component: 'CNavItem',
-        name: 'Activity Log',
+        name: 'Data User',
+        to: '/user',
+        icon: 'cil-user',
+      },
+      {
+        component: 'CNavItem',
+        name: 'Log Aktivitas',
         to: '/activitylog',
-        icon: 'cil-list',
-        // roles: ['superadmin'], // Role yang bisa mengakses
-
+        icon: 'cil-history',
       },
-    {
+    ],
+  },
+
+  {
+    component: 'CNavTitle',
+    name: 'Manajemen Kategori',
+    roles: ['superadmin'],
+  },
+  {
+    component: 'CNavItem',
+    name: 'Kategori',
+    to: '/kategori',
+    icon: 'cil-list-rich',
+    roles: ['superadmin'],
+  },
+  {
+    component: 'CNavItem',
+    name: 'Kategori Jasa',
+    to: '/kategorijasa',
+    icon: 'cil-layers',
+    roles: ['superadmin'],
+  },
+
+  {
+    component: 'CNavTitle',
+    name: 'Master Data',
+  },
+  {
+    component: 'CNavGroup',
+    name: 'Data Umum',
+    icon: 'cil-library',
+    items: [
+      {
         component: 'CNavItem',
-        name: 'Kategori Jasa',
-        to: '/kategorijasa',
-        icon: 'cil-list',
-        roles: ['superadmin'],
-      },
-    {
-        component: 'CNavTitle',
-        name: 'Master Data Pembelian',
-      },
-    {
-        component: 'CNavGroup',
-        name: 'Master Data Pembelian',
-        to: '/base',
-        icon: 'cil-folder',
-        items: [
-          {
-              component: 'CNavItem',
-              name: 'Merek',
-              to: '/base/merek',
-            },
-            {
-              component: 'CNavItem',
-              name: 'Unit',
-              to: '/base/unit',
-            },
-        ],
+        name: 'Merek',
+        to: '/base/merek',
+        icon: 'cil-tags',
       },
       {
-        component: 'CNavTitle',
-        name: 'Master Data Proyek',
+        component: 'CNavItem',
+        name: 'Unit',
+        to: '/base/unit',
+        icon: 'cil-puzzle',
       },
-    {
-        component: 'CNavGroup',
-        name: 'Master Data Proyek',
-        to: '/base',
-        icon: 'cil-folder',
-        items: [
-            {
-              component: 'CNavItem',
-              name: 'Proyek',
-              to: '/base/proyek/proyek',
-            },
-            {
-              component: 'CNavItem',
-              name: 'Pembelian Material',
-              to: '/base/purchase/pembelian',
-            },
-        ],
+    ],
+  },
+
+  {
+    component: 'CNavGroup',
+    name: 'Proyek',
+    icon: 'cil-factory',
+    items: [
+      {
+        component: 'CNavItem',
+        name: 'Proyek',
+        to: '/base/proyek/proyek',
+        icon: 'cil-briefcase',
+      },
+    ],
+  },
+
+  {
+    component: 'CNavGroup',
+    name: 'Pembelian',
+    icon: 'cil-cart',
+    items: [
+      {
+        component: 'CNavItem',
+        name: 'Pembelian Material',
+        to: '/base/purchase/pembelian',
+        icon: 'cil-basket',
+      },
+    ],
+  },
+
+  {
+    component: 'CNavGroup',
+    name: 'Transaksi Keuangan',
+    icon: 'cil-cash',
+    items: [
+      {
+        component: 'CNavItem',
+        name: 'Pencatatan Pemasukan',
+        to: '/base/pemasukan',
+        icon: 'cil-arrow-circle-top',
       },
       {
-        component: 'CNavTitle',
-        name: 'Master Data Transaksi',
+        component: 'CNavItem',
+        name: 'Pencatatan Pengeluaran',
+        to: '/base/pengeluaran',
+        icon: 'cil-arrow-circle-bottom',
       },
-    {
-      component: 'CNavGroup',
-      name: 'Master Data Transaksi',
-      to: '/base',
-      icon: 'cil-folder',
-      items: [
-        // {
-        //   component: 'CNavItem',
-        //   name: 'Data Perusahaan',
-        //   to: '/base/company',
-        // },
-        {
-          component: 'CNavItem',
-          name: 'Pencatatan Pemasukan',
-          to: '/base/pemasukan',
-        },
-        {
-          component: 'CNavItem',
-          name: 'Metode Pembayaran',
-          to: '/base/paymentmethod',
-        },
-        {
-            component: 'CNavItem',
-            name: 'Pencatatan invoice',
-            to: '/base/invoice',
-          },
-        // {
-        //   component: 'CNavItem',
-        //   name: 'Detail Invoice',
-        //   to: '/base/invoice/show',
-        // },
-
-        {
-          component: 'CNavItem',
-          name: 'Pencatatan Pengeluaran',
-          to: '/base/pengeluaran',
-        },
-        {
-          component: 'CNavItem',
-          name: 'Pencatatan Piutang',
-          to: '/base/piutang',
-        },
-        {
-          component: 'CNavItem',
-          name: 'Kasbon',
-          to: '/base/kasbon',
-        },
-        {
-            component: 'CNavItem',
-            name: 'Termin',
-            to: '/base/termin/termin',
-          },
-      ],
-    },
-    // kolom master data penjualan
-    {
-        component: 'CNavTitle',
-        name: 'Master Data Pembelian',
+      {
+        component: 'CNavItem',
+        name: 'Pencatatan Piutang',
+        to: '/base/piutang',
+        icon: 'cil-money',
       },
-    {
-      component: 'CNavTitle',
-      name: 'Lainnya',
-    },
-    {
-      component: 'CNavItem',
-      name: 'Profile',
-      to: '/profile',
-      icon: 'cil-user',
-    },
-    {
-      component: 'CNavItem',
-      name: 'Settings',
-      to: '/settings',
-      icon: 'cil-settings',
-    },
+      {
+        component: 'CNavItem',
+        name: 'Kasbon',
+        to: '/base/kasbon',
+        icon: 'cil-wallet',
+      },
+      {
+        component: 'CNavItem',
+        name: 'Termin',
+        to: '/base/termin/termin',
+        icon: 'cil-calendar',
+      },
+      {
+        component: 'CNavItem',
+        name: 'Pencatatan Invoice',
+        to: '/base/invoice',
+        icon: 'cil-file',
+      },
+      {
+        component: 'CNavItem',
+        name: 'Metode Pembayaran',
+        to: '/base/paymentmethod',
+        icon: 'cil-credit-card',
+      },
+    ],
+  },
 
-  ]
+  {
+    component: 'CNavTitle',
+    name: 'Pengaturan',
+  },
+  {
+    component: 'CNavGroup',
+    name: 'Akun',
+    icon: 'cil-user',
+    items: [
+      {
+        component: 'CNavItem',
+        name: 'Profile',
+        to: '/profile',
+        icon: 'cil-user',
+      },
+      {
+        component: 'CNavItem',
+        name: 'Settings',
+        to: '/settings',
+        icon: 'cil-settings',
+      },
+    ],
+  },
+]

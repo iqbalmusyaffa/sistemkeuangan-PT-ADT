@@ -1,160 +1,46 @@
 <script setup>
-import { CChart } from '@coreui/vue-chartjs'
+import { ref } from 'vue'
+import { CWidgetStatsA, CRow, CCol } from '@coreui/vue'
 
-const options = {
-  elements: {
-    line: {
-      tension: 0.4,
-    },
-    point: {
-      radius: 0,
-      hitRadius: 10,
-      hoverRadius: 4,
-      hoverBorderWidth: 3,
-    },
-  },
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      display: false,
-    },
-  },
-  scales: {
-    x: {
-      display: false,
-    },
-    y: {
-      display: false,
-    },
-  },
-}
+const jumlahUser = ref(3)
+const totalIncome = ref(0)
+const totalExpense = ref(10002500)
+const jumlahMetodePembayaran = ref(5)
+const jumlahTermin = ref(2)
+const jumlahPiutang = ref(1)
+const jumlahKasbon = ref(2)
+const jumlahInvoice = ref(4)
+
+const chartUsers = ref([0,0,0,1,2,3,2,2,2,2,2,2])
+const chartIncome = ref([0,0,0,0,0,0,0,0,0,0,0,0])
+const chartExpense = ref([0,0,0,0,0,10,0,0,0,0,0,0])
 </script>
 
 <template>
-  <CRow :xs="{ gutter: 4 }">
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsD
-        style="--cui-card-cap-bg: #3b5998"
-        :values="[
-          { title: 'friends', value: '89K' },
-          { title: 'feeds', value: '459' },
-        ]"
-      >
-        <template #icon><CIcon icon="cib-facebook" height="52" class="my-4 text-white" /></template>
-        <template #chart>
-          <CChart
-            class="position-absolute w-100 h-100"
-            type="line"
-            :data="{
-              labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-              datasets: [
-                {
-                  backgroundColor: 'rgba(255,255,255,.1)',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointHoverBackgroundColor: '#fff',
-                  borderWidth: 2,
-                  data: [65, 59, 84, 84, 51, 55, 40],
-                  fill: true,
-                },
-              ],
-            }"
-            :options="options"
-          />
-        </template>
-      </CWidgetStatsD>
+  <CRow :xs="{ gutter: 4 }" class="mb-4">
+    <CCol :sm="4">
+      <CWidgetStatsA color="primary" :value="jumlahUser + ' Users'" title="Users" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartUsers }] }" />
     </CCol>
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsD
-        style="--cui-card-cap-bg: #00aced"
-        :values="[
-          { title: 'followers', value: '973k' },
-          { title: 'tweets', value: '1.792' },
-        ]"
-      >
-        <template #icon><CIcon icon="cib-twitter" height="52" class="my-4 text-white" /></template>
-        <template #chart>
-          <CChart
-            class="position-absolute w-100 h-100"
-            type="line"
-            :data="{
-              labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-              datasets: [
-                {
-                  backgroundColor: 'rgba(255,255,255,.1)',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointHoverBackgroundColor: '#fff',
-                  borderWidth: 2,
-                  data: [1, 13, 9, 17, 34, 41, 38],
-                  fill: true,
-                },
-              ],
-            }"
-            :options="options"
-          />
-        </template>
-      </CWidgetStatsD>
+    <CCol :sm="4">
+      <CWidgetStatsA color="info" :value="'Rp ' + totalIncome + ' Income'" title="Income" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartIncome }] }" />
     </CCol>
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsD
-        style="--cui-card-cap-bg: #4875b4"
-        :values="[
-          { title: 'contacts', value: '500' },
-          { title: 'feeds', value: '1.292' },
-        ]"
-      >
-        <template #icon><CIcon icon="cib-linkedin" height="52" class="my-4 text-white" /></template>
-        <template #chart>
-          <CChart
-            class="position-absolute w-100 h-100"
-            type="line"
-            :data="{
-              labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-              datasets: [
-                {
-                  backgroundColor: 'rgba(255,255,255,.1)',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointHoverBackgroundColor: '#fff',
-                  borderWidth: 2,
-                  data: [78, 81, 80, 45, 34, 12, 40],
-                  fill: true,
-                },
-              ],
-            }"
-            :options="options"
-          />
-        </template>
-      </CWidgetStatsD>
+    <CCol :sm="4">
+      <CWidgetStatsA color="danger" :value="'Rp ' + totalExpense + ' Pengeluaran'" title="Pengeluaran" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartExpense }] }" />
     </CCol>
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsD
-        color="warning"
-        :values="[
-          { title: 'events', value: '12+' },
-          { title: 'meetings', value: '4' },
-        ]"
-      >
-        <template #icon><CIcon icon="cil-calendar" height="52" class="my-4 text-white" /></template>
-        <template #chart>
-          <CChart
-            class="position-absolute w-100 h-100"
-            type="line"
-            :data="{
-              labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July'],
-              datasets: [
-                {
-                  backgroundColor: 'rgba(255,255,255,.1)',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointHoverBackgroundColor: '#fff',
-                  borderWidth: 2,
-                  data: [35, 23, 56, 22, 97, 23, 64],
-                  fill: true,
-                },
-              ],
-            }"
-            :options="options"
-          />
-        </template>
-      </CWidgetStatsD>
+    <CCol :sm="4">
+      <CWidgetStatsA color="success" :value="jumlahMetodePembayaran + ' Metode'" title="Metode Pembayaran" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahMetodePembayaran) }] }" />
+    </CCol>
+    <CCol :sm="4">
+      <CWidgetStatsA color="warning" :value="jumlahTermin + ' Termin'" title="Termin" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahTermin) }] }" />
+    </CCol>
+    <CCol :sm="4">
+      <CWidgetStatsA color="secondary" :value="jumlahPiutang + ' Piutang'" title="Piutang" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahPiutang) }] }" />
+    </CCol>
+    <CCol :sm="4">
+      <CWidgetStatsA color="dark" :value="jumlahKasbon + ' Kasbon'" title="Kasbon" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahKasbon) }] }" />
+    </CCol>
+    <CCol :sm="4">
+      <CWidgetStatsA color="primary" :value="jumlahInvoice + ' Invoice'" title="Invoice" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahInvoice) }] }" />
     </CCol>
   </CRow>
 </template>

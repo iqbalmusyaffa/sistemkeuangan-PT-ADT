@@ -11,6 +11,7 @@ import WidgetsStatsD from './../widgets/WidgetsStatsTypeD.vue'
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { CWidgetStatsA } from '@coreui/vue'
 
 const progressGroupExample1 = [
   { title: 'Monday', value1: 34, value2: 78 },
@@ -142,7 +143,35 @@ const fetchActivityLogs = async () => {
   }
 }
 
-onMounted(() => {
+const jumlahUser = ref(0)
+const totalIncome = ref(0)
+const totalExpense = ref(0)
+const jumlahMetodePembayaran = ref(0)
+const jumlahTermin = ref(0)
+const jumlahPiutang = ref(0)
+const jumlahKasbon = ref(0)
+const jumlahInvoice = ref(0)
+const chartUsers = ref(Array(12).fill(0))
+const chartIncome = ref(Array(12).fill(0))
+const chartExpense = ref(Array(12).fill(0))
+
+onMounted(async () => {
+  const token = sessionStorage.getItem('token')
+  const res = await axios.get('/api/dashboard/summary', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  jumlahUser.value = res.data.user_count
+  totalIncome.value = res.data.total_income
+  totalExpense.value = res.data.total_expense
+  jumlahMetodePembayaran.value = res.data.payment_method_count
+  jumlahTermin.value = res.data.termin_count
+  jumlahPiutang.value = res.data.piutang_count
+  jumlahKasbon.value = res.data.kasbon_count
+  jumlahInvoice.value = res.data.invoice_count
+  // Jika backend sudah mengembalikan data bulanan, gunakan ini:
+  // chartUsers.value = res.data.users
+  // chartIncome.value = res.data.income
+  // chartExpense.value = res.data.expense
   fetchActivityLogs()
 })
 </script>
@@ -154,7 +183,7 @@ onMounted(() => {
       <CCol :md="12">
         <CCard class="mb-4">
           <CCardBody>
-            <CRow>
+            <!-- <CRow>
               <CCol :sm="5">
                 <h4 id="traffic" class="card-title mb-0">Traffic</h4>
                 <div class="small text-body-secondary">January - July 2023</div>
@@ -173,10 +202,10 @@ onMounted(() => {
                   <CButton color="secondary" variant="outline">Year</CButton>
                 </CButtonGroup>
               </CCol>
-            </CRow>
-            <CRow>
+            </CRow> -->
+            <!-- <CRow>
               <MainChart style="height: 300px; max-height: 300px; margin-top: 40px" />
-            </CRow>
+            </CRow> -->
           </CCardBody>
           <CCardFooter>
             <CRow
@@ -398,6 +427,72 @@ onMounted(() => {
             </CTable>
           </CCardBody>
         </CCard>
+      </CCol>
+    </CRow>
+    <CRow :xs="{ gutter: 4 }" class="mb-4">
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="primary"
+          :value="jumlahUser + ' Users'"
+          title="Users"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartUsers }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="info"
+          :value="'Rp ' + totalIncome + ' Income'"
+          title="Income"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartIncome }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="danger"
+          :value="'Rp ' + totalExpense + ' Pengeluaran'"
+          title="Pengeluaran"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartExpense }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="success"
+          :value="jumlahMetodePembayaran + ' Metode'"
+          title="Metode Pembayaran"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahMetodePembayaran) }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="warning"
+          :value="jumlahTermin + ' Termin'"
+          title="Termin"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahTermin) }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="secondary"
+          :value="jumlahPiutang + ' Piutang'"
+          title="Piutang"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahPiutang) }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="dark"
+          :value="jumlahKasbon + ' Kasbon'"
+          title="Kasbon"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahKasbon) }] }"
+        />
+      </CCol>
+      <CCol :sm="4">
+        <CWidgetStatsA
+          color="primary"
+          :value="jumlahInvoice + ' Invoice'"
+          title="Invoice"
+          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahInvoice) }] }"
+        />
       </CCol>
     </CRow>
   </div>

@@ -1,40 +1,55 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { CChart } from '@coreui/vue-chartjs'
+import { CWidgetStatsA, CRow, CCol, CCard, CCardBody } from '@coreui/vue'
 import { getStyle } from '@coreui/utils'
 import axios from 'axios'
+import { CChart } from '@coreui/vue-chartjs'
 
-const userCount = ref(0)
+const jumlahUser = ref(0)
 const totalIncome = ref(0)
 const totalExpense = ref(0)
+const jumlahMetodePembayaran = ref(0)
+const jumlahTermin = ref(0)
+const jumlahPiutang = ref(0)
+const jumlahKasbon = ref(0)
+const jumlahInvoice = ref(0)
 
-const userChartData = ref([0,0,0,0,0,0,0,0,0,0,0,0])
-const incomeChartData = ref([0,0,0,0,0,0,0,0,0,0,0,0])
-const expenseChartData = ref([0,0,0,0,0,0,0,0,0,0,0,0])
+// Chart data bulanan, default dummy
+const chartUsers = ref(Array(12).fill(0))
+const chartIncome = ref(Array(12).fill(0))
+const chartExpense = ref(Array(12).fill(0))
+const chartMetode = ref(Array(12).fill(0))
+const chartTermin = ref(Array(12).fill(0))
+const chartPiutang = ref(Array(12).fill(0))
+const chartKasbon = ref(Array(12).fill(0))
+const chartInvoice = ref(Array(12).fill(0))
 
 const widgetChartRef1 = ref()
 const widgetChartRef2 = ref()
 const widgetChartRef3 = ref()
 
-const format = (val) => new Intl.NumberFormat('id-ID').format(val || 0)
+function formatRupiah(val) {
+  return 'Rp ' + (parseInt(val, 10) || 0).toLocaleString('id-ID')
+}
 
 onMounted(async () => {
   const token = sessionStorage.getItem('token')
-  // Fetch summary data
   const res = await axios.get('/api/dashboard/summary', {
     headers: { Authorization: `Bearer ${token}` }
   })
-  userCount.value = res.data.user_count
+  jumlahUser.value = res.data.user_count
   totalIncome.value = res.data.total_income
   totalExpense.value = res.data.total_expense
-
-  // Fetch chart data
-  const chartRes = await axios.get('/api/dashboard/chart-summary', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  userChartData.value = chartRes.data.users
-  incomeChartData.value = chartRes.data.income
-  expenseChartData.value = chartRes.data.expense
+  jumlahMetodePembayaran.value = res.data.payment_method_count
+  jumlahTermin.value = res.data.termin_count
+  jumlahPiutang.value = res.data.piutang_count
+  jumlahKasbon.value = res.data.kasbon_count
+  jumlahInvoice.value = res.data.invoice_count
+  // Ambil data bulanan dari API jika ada
+  if (res.data.users_per_bulan) chartUsers.value = res.data.users_per_bulan
+  if (res.data.income_per_bulan) chartIncome.value = res.data.income_per_bulan
+  if (res.data.expense_per_bulan) chartExpense.value = res.data.expense_per_bulan
+  // chartMetode, chartTermin, chartPiutang, chartKasbon, chartInvoice tetap dummy
 
   document.documentElement.addEventListener('ColorSchemeChange', () => {
     if (widgetChartRef1.value) {
@@ -54,156 +69,118 @@ onMounted(async () => {
 </script>
 
 <template>
-  <CRow :xs="{ gutter: 4 }">
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsA color="primary">
-        <template #value>
-          {{ format(userCount) }}
-          <span class="fs-6 fw-normal"> Users </span>
-        </template>
-        <template #title>Users</template>
-        <template #action>
-          <CDropdown placement="bottom-end">
-            <CDropdownToggle color="transparent" class="p-0 text-white" :caret="false">
-              <CIcon icon="cil-options" class="text-white" />
-            </CDropdownToggle>
-            <CDropdownMenu>
-              <CDropdownItem href="#">Action</CDropdownItem>
-              <CDropdownItem href="#">Another action</CDropdownItem>
-              <CDropdownItem href="#">Something else here</CDropdownItem>
-            </CDropdownMenu>
-          </CDropdown>
-        </template>
-        <template #chart>
+  <CRow :xs="{ gutter: 4 }" class="mb-4">
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahUser }}</div>
+          <div class="text-body-secondary">Users</div>
           <CChart
             type="line"
-            class="mt-3 mx-3"
-            style="height: 70px"
-            ref="widgetChartRef1"
-            :data="{
-              labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'],
-              datasets: [
-                {
-                  label: 'Users',
-                  backgroundColor: 'transparent',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointBackgroundColor: getStyle('--cui-primary'),
-                  data: userChartData,
-                },
-              ],
-            }"
-            :options="{
-              plugins: { legend: { display: false } },
-              maintainAspectRatio: false,
-              scales: {
-                x: { border: { display: false }, grid: { display: false }, ticks: { display: false } },
-                y: { min: 0, max: Math.max(...userChartData)+10, display: false, grid: { display: false }, ticks: { display: false } },
-              },
-              elements: { line: { borderWidth: 1, tension: 0.4 }, point: { radius: 4, hitRadius: 10, hoverRadius: 4 } },
-            }"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Users', backgroundColor: 'rgba(0,123,255,0.1)', borderColor: '#321fdb', data: chartUsers, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
           />
-        </template>
-      </CWidgetStatsA>
+        </CCardBody>
+      </CCard>
     </CCol>
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsA color="info">
-        <template #value>
-          Rp {{ format(totalIncome) }}
-          <span class="fs-6 fw-normal"> Income </span>
-        </template>
-        <template #title>Income</template>
-        <template #action>
-          <CDropdown placement="bottom-end">
-            <CDropdownToggle color="transparent" class="p-0 text-white" :caret="false">
-              <CIcon icon="cil-options" class="text-white" />
-            </CDropdownToggle>
-            <CDropdownMenu>
-              <CDropdownItem href="#">Action</CDropdownItem>
-              <CDropdownItem href="#">Another action</CDropdownItem>
-              <CDropdownItem href="#">Something else here</CDropdownItem>
-            </CDropdownMenu>
-          </CDropdown>
-        </template>
-        <template #chart>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ formatRupiah(totalIncome) }}</div>
+          <div class="text-body-secondary">Income</div>
           <CChart
             type="line"
-            class="mt-3 mx-3"
-            style="height: 70px"
-            ref="widgetChartRef2"
-            :data="{
-              labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'],
-              datasets: [
-                {
-                  label: 'Income',
-                  backgroundColor: 'transparent',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointBackgroundColor: getStyle('--cui-info'),
-                  data: incomeChartData,
-                },
-              ],
-            }"
-            :options="{
-              plugins: { legend: { display: false } },
-              maintainAspectRatio: false,
-              scales: {
-                x: { border: { display: false }, grid: { display: false }, ticks: { display: false } },
-                y: { min: 0, max: Math.max(...incomeChartData)+10, display: false, grid: { display: false }, ticks: { display: false } },
-              },
-              elements: { line: { borderWidth: 1 }, point: { radius: 4, hitRadius: 10, hoverRadius: 4 } },
-            }"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Income', backgroundColor: 'rgba(0,123,255,0.1)', borderColor: '#39f', data: chartIncome, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
           />
-        </template>
-      </CWidgetStatsA>
+        </CCardBody>
+      </CCard>
     </CCol>
-    <CCol :sm="6" :xl="4" :xxl="3">
-      <CWidgetStatsA color="danger">
-        <template #value>
-          Rp {{ format(totalExpense) }}
-          <span class="fs-6 fw-normal"> Pengeluaran </span>
-        </template>
-        <template #title>Pengeluaran</template>
-        <template #action>
-          <CDropdown placement="bottom-end">
-            <CDropdownToggle color="transparent" class="p-0 text-white" :caret="false">
-              <CIcon icon="cil-options" class="text-white" />
-            </CDropdownToggle>
-            <CDropdownMenu>
-              <CDropdownItem href="#">Action</CDropdownItem>
-              <CDropdownItem href="#">Another action</CDropdownItem>
-              <CDropdownItem href="#">Something else here</CDropdownItem>
-            </CDropdownMenu>
-          </CDropdown>
-        </template>
-        <template #chart>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ formatRupiah(totalExpense) }}</div>
+          <div class="text-body-secondary">Pengeluaran</div>
           <CChart
             type="line"
-            class="mt-3 mx-3"
-            style="height: 70px"
-            ref="widgetChartRef3"
-            :data="{
-              labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'],
-              datasets: [
-                {
-                  label: 'Pengeluaran',
-                  backgroundColor: 'transparent',
-                  borderColor: 'rgba(255,255,255,.55)',
-                  pointBackgroundColor: getStyle('--cui-danger'),
-                  data: expenseChartData,
-                },
-              ],
-            }"
-            :options="{
-              plugins: { legend: { display: false } },
-              maintainAspectRatio: false,
-              scales: {
-                x: { border: { display: false }, grid: { display: false }, ticks: { display: false } },
-                y: { min: 0, max: Math.max(...expenseChartData)+10, display: false, grid: { display: false }, ticks: { display: false } },
-              },
-              elements: { line: { borderWidth: 1 }, point: { radius: 4, hitRadius: 10, hoverRadius: 4 } },
-            }"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Pengeluaran', backgroundColor: 'rgba(255,0,0,0.1)', borderColor: '#e55353', data: chartExpense, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
           />
-        </template>
-      </CWidgetStatsA>
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahMetodePembayaran }}</div>
+          <div class="text-body-secondary">Metode Pembayaran</div>
+          <CChart
+            type="line"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Metode Pembayaran', backgroundColor: 'rgba(40,167,69,0.1)', borderColor: '#2eb85c', data: chartMetode, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
+          />
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahTermin }}</div>
+          <div class="text-body-secondary">Termin</div>
+          <CChart
+            type="line"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Termin', backgroundColor: 'rgba(255,193,7,0.1)', borderColor: '#f9b115', data: chartTermin, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
+          />
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahPiutang }}</div>
+          <div class="text-body-secondary">Piutang</div>
+          <CChart
+            type="line"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Piutang', backgroundColor: 'rgba(108,117,125,0.1)', borderColor: '#636f83', data: chartPiutang, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
+          />
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahKasbon }}</div>
+          <div class="text-body-secondary">Kasbon</div>
+          <CChart
+            type="line"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Kasbon', backgroundColor: 'rgba(33,37,41,0.1)', borderColor: '#23282c', data: chartKasbon, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
+          />
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="4">
+      <CCard>
+        <CCardBody>
+          <div class="fs-2 fw-bold">{{ jumlahInvoice }}</div>
+          <div class="text-body-secondary">Invoice</div>
+          <CChart
+            type="line"
+            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Invoice', backgroundColor: 'rgba(50,31,219,0.1)', borderColor: '#321fdb', data: chartInvoice, fill: true, tension: 0.4 }] }"
+            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
+            style="height: 60px"
+          />
+        </CCardBody>
+      </CCard>
     </CCol>
   </CRow>
 </template>
