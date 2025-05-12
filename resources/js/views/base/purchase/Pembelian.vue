@@ -268,7 +268,8 @@ const form = ref({
   total_harga: 0,
   deskripsi: "",
   displayHarga: "0",
-  displayTotalHarga: "0"
+  displayTotalHarga: "0",
+  invoice_id: null
 });
 const mereks = ref([]);
 const units = ref([]);
@@ -293,6 +294,24 @@ const isServiceUnit = computed(() => {
   selectedUnitType.value = selectedUnit?.unit_name?.toLowerCase() || null;
   return selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase());
 });
+
+// Add invoices ref
+const invoices = ref([]);
+
+// Add function to fetch invoices
+const fetchInvoices = async (proyekId) => {
+  if (!proyekId) return;
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/invoices", {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { proyek_id: proyekId }
+    });
+    invoices.value = response.data.data || [];
+  } catch (err) {
+    invoices.value = [];
+  }
+};
 
 // Fetch Projects
 const fetchProjects = async () => {
@@ -343,7 +362,6 @@ const fetchCategories = async () => {
     const response = await axios.get("/api/categories", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    console.log("Categories response:", response.data);
 
     // Pastikan response.data adalah array
     const categoriesData = Array.isArray(response.data) ? response.data :
@@ -354,7 +372,6 @@ const fetchCategories = async () => {
       is_service: false
     }));
   } catch (err) {
-    console.error("Error fetching categories:", err);
     error.value = "Gagal memuat data kategori: " + (err.response?.data?.error || err.message);
   }
 };
@@ -370,9 +387,7 @@ const fetchServiceCategories = async (unitId) => {
                 (response.data.data ? response.data.data : []);
 
     serviceCategories.value = data.filter(cat => String(cat.unit_id) === String(unitId));
-    console.log('Fetched service categories:', serviceCategories.value); // Debug log
   } catch (err) {
-    console.error("Error fetching service categories:", err);
     Swal.fire({
       icon: "error",
       title: "Error",
@@ -399,9 +414,7 @@ const fetchPembelians = async (proyekId) => {
     ]);
 
     if (purchaseResponse.data && proyekResponse.data) {
-      console.log('Purchase response:', purchaseResponse.data); // Debug log
       pembelians.value = purchaseResponse.data.purchases.map(purchase => {
-        console.log('Processing purchase:', purchase); // Debug log
         return {
           ...purchase,
           displayHarga: formatCurrency(purchase.harga),
@@ -415,11 +428,9 @@ const fetchPembelians = async (proyekId) => {
       });
 
       selectedProjectDetails.value = proyekResponse.data;
-      console.log('Processed pembelians:', pembelians.value); // Debug log
       initDataTable();
     }
   } catch (err) {
-    console.error("Error fetching purchases:", err);
     let errorMessage = "Gagal mengambil data pembelian";
     if (err.response?.data?.message) {
       errorMessage = err.response.data.message;
@@ -437,19 +448,31 @@ const initDataTable = () => {
     $(pembelianTableRef.value).DataTable().destroy();
   }
 
+  if (!pembelians.value || pembelians.value.length === 0) {
+    return;
+  }
+
   $(pembelianTableRef.value).DataTable({
     data: pembelians.value,
     columns: [
-      { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1 },
+      {
+        title: "No",
+        data: null,
+        render: (data, type, row, meta) => meta.row + 1,
+        className: "text-center"
+      },
+      {
+        title: "Customer",
+        data: "nama_customer"
+      },
       {
         title: "Proyek",
-        data: null,
-        render: (data) => {
-          const proyek = selectedProjectDetails.value;
-          return proyek ? `${proyek.nama_customer} - ${proyek.nama_proyek}` : "-";
-        }
+        data: "nama_proyek"
       },
-      { title: "Item", data: "item" },
+      {
+        title: "Item",
+        data: "item"
+      },
       {
         title: "Merek",
         data: "merek",
@@ -460,7 +483,10 @@ const initDataTable = () => {
           return data ? data.name : "-";
         }
       },
-      { title: "Tipe", data: "type" },
+      {
+        title: "Tipe",
+        data: "type"
+      },
       {
         title: "Unit",
         data: "unit",
@@ -479,17 +505,31 @@ const initDataTable = () => {
       {
         title: "Jumlah",
         data: "qty",
+        className: "text-center",
         render: (data) => data.toLocaleString()
       },
       {
         title: "Harga",
         data: "harga",
+        className: "text-end",
         render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
       },
       {
         title: "Total",
         data: "total_harga",
+        className: "text-end",
         render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
+      },
+      {
+        title: "Status",
+        data: "is_service",
+        render: (data, type, row) => {
+          if (row.is_service) {
+            return `<span class='badge bg-info'>Jasa</span>`;
+          }
+          return `<span class='badge bg-primary'>Material</span>`;
+        },
+        className: "text-center"
       },
       {
         title: "Aksi",
@@ -501,8 +541,9 @@ const initDataTable = () => {
           <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
             <i class="cil-trash"></i> Hapus
           </button>
-        `
-      }
+        `,
+        className: "text-center"
+      },
     ],
     scrollX: true,
     scrollCollapse: true,
@@ -513,34 +554,26 @@ const initDataTable = () => {
     dom: '<"top"lf>rt<"bottom"ip><"clear">',
     pageLength: 10,
     lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]],
-    autoWidth: false,
-    columnDefs: [
-      { width: "5%", targets: 0 }, // No
-      { width: "15%", targets: 1 }, // Proyek
-      { width: "10%", targets: 2 }, // Item
-      { width: "10%", targets: 3 }, // Merek
-      { width: "10%", targets: 4 }, // Tipe
-      { width: "10%", targets: 5 }, // Unit
-      { width: "10%", targets: 6 }, // Kategori
-      { width: "5%", targets: 7 }, // Jumlah
-      { width: "10%", targets: 8 }, // Harga
-      { width: "10%", targets: 9 }, // Total
-      { width: "5%", targets: 10 } // Aksi
-    ],
-    rowCallback: function(row, data) {
-      const unit = units.value.find(u => u.id === data.unit_id);
-      if (data.is_service) {
-        if (unit && ['set', 'transaksi'].includes(unit.unit_name.toLowerCase())) {
-          $(row).addClass('service-other-row');
-        } else {
-          $(row).addClass('service-row');
-        }
-      } else {
-        $(row).addClass('material-row');
+    language: {
+      search: "Cari:",
+      lengthMenu: "Tampilkan _MENU_ data per halaman",
+      zeroRecords: "Tidak ada data yang ditemukan",
+      info: "Menampilkan halaman _PAGE_ dari _PAGES_",
+      infoEmpty: "Tidak ada data tersedia",
+      infoFiltered: "(difilter dari _MAX_ total data)",
+      paginate: {
+        first: "Pertama",
+        last: "Terakhir",
+        next: "Selanjutnya",
+        previous: "Sebelumnya"
       }
+    },
+    rowCallback: function(row, data) {
+      // Optional: highlight row based on type if needed
     }
   });
 
+  // Add event listeners for buttons
   $(pembelianTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
     const id = $(this).data("id");
     const pembelian = pembelians.value.find(p => p.id === id);
@@ -555,14 +588,13 @@ const initDataTable = () => {
 
 const filterByProject = async () => {
   if (selectedProject.value) {
-    const selectedUnit = units.value.find(unit => unit.id === form.value.unit_id);
-    if (selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase())) {
-      await fetchServicePurchases(selectedProject.value);
-    } else {
-      await fetchPembelians(selectedProject.value);
-    }
+    await Promise.all([
+      fetchPembelians(selectedProject.value),
+      fetchInvoices(selectedProject.value)
+    ]);
   } else {
     pembelians.value = [];
+    invoices.value = [];
     if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
       $(pembelianTableRef.value).DataTable().destroy();
       $(pembelianTableRef.value).empty();
@@ -707,7 +739,7 @@ watch(
 const openModal = (mode, pembelian = null) => {
   modalMode.value = mode;
   if (mode === "edit" && pembelian) {
-    console.log('Opening modal for editing:', pembelian); // Debug log
+    console.log('Opening modal for editing:', pembelian);
     const isService = pembelian.is_service;
     form.value = {
       proyek_id: pembelian.proyek_id,
@@ -724,10 +756,10 @@ const openModal = (mode, pembelian = null) => {
       total_harga: pembelian.total_harga,
       deskripsi: pembelian.deskripsi || "",
       displayHarga: formatCurrency(pembelian.harga),
-      displayTotalHarga: formatCurrency(pembelian.total_harga)
+      displayTotalHarga: formatCurrency(pembelian.total_harga),
+      invoice_id: pembelian.invoice_id
     };
 
-    // If it's a service, fetch service categories
     if (isService) {
       fetchServiceCategories(pembelian.unit_id);
     }
@@ -751,7 +783,8 @@ const openModal = (mode, pembelian = null) => {
       total_harga: 0,
       deskripsi: "",
       displayHarga: "0",
-      displayTotalHarga: "0"
+      displayTotalHarga: "0",
+      invoice_id: null
     };
     editingId.value = null;
     modalTitle.value = "Tambah Pembelian";
@@ -801,6 +834,40 @@ const handleSubmit = async () => {
       return;
     }
 
+    // Create invoice if not exists
+    if (!form.value.invoice_id) {
+      try {
+        const token = sessionStorage.getItem('token');
+        const invoiceResponse = await axios.post("/api/invoices", {
+          proyek_id: form.value.proyek_id,
+          invoice_date: new Date().toISOString().split('T')[0],
+          purchase_materials: [{
+            item: form.value.item,
+            type: form.value.type || '-',
+            spesifikasi: form.value.spesifikasi || '-',
+            unit_id: form.value.unit_id,
+            qty: form.value.qty,
+            harga: unformatCurrency(form.value.displayHarga),
+            deskripsi: form.value.deskripsi || '-',
+            is_service: isServiceUnit.value,
+            category_id: isServiceUnit.value ? null : form.value.category_id,
+            service_category_id: isServiceUnit.value ? form.value.category_id : null,
+            merek_id: isServiceUnit.value ? null : form.value.merek_id
+          }]
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        form.value.invoice_id = invoiceResponse.data.id;
+      } catch (err) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Gagal membuat invoice: " + (err.response?.data?.message || err.message)
+        });
+        return;
+      }
+    }
+
     const token = sessionStorage.getItem('token');
     const selectedUnit = units.value.find(u => String(u.id) === String(form.value.unit_id));
     const isService = selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase());
@@ -818,28 +885,14 @@ const handleSubmit = async () => {
       deskripsi: form.value.deskripsi || '-',
       is_service: isService,
       category_id: null,
-      service_category_id: null
+      service_category_id: null,
+      invoice_id: form.value.invoice_id
     };
-
-    // Validasi anggaran proyek sebelum submit
-    const selectedProj = projects.value.find(p => String(p.id) === String(form.value.proyek_id));
-    if (selectedProj) {
-      const sisaAnggaran = Number(selectedProj.anggaran_kontrak || 0) - Number(selectedProj.total_expenses || 0);
-      if (payload.total_harga > sisaAnggaran) {
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Anggaran Melebihi Batas!',
-          text: 'Jumlah pembelian melebihi sisa anggaran proyek. Silakan cek kembali nilai pembelian.'
-        });
-        return;
-      }
-    }
 
     // Add category data based on type
     if (isService) {
       payload.service_category_id = form.value.category_id;
       payload.category_id = null;
-      // Default merek will be handled by backend
     } else {
       payload.category_id = form.value.category_id;
       payload.service_category_id = null;
@@ -854,27 +907,22 @@ const handleSubmit = async () => {
       payload.merek_id = form.value.merek_id;
     }
 
-    console.log('Submitting payload:', payload); // Debug log
-
     let response;
     if (modalMode.value === "edit") {
       response = await axios.put(`/api/purchasematerials/${editingId.value}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Update response:', response.data); // Debug log
       Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil diupdate" });
     } else {
       response = await axios.post("/api/purchasematerials", payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Create response:', response.data); // Debug log
       Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil ditambahkan" });
     }
 
     closeModal();
     await fetchPembelians(form.value.proyek_id);
   } catch (err) {
-    console.error("Error submitting form:", err);
     const errorMessage = err.response?.data?.error || err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
     Swal.fire({
       icon: "error",
@@ -909,7 +957,6 @@ const handleDelete = async (id) => {
       await fetchPembelians(selectedProject.value);
     }
   } catch (err) {
-    console.error("Error deleting purchase:", err);
     let errorMessage = "Gagal menghapus data";
     if (err.response?.data?.message) {
       errorMessage = err.response.data.message;
@@ -1017,6 +1064,15 @@ const groupedProjects = computed(() => {
   return grouped;
 });
 
+const changeProject = () => {
+  selectedProject.value = "";
+  pembelians.value = [];
+  if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
+    $(pembelianTableRef.value).DataTable().destroy();
+    $(pembelianTableRef.value).empty();
+  }
+};
+
 // Initial Fetching
 onMounted(() => {
   fetchProjects();
@@ -1084,6 +1140,7 @@ onMounted(() => {
     margin: 0 2px;
   }
 
+  /* Row styles */
   .service-row {
     background-color: #e8f4ff !important;
   }
@@ -1094,5 +1151,115 @@ onMounted(() => {
 
   .material-row {
     background-color: #ffffff !important;
+  }
+
+  /* DataTables controls */
+  .dataTables_length select {
+    padding: 0.375rem 1.75rem 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    background-color: #fff;
+  }
+
+  .dataTables_filter {
+    text-align: right;
+    margin-bottom: 1rem;
+  }
+
+  .dataTables_filter input {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+    width: 250px;
+  }
+
+  .dataTables_filter label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin: 0;
+  }
+
+  .dataTables_filter label::before {
+    content: "Cari:";
+    margin-right: 0.5rem;
+    font-weight: 500;
+  }
+
+  .dataTables_info {
+    padding-top: 1rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+
+  .dataTables_paginate {
+    padding-top: 1rem;
+  }
+
+  .dataTables_paginate .paginate_button {
+    padding: 0.375rem 0.75rem;
+    margin: 0 0.25rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background-color: #fff;
+    color: #007bff;
+    cursor: pointer;
+  }
+
+  .dataTables_paginate .paginate_button:hover {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+    color: #0056b3;
+  }
+
+  .dataTables_paginate .paginate_button.current {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+  }
+
+  /* Badge styles */
+  .badge {
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+    border-radius: 0.25rem;
+  }
+
+  /* Responsive styles */
+  @media (max-width: 768px) {
+    .dataTables_wrapper {
+      padding: 0.5rem;
+    }
+
+    .dataTables_filter {
+      text-align: left;
+      margin-top: 1rem;
+    }
+
+    .dataTables_filter input {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .dataTables_filter label {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .dataTables_filter label::before {
+      margin-bottom: 0.5rem;
+    }
+
+    .btn {
+      margin: 0.125rem 0;
+    }
+
+    table.display {
+      min-width: 100%;
+    }
   }
   </style>

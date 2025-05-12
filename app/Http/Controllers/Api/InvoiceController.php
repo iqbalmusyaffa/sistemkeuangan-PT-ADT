@@ -39,6 +39,7 @@ class InvoiceController extends Controller
             
             $validator = Validator::make($request->all(), [
                 'proyek_id' => 'required|exists:proyeks,id',
+                'payment_method_id' => 'nullable|exists:payment_methods,id',
                 'invoice_date' => 'required|date',
                 'purchase_materials' => 'required|array|min:1',
                 'purchase_materials.*.item' => 'required|string',
@@ -92,6 +93,7 @@ class InvoiceController extends Controller
 
                 $invoice = Invoice::create([
                     'proyek_id' => $request->proyek_id,
+                    'payment_method_id' => $request->payment_method_id,
                     'invoice_number' => $invoiceNumber,
                     'invoice_date' => $request->invoice_date,
                     'total_amount' => 0,
@@ -172,6 +174,7 @@ class InvoiceController extends Controller
                     'pph_final_amount' => $pphFinal,
                     'ppn_amount' => $ppnAmount,
                     'net_profit' => $netProfit,
+                    'payment_method_id' => $request->payment_method_id,
                 ]);
 
                 // Handle termins
@@ -241,6 +244,7 @@ class InvoiceController extends Controller
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:unpaid,partially_paid,paid,cancelled',
             'amount_paid' => 'required|numeric|min:0',
+            'payment_method_id' => 'nullable|exists:payment_methods,id',
         ]);
 
         if ($validator->fails()) {
@@ -251,6 +255,9 @@ class InvoiceController extends Controller
         $invoice->status = $request->status;
         $invoice->amount_paid = $request->amount_paid;
         $invoice->status = $invoice->determineStatus();
+        if ($request->has('payment_method_id')) {
+            $invoice->payment_method_id = $request->payment_method_id;
+        }
         $invoice->save();
 
         return new InvoiceResource($invoice);

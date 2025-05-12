@@ -179,10 +179,10 @@ onMounted(async () => {
 <template>
   <div>
     <WidgetsStatsA class="mb-4" />
-    <CRow>
+    <!-- <CRow>
       <CCol :md="12">
-        <CCard class="mb-4">
-          <CCardBody>
+        <CCard class="mb-4"> -->
+          <!-- <CCardBody> -->
             <!-- <CRow>
               <CCol :sm="5">
                 <h4 id="traffic" class="card-title mb-0">Traffic</h4>
@@ -206,8 +206,8 @@ onMounted(async () => {
             <!-- <CRow>
               <MainChart style="height: 300px; max-height: 300px; margin-top: 40px" />
             </CRow> -->
-          </CCardBody>
-          <CCardFooter>
+          <!-- </CCardBody> -->
+          <!-- <CCardFooter>
             <CRow
               :xs="{ cols: 1, gutter: 4 }"
               :sm="{ cols: 2 }"
@@ -241,10 +241,10 @@ onMounted(async () => {
                 <CProgress class="mt-2" :value="40" thin :precision="1" />
               </CCol>
             </CRow>
-          </CCardFooter>
-        </CCard>
-      </CCol>
-    </CRow>
+          </CCardFooter> -->
+        <!-- </CCard> -->
+      <!-- </CCol>
+    </CRow> -->
     <CRow>
       <CCol :md="12">
         <CCard class="mb-4">
@@ -427,72 +427,6 @@ onMounted(async () => {
             </CTable>
           </CCardBody>
         </CCard>
-      </CCol>
-    </CRow>
-    <CRow :xs="{ gutter: 4 }" class="mb-4">
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="primary"
-          :value="jumlahUser + ' Users'"
-          title="Users"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartUsers }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="info"
-          :value="'Rp ' + totalIncome + ' Income'"
-          title="Income"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartIncome }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="danger"
-          :value="'Rp ' + totalExpense + ' Pengeluaran'"
-          title="Pengeluaran"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartExpense }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="success"
-          :value="jumlahMetodePembayaran + ' Metode'"
-          title="Metode Pembayaran"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahMetodePembayaran) }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="warning"
-          :value="jumlahTermin + ' Termin'"
-          title="Termin"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahTermin) }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="secondary"
-          :value="jumlahPiutang + ' Piutang'"
-          title="Piutang"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahPiutang) }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="dark"
-          :value="jumlahKasbon + ' Kasbon'"
-          title="Kasbon"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahKasbon) }] }"
-        />
-      </CCol>
-      <CCol :sm="4">
-        <CWidgetStatsA
-          color="primary"
-          :value="jumlahInvoice + ' Invoice'"
-          title="Invoice"
-          :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahInvoice) }] }"
-        />
       </CCol>
     </CRow>
   </div>

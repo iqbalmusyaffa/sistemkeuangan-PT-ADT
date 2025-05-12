@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Traits\Trackable;
+use App\Traits\BudgetMonitor;
+
 class Proyek extends Model
 {
-    use HasFactory;
-    use Trackable;
+    use HasFactory, Trackable, BudgetMonitor;
 
     protected $fillable = [
         'nama_customer',
@@ -50,5 +51,21 @@ class Proyek extends Model
     public function expenses()
     {
         return $this->hasMany(\App\Models\Expense::class, 'proyek_id');
+    }
+
+    /**
+     * Get the user associated with the project.
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    protected static function booted()
+    {
+        static::saved(function ($proyek) {
+            // Check if budget is exceeded whenever the project is saved
+            $proyek->checkBudgetExceeded();
+        });
     }
 }

@@ -17,7 +17,7 @@ const chartExpense = ref([0,0,0,0,0,10,0,0,0,0,0,0])
 </script>
 
 <template>
-  <CRow :xs="{ gutter: 4 }" class="mb-4">
+  <!-- <CRow :xs="{ gutter: 4 }" class="mb-4">
     <CCol :sm="4">
       <CWidgetStatsA color="primary" :value="jumlahUser + ' Users'" title="Users" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: chartUsers }] }" />
     </CCol>
@@ -42,5 +42,5 @@ const chartExpense = ref([0,0,0,0,0,10,0,0,0,0,0,0])
     <CCol :sm="4">
       <CWidgetStatsA color="primary" :value="jumlahInvoice + ' Invoice'" title="Invoice" :chart="{ labels: Array(12).fill(''), datasets: [{ backgroundColor: 'rgba(255,255,255,.2)', borderColor: 'rgba(255,255,255,.55)', data: Array(12).fill(jumlahInvoice) }] }" />
     </CCol>
-  </CRow>
+  </CRow> -->
 </template>

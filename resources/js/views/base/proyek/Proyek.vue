@@ -80,6 +80,9 @@
                     required
                   />
                 </div>
+                <div v-if="showBudgetWarning" class="text-warning mt-2">
+                  <CIcon icon="cil-warning" /> Nilai kontrak lebih kecil dari total pengeluaran proyek
+                </div>
               </CCol>
               <CCol md="6">
                 <CFormLabel for="status_project">Status Proyek</CFormLabel>
@@ -141,6 +144,7 @@
   const editingId = ref(null);
   const router = useRouter();
   const displayAnggaranKontrak = ref('');
+  const showBudgetWarning = ref(false);
 
   function formatRupiah(value) {
     if (!value) return '';
@@ -240,7 +244,19 @@
         {
           title: "Nilai Kontrak",
           data: "anggaran_kontrak",
-          render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
+          render: (data, type, row) => {
+            const formattedAmount = `Rp ${new Intl.NumberFormat('id-ID').format(data)}`;
+            const totalExpenses = row.total_expenses || 0;
+            const percentage = (totalExpenses / data) * 100;
+            
+            if (percentage >= 80) {
+              return `<div class="text-warning">
+                <CIcon icon="cil-warning" /> ${formattedAmount}
+                <small class="d-block">(${percentage.toFixed(1)}% terpakai)</small>
+              </div>`;
+            }
+            return formattedAmount;
+          }
         },
         {
           title: "Status",
@@ -343,6 +359,7 @@
 
   const closeModal = () => {
     showModal.value = false;
+    showBudgetWarning.value = false;
     form.value = {
       nama_customer: "",
       nama_proyek: "",
@@ -360,13 +377,16 @@
   };
 
   const handleSubmit = async () => {
-    // Ambil total pengeluaran proyek (misal dari selectedProjectDetails atau proyeks)
+    // Ambil total pengeluaran proyek
     let totalPengeluaran = 0;
     if (modalMode.value === "edit") {
       const proyek = proyeks.value.find((p) => p.id == editingId.value);
       totalPengeluaran = proyek?.total_expenses || 0;
     }
+
+    // Tampilkan peringatan jika anggaran lebih kecil dari pengeluaran
     if (form.value.anggaran_kontrak < totalPengeluaran) {
+      showBudgetWarning.value = true;
       Swal.fire({
         icon: 'warning',
         title: 'Anggaran Tidak Valid!',
@@ -374,6 +394,7 @@
       });
       return;
     }
+
     try {
       const token = sessionStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
@@ -494,5 +515,14 @@
   .badge {
     padding: 0.5em 0.75em;
     font-size: 0.875em;
+  }
+
+  .text-warning {
+    color: #ffc107 !important;
+  }
+
+  .text-warning small {
+    font-size: 0.8em;
+    opacity: 0.8;
   }
   </style>

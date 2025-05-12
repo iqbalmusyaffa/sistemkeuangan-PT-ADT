@@ -11,6 +11,7 @@ class Invoice extends Model
 
     protected $fillable = [
         'proyek_id',
+        'payment_method_id',
         'invoice_number',
         'invoice_date',
         'total_amount',
@@ -59,6 +60,11 @@ class Invoice extends Model
     public function expenses()
     {
         return $this->hasMany(Expense::class, 'invoice_id');
+    }
+
+    public function paymentMethod()
+    {
+        return $this->belongsTo(\App\Models\PaymentMethod::class);
     }
 
     // Status Management

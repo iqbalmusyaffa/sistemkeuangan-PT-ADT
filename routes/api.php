@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\PaymentMethodController;
 use App\Http\Controllers\Api\ProfitLossReportController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\KasbonController;
+use App\Http\Controllers\Api\NotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -124,5 +125,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/termins/export-pdf/{project}', [TerminController::class, 'exportPDF']);
     Route::get('/termins/export-excel/{project}', [TerminController::class, 'exportExcel']);
     Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
+
+    // Notification Routes
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);

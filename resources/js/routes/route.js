@@ -147,6 +147,7 @@ const routes = [
         component: () => import('@/views/base/kasbon/Kasbon.vue'),
         meta: { requiresAuth: true },
       },
+    
     //   {
     //     path: '/base',
     //     name: 'Base',

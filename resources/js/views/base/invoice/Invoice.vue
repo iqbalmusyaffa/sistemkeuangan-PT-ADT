@@ -165,22 +165,28 @@
 
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel>Metode Pembayaran</CFormLabel>
-              <CFormCheck
-                type="radio"
-                label="Cash (Tanpa Termin)"
-                v-model="form.is_cash"
-                :value="true"
-              />
-              <CFormCheck
-                type="radio"
-                label="Termin"
-                v-model="form.is_cash"
-                :value="false"
-              />
+              <CFormLabel>Jenis Pembayaran</CFormLabel>
+              <CFormCheck type="radio" label="Cash (Tanpa Termin)" v-model="form.is_cash" :value="true" />
+              <CFormCheck type="radio" label="Termin" v-model="form.is_cash" :value="false" />
             </CCol>
           </CRow>
-
+  <!-- Payment Method -->
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel for="payment_method_id">Metode Pembayaran</CFormLabel>
+              <CFormSelect
+                id="payment_method_id"
+                v-model="form.payment_method_id"
+                :disabled="modalMode === 'view'"
+                required
+              >
+                <option value="">Pilih Metode Pembayaran</option>
+                <option v-for="method in paymentMethods" :key="method.id" :value="method.id">
+                  {{ method.nama_metode }}
+                </option>
+              </CFormSelect>
+            </CCol>
+          </CRow>
           <div v-if="!form.is_cash">
             <div v-for="(termin, idx) in form.termins" :key="idx" class="border p-2 mb-2">
               <CRow>
@@ -465,6 +471,7 @@ export default {
     const invoices = ref([])
     const modalMode = ref('add') // 'add', 'edit', 'view'
     const route = useRoute()
+    const paymentMethods = ref([])
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -583,7 +590,8 @@ export default {
         serviceCategories: []
       }],
       is_cash: true,
-      termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
+      termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}],
+      payment_method_id: ''
     })
     const modalTitle = ref('Tambah Invoice')
     const editingId = ref(null)
@@ -810,7 +818,8 @@ export default {
           serviceCategories: []
         }],
         is_cash: true,
-        termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}]
+        termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}],
+        payment_method_id: ''
       }
       editingId.value = null
       form.value.purchase_materials.forEach(item => handleCategoryChange(item))
@@ -1173,6 +1182,24 @@ export default {
       return totalInvoice.value + totalTax.value;
     });
 
+    const fetchPaymentMethods = async () => {
+      try {
+        const token = sessionStorage.getItem('token');
+        const response = await axios.get('/api/payment-methods', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (Array.isArray(response.data.data)) {
+          paymentMethods.value = response.data.data;
+        } else if (Array.isArray(response.data)) {
+          paymentMethods.value = response.data;
+        } else {
+          paymentMethods.value = [];
+        }
+      } catch (e) {
+        paymentMethods.value = [];
+      }
+    };
+
     const mountCoreUIIcons = () => {
       document.querySelectorAll('.cicon-eye').forEach(el => {
         const icon = h(CIcon, { icon: icons.cilEye, size: 'sm' });
@@ -1246,6 +1273,7 @@ export default {
       loadMasterData()
       loadProjects()
       loadInvoices()
+      fetchPaymentMethods()
       nextTick(initDataTable)
       const handler = () => loadInvoices()
       window.addEventListener('termin-updated', handler)
@@ -1313,7 +1341,9 @@ export default {
       pphFinal,
       totalTax,
       ppnAmount,
-      totalWithTax
+      totalWithTax,
+      paymentMethods,
+      fetchPaymentMethods
     }
   }
 }
