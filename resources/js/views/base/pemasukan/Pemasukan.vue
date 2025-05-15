@@ -3,16 +3,67 @@
       <CCol>
         <CCard>
           <CCardHeader>
-            <CIcon icon="cil-dollar" /> Data Pemasukan
-            <CButton color="primary" class="float-end" @click="openModal('tambah')">
-              Tambah Pemasukan
-            </CButton>
+            <CIcon icon="cil-dollar" class="me-2" />
+            Pemasukan
           </CCardHeader>
           <CCardBody>
-            <div v-if="error" class="alert alert-danger">{{ error }}</div>
-            <div v-if="loading" class="alert alert-info">Loading...</div>
+            <!-- Filter Section -->
+            <CRow class="mb-3">
+              <CCol md="3">
+                <CFormSelect
+                  v-model="selectedProyekId"
+                  :options="[
+                    { label: 'Semua Proyek', value: '' },
+                    ...proyeks.map(p => ({ label: p.nama_proyek, value: p.id }))
+                  ]"
+                  @change="handleProyekChange"
+                />
+              </CCol>
+              <CCol md="3">
+                <CFormSelect
+                  v-model="selectedStatus"
+                  :options="[
+                    { label: 'Semua Status', value: '' },
+                    { label: 'Pending', value: 'Pending' },
+                    { label: 'Diterima', value: 'Diterima' },
+                    { label: 'Ditolak', value: 'Ditolak' }
+                  ]"
+                  @change="handleStatusChange"
+                />
+              </CCol>
+              <CCol md="3">
+                <CFormSelect
+                  v-model="selectedType"
+                  :options="[
+                    { label: 'Semua Tipe', value: '' },
+                    { label: 'DP', value: 'dp' },
+                    { label: 'Pelunasan', value: 'pelunasan' }
+                  ]"
+                  @change="handleTypeChange"
+                />
+              </CCol>
+              <CCol md="3">
+                <CButton color="primary" @click="fetchData">
+                  <CIcon icon="cil-sync" /> Refresh
+                </CButton>
+              </CCol>
+            </CRow>
+
+            <!-- Error Alert -->
+            <CAlert v-if="error" color="danger" dismissible>
+              {{ error }}
+            </CAlert>
+
+            <!-- Data Table -->
             <div class="w-100">
               <table ref="dataTableRef" class="display nowrap"></table>
+            </div>
+
+            <!-- Add Button -->
+            <div class="mt-3">
+              <CButton color="primary" @click="openModal('tambah')">
+                <CIcon icon="cil-plus" /> Tambah Pemasukan
+              </CButton>
             </div>
           </CCardBody>
         </CCard>
@@ -49,7 +100,7 @@
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Proyek</CFormLabel>
-                <select v-model="selectedProyekId" class="form-control">
+                <select v-model="selectedProyekId" class="form-control" @change="handleProyekSelect">
                   <option value="">Pilih Proyek</option>
                   <option v-for="proyek in proyeks" :key="proyek.id" :value="proyek.id">
                     {{ proyek.nama_proyek }}
@@ -58,22 +109,31 @@
               </CCol>
             </CRow>
 
+            <CRow class="mb-3" v-if="selectedProyekId">
+              <CCol>
+                <CFormLabel>Termin</CFormLabel>
+                <select v-model="selectedTerminId" class="form-control" @change="handleTerminSelect">
+                  <option value="">Pilih Termin</option>
+                  <option v-for="termin in availableTermins" :key="termin.id" :value="termin.id">
+                    {{ termin.nama_termin }} ({{ termin.status_termin }})
+                  </option>
+                </select>
+              </CCol>
+            </CRow>
+
+            <CRow class="mb-3" v-if="selectedTerminId">
+              <CCol>
+                <CFormLabel>Tipe Pembayaran</CFormLabel>
+                <select v-model="type" class="form-control" required>
+                  <option value="dp">DP</option>
+                  <option value="pelunasan">Pelunasan</option>
+                </select>
+              </CCol>
+            </CRow>
+
             <CRow class="mb-3">
               <CCol>
                 <CFormLabel>Jumlah</CFormLabel>
-                <CFormInput v-model="jumlah" type="number" required />
-              </CCol>
-            </CRow>
-
-            <CRow class="mb-3">
-              <CCol>
-                <CFormLabel>Deskripsi</CFormLabel>
-                <CFormTextarea v-model="deskripsi" rows="3" />
-              </CCol>
-            </CRow>
-
-            <CRow class="mb-3">
-              <CCol>
                 <CFormLabel>Tanggal</CFormLabel>
                 <CFormInput v-model="tanggal" type="date" required />
               </CCol>
@@ -141,25 +201,46 @@
   const status = ref('Pending')
   const buktiPembayaran = ref(null)
 
+  // Filter states
+  const selectedStatus = ref('')
+  const selectedType = ref('')
+
   const fetchData = async () => {
     loading.value = true
+    error.value = ''
+    const token = sessionStorage.getItem('token')
+    if (!token) {
+      error.value = 'Token tidak ditemukan. Silakan login ulang.'
+      loading.value = false
+      return
+    }
     try {
-      const token = sessionStorage.getItem('token')
+      // Build query parameters
+      const params = new URLSearchParams()
+      if (selectedProyekId.value) params.append('proyek_id', selectedProyekId.value)
+      if (selectedStatus.value) params.append('status', selectedStatus.value)
+      if (selectedType.value) params.append('type', selectedType.value)
+
       const [incomeRes, categoryRes, paymentMethodRes, proyekRes] = await Promise.all([
-        axios.get('/api/incomes', { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get('/api/categories', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`/api/incomes?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/kategori', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/payment-methods', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/proyeks', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       
-      categories.value = (categoryRes.data.data || categoryRes.data).filter(cat => cat.jenis === 'Pemasukan')
+      console.log('categoryRes.data', categoryRes.data)
+      categories.value = (categoryRes.data.data || categoryRes.data).filter(cat => cat.jenis === 'pemasukan')
       paymentMethods.value = paymentMethodRes.data.data || paymentMethodRes.data
       proyeks.value = proyekRes.data.data || proyekRes.data
       incomes.value = incomeRes.data.data || incomeRes.data
 
       nextTick(() => initDataTable())
     } catch (e) {
-      error.value = 'Gagal memuat data'
+      if (e.response) {
+        error.value = `Gagal memuat data: ${e.response.status} - ${e.response.data.message || e.message}`
+      } else {
+        error.value = `Gagal memuat data: ${e.message}`
+      }
     } finally {
       loading.value = false
     }
@@ -259,7 +340,7 @@
       }
 
       if (modalMode.value === 'edit') {
-        await axios.post(`/api/incomes/${editingId.value}`, formData, {
+        await axios.put(`/api/incomes/${editingId.value}`, formData, {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
@@ -309,7 +390,22 @@
     }
   }
 
-  onMounted(fetchData)
+  // Filter handlers
+  const handleProyekChange = () => {
+    fetchData()
+  }
+
+  const handleStatusChange = () => {
+    fetchData()
+  }
+
+  const handleTypeChange = () => {
+    fetchData()
+  }
+
+  onMounted(() => {
+    fetchData()
+  })
   </script>
 
   <style scoped>

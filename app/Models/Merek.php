@@ -11,7 +11,7 @@ class Merek extends Model
     use HasFactory;
     use Trackable;
 
-    protected $fillable = ['name', 'deskripsi'];
+    protected $fillable = ['name'];
     public function purchasematerials()
     {
         return $this->hasMany(Purchasematerial::class);

@@ -168,4 +168,28 @@ class ProyekController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Project summary endpoint
+     */
+    public function summary($id)
+    {
+        $totalIncome = \App\Models\Income::where('proyek_id', $id)
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+        $totalExpenses = \App\Models\Expense::where('proyek_id', $id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
+        \Log::info('Summary Query', [
+            'proyek_id' => $id,
+            'income_count' => \App\Models\Income::where('proyek_id', $id)->count(),
+            'income_diterima' => \App\Models\Income::where('proyek_id', $id)->where('status', 'Diterima')->count(),
+            'total_income' => $totalIncome
+        ]);
+        return response()->json([
+            'total_income' => $totalIncome,
+            'total_expenses' => $totalExpenses,
+            'profit_loss' => $totalIncome - $totalExpenses,
+        ]);
+    }
 }

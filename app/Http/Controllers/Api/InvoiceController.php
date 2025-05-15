@@ -49,10 +49,20 @@ class InvoiceController extends Controller
                 'purchase_materials.*.merek_id' => 'nullable|exists:mereks,id',
                 'purchase_materials.*.unit_id' => 'required|exists:units,id',
                 'purchase_materials.*.category_id' => 'nullable|exists:kategoris,id',
+                'purchase_materials.*.service_category_id' => 'nullable|exists:service_categories,id',
                 'purchase_materials.*.deskripsi' => 'nullable|string',
                 'use_ppn' => 'boolean',
                 'use_pph_non_final' => 'boolean',
                 'use_pph_final' => 'boolean',
+                'profit_margin_percentage' => 'nullable|numeric|min:0|max:100',
+                'termins' => 'nullable|array',
+                'termins.*.nama_termin' => 'required_with:termins|string',
+                'termins.*.nilai_termin' => 'required_with:termins|numeric|min:0',
+                'termins.*.dp_percentage' => 'required_with:termins|numeric|min:0|max:100',
+                'termins.*.nilai_dp' => 'required_with:termins|numeric|min:0',
+                'termins.*.nilai_pelunasan' => 'required_with:termins|numeric|min:0',
+                'termins.*.tanggal_dp' => 'nullable|date',
+                'termins.*.tanggal_pelunasan' => 'nullable|date|after_or_equal:termins.*.tanggal_dp',
             ]);
 
             if ($validator->fails()) {
@@ -67,7 +77,7 @@ class InvoiceController extends Controller
             DB::beginTransaction();
             try {
                 // Validasi anggaran proyek
-                $proyek = Proyek::find($request->proyek_id);
+                $proyek = Proyek::findOrFail($request->proyek_id);
                 $totalInvoice = Invoice::where('proyek_id', $request->proyek_id)->sum('total_amount');
                 $totalBaru = 0;
                 foreach ($request->purchase_materials as $item) {
@@ -91,6 +101,7 @@ class InvoiceController extends Controller
 
                 $invoiceNumber = 'INV-' . $date . '-' . str_pad($number, 4, '0', STR_PAD_LEFT);
 
+                // Create invoice
                 $invoice = Invoice::create([
                     'proyek_id' => $request->proyek_id,
                     'payment_method_id' => $request->payment_method_id,
@@ -102,112 +113,65 @@ class InvoiceController extends Controller
                     'use_ppn' => $request->use_ppn ?? false,
                     'use_pph_non_final' => $request->use_pph_non_final ?? false,
                     'use_pph_final' => $request->use_pph_final ?? false,
+                    'profit_margin_percentage' => $request->profit_margin_percentage ?? 30.00,
                 ]);
 
+                // Create purchase materials
                 $totalPurchaseAmount = 0;
-                $totalBarangAmount = 0;
-                $totalJasaAmount = 0;
-
                 foreach ($request->purchase_materials as $item) {
                     $totalHarga = $item['qty'] * $item['harga'];
                     $totalPurchaseAmount += $totalHarga;
 
-                    if (isset($item['is_service']) && $item['is_service']) {
-                        $totalJasaAmount += $totalHarga;
-                    } else {
-                        $totalBarangAmount += $totalHarga;
-                    }
-
-                    $purchaseMaterial = new PurchaseMaterial([
+                    PurchaseMaterial::create([
+                        'invoice_id' => $invoice->id,
+                        'proyek_id' => $request->proyek_id,
                         'item' => $item['item'],
                         'type' => $item['type'],
                         'spesifikasi' => $item['spesifikasi'] ?? null,
                         'unit_id' => $item['unit_id'],
+                        'category_id' => $item['category_id'] ?? null,
+                        'service_category_id' => $item['service_category_id'] ?? null,
                         'qty' => $item['qty'],
                         'harga' => $item['harga'],
                         'total_harga' => $totalHarga,
                         'deskripsi' => $item['deskripsi'] ?? null,
-                        'proyek_id' => $request->proyek_id,
-                        'is_service' => $item['is_service'] ?? false,
-                        'category_id' => $item['category_id'] ?? null,
-                        'service_category_id' => $item['service_category_id'] ?? null,
                         'merek_id' => $item['merek_id'] ?? null,
-                        'invoice_id' => $invoice->id
+                        'is_service' => isset($item['is_service']) ? $item['is_service'] : false
                     ]);
-                    $purchaseMaterial->save();
-
-                    // Create expense record
-                    $expense = new \App\Models\Expense([
-                        'user_id' => auth()->id(),
-                        'proyek_id' => $request->proyek_id,
-                        'category_id' => $purchaseMaterial->is_service ? null : $purchaseMaterial->category_id,
-                        'service_category_id' => $purchaseMaterial->is_service ? $purchaseMaterial->service_category_id : null,
-                        'amount' => $purchaseMaterial->total_harga,
-                        'description' => "Pembelian " . $purchaseMaterial->item . " - " . $purchaseMaterial->deskripsi,
-                        'transaction_date' => $request->invoice_date,
-                        'status' => 'Pending',
-                        'payment_method' => null,
-                        'prepared_fund' => $purchaseMaterial->total_harga,
-                        'source_type' => 'purchase',
-                        'source_id' => $purchaseMaterial->id,
-                        'invoice_id' => $invoice->id
-                    ]);
-                    $expense->save();
-
-                    $purchaseMaterial->expense_id = $expense->id;
-                    $purchaseMaterial->save();
                 }
 
-                // Calculate taxes
-                $pphNonFinalBarang = $request->use_pph_non_final ? ($totalBarangAmount * 0.015) : 0;
-                $pphNonFinalJasa = $request->use_pph_non_final ? ($totalJasaAmount * 0.02) : 0;
-                $pphNonFinalTotal = $pphNonFinalBarang + $pphNonFinalJasa;
-
+                // Calculate taxes and profit
+                $pphNonFinalTotal = $request->use_pph_non_final ? ($totalPurchaseAmount * 0.02) : 0;
+                $pphFinal = $request->use_pph_final ? ($totalPurchaseAmount * 0.05) : 0;
                 $ppnAmount = $request->use_ppn ? ($totalPurchaseAmount * 0.11) : 0;
+                $netProfit = $totalPurchaseAmount * ($invoice->profit_margin_percentage / 100);
 
-                $netProfit = $totalPurchaseAmount * 0.3;
-                $pphFinal = $request->use_pph_final ? ($netProfit * 0.22) : 0;
-
+                // Update invoice with calculated amounts
                 $invoice->update([
                     'total_amount' => $totalPurchaseAmount,
                     'pph_non_final_amount' => $pphNonFinalTotal,
                     'pph_final_amount' => $pphFinal,
                     'ppn_amount' => $ppnAmount,
                     'net_profit' => $netProfit,
-                    'payment_method_id' => $request->payment_method_id,
                 ]);
 
-                // Handle termins
+                // Handle termins if provided
                 if ($request->has('termins') && is_array($request->termins) && count($request->termins) > 0) {
-                    foreach ($request->termins as $i => $terminData) {
+                    foreach ($request->termins as $terminData) {
                         \App\Models\Termin::create([
                             'proyek_id' => $request->proyek_id,
                             'invoice_id' => $invoice->id,
-                            'nama_termin' => $terminData['nama_termin'] ?? 'Termin ' . ($i+1),
+                            'nama_termin' => $terminData['nama_termin'],
                             'nilai_termin' => $terminData['nilai_termin'],
-                            'dp_percentage' => $terminData['dp_percentage'] ?? 0,
-                            'nilai_dp' => $terminData['nilai_dp'] ?? 0,
-                            'nilai_pelunasan' => $terminData['nilai_pelunasan'] ?? $terminData['nilai_termin'],
+                            'dp_percentage' => $terminData['dp_percentage'],
+                            'nilai_dp' => $terminData['nilai_dp'],
+                            'nilai_pelunasan' => $terminData['nilai_pelunasan'],
                             'tanggal_dp' => $terminData['tanggal_dp'] ?? null,
                             'tanggal_pelunasan' => $terminData['tanggal_pelunasan'] ?? null,
-                            'status_termin' => $terminData['status_termin'] ?? 'Belum Dibayar',
+                            'status_termin' => 'Belum Dibayar',
                             'keterangan' => $terminData['keterangan'] ?? ($request->notes ?? '-')
                         ]);
                     }
-                } elseif (!$request->has('is_cash') || !$request->is_cash) {
-                    \App\Models\Termin::create([
-                        'proyek_id' => $request->proyek_id,
-                        'invoice_id' => $invoice->id,
-                        'nama_termin' => 'Termin 1',
-                        'nilai_termin' => $invoice->total_amount,
-                        'dp_percentage' => 0,
-                        'nilai_dp' => 0,
-                        'nilai_pelunasan' => $invoice->total_amount,
-                        'tanggal_dp' => null,
-                        'tanggal_pelunasan' => null,
-                        'status_termin' => 'Belum Dibayar',
-                        'keterangan' => $request->notes ?? '-'
-                    ]);
                 }
 
                 DB::commit();
@@ -221,8 +185,7 @@ class InvoiceController extends Controller
                 ]);
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Failed to create invoice',
-                    'error' => $e->getMessage()
+                    'message' => 'Failed to create invoice: ' . $e->getMessage()
                 ], 500);
             }
         } catch (\Exception $e) {
@@ -232,8 +195,7 @@ class InvoiceController extends Controller
             ]);
             return response()->json([
                 'status' => 'error',
-                'message' => 'An unexpected error occurred',
-                'error' => $e->getMessage()
+                'message' => 'An unexpected error occurred: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -292,6 +254,32 @@ class InvoiceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Failed to delete invoice. ' . $e->getMessage()], 500);
+        }
+    }
+
+    // Add a new method to get project financial summary
+    public function getProjectFinancialSummary($projectId)
+    {
+        try {
+            $invoice = Invoice::where('proyek_id', $projectId)->first();
+            if (!$invoice) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No invoice found for this project'
+                ], 404);
+            }
+
+            $summary = $invoice->getProjectFinancialSummary();
+            return response()->json([
+                'status' => 'success',
+                'data' => $summary
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to get project financial summary',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

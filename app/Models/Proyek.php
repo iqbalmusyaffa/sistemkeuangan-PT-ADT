@@ -68,4 +68,42 @@ class Proyek extends Model
             $proyek->checkBudgetExceeded();
         });
     }
+
+    public function getTotalIncomeAttribute()
+    {
+        return $this->termins()
+            ->with('incomes')
+            ->get()
+            ->sum(function ($termin) {
+                return $termin->incomes()
+                    ->where('status', 'Diterima')
+                    ->sum('jumlah');
+            });
+    }
+
+    public function getTotalIncomeDpAttribute()
+    {
+        return $this->termins()
+            ->with('incomes')
+            ->get()
+            ->sum(function ($termin) {
+                return $termin->incomes()
+                    ->where('type', 'dp')
+                    ->where('status', 'Diterima')
+                    ->sum('jumlah');
+            });
+    }
+
+    public function getTotalIncomePelunasanAttribute()
+    {
+        return $this->termins()
+            ->with('incomes')
+            ->get()
+            ->sum(function ($termin) {
+                return $termin->incomes()
+                    ->where('type', 'pelunasan')
+                    ->where('status', 'Diterima')
+                    ->sum('jumlah');
+            });
+    }
 }

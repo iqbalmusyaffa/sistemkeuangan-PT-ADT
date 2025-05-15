@@ -23,6 +23,11 @@ return new class extends Migration
             $table->decimal('pph_final_amount', 18, 2)->default(0);
             $table->decimal('ppn_amount', 18, 2)->default(0);
             $table->decimal('net_profit', 18, 2)->default(0);
+            $table->decimal('profit_margin_percentage', 5, 2)->default(30.00);
+            $table->decimal('total_income', 18, 2)->default(0);
+            $table->decimal('total_expenses', 18, 2)->default(0);
+            $table->decimal('profit_loss', 18, 2)->default(0);
+            $table->decimal('profit_loss_percentage', 5, 2)->default(0);
             $table->boolean('use_ppn')->default(false);
             $table->boolean('use_pph_non_final')->default(false);
             $table->boolean('use_pph_final')->default(false);

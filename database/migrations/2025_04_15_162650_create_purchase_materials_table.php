@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('type');
             $table->text('spesifikasi')->nullable();
             $table->foreignId('unit_id')->constrained('units')->onDelete('cascade');
-            $table->foreignId('category_id')->constrained('kategoris')->onDelete('cascade');
+            $table->foreignId('category_id')->nullable()->constrained('kategoris')->nullOnDelete();
             $table->integer('qty');
             $table->decimal('harga', 15, 2);
             $table->decimal('total_harga', 18, 2);

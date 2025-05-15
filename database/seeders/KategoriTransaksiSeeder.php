@@ -14,6 +14,12 @@ class KategoriTransaksiSeeder extends Seeder
     public function run(): void
     {
         $kategori = [
+            // KATEGORI PEMASUKAN
+            ['nama_kategori' => 'Pendapatan Proyek', 'jenis' => 'pemasukan', 'deskripsi' => 'Pembayaran dari klien'],
+            ['nama_kategori' => 'Pendapatan Jasa Instalasi', 'jenis' => 'pemasukan', 'deskripsi' => 'Pendapatan dari pemasangan alat listrik'],
+            ['nama_kategori' => 'Investasi Masuk', 'jenis' => 'pemasukan', 'deskripsi' => 'Dana dari investor atau pemodal'],
+            ['nama_kategori' => 'Retensi Proyek', 'jenis' => 'pemasukan', 'deskripsi' => 'Dana retensi proyek yang telah selesai'],
+            ['nama_kategori' => 'Pendapatan Lainnya', 'jenis' => 'pemasukan', 'deskripsi' => 'Pemasukan selain dari proyek utama'],
             // ['nama_kategori' => 'Pendapatan Proyek', 'jenis' => 'pemasukan', 'deskripsi' => 'Pembayaran dari klien'],
             // ['nama_kategori' => 'Pendapatan Jasa Instalasi', 'jenis' => 'pemasukan', 'deskripsi' => 'Pendapatan dari pemasangan alat listrik'],
             ['nama_kategori' => 'Material PLTS', 'jenis' => 'pengeluaran', 'deskripsi' => 'Pengeluaran untuk material PLTS'],

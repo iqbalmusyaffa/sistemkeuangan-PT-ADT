@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('termins', function (Blueprint $table) {
-            $table->unsignedBigInteger('expense_id')->nullable();
+            $table->foreignId('expense_id')->nullable()->constrained('expenses')->onDelete('set null');
         });
     }
 

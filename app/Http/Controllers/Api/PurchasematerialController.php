@@ -353,4 +353,19 @@ class PurchasematerialController extends Controller
             'data' => $purchases
         ]);
     }
+
+    public function show(string $id)
+    {
+        try {
+            $purchasematerial = Purchasematerial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek', 'invoice'])
+                ->findOrFail($id);
+            
+            return response()->json($purchasematerial);
+        } catch (\Exception $e) {
+            Log::error('Error in PurchasematerialController@show: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Gagal mengambil data Pembelian material. ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

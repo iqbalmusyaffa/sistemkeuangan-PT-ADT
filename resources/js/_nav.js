@@ -125,12 +125,12 @@ export default [
         to: '/base/pengeluaran',
         icon: 'cil-arrow-circle-bottom',
       },
-      {
-        component: 'CNavItem',
-        name: 'Pencatatan Piutang',
-        to: '/base/piutang',
-        icon: 'cil-money',
-      },
+    //   {
+    //     component: 'CNavItem',
+    //     name: 'Pencatatan Piutang',
+    //     to: '/base/piutang',
+    //     icon: 'cil-money',
+    //   },
       {
         component: 'CNavItem',
         name: 'Kasbon',

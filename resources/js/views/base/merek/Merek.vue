@@ -28,12 +28,12 @@
                 <CFormInput v-model="name" id="name" required />
               </CCol>
             </CRow>
-            <CRow class="mb-3">
+            <!-- <CRow class="mb-3">
               <CCol md="12">
                 <CFormLabel for="deskripsi">Deskripsi</CFormLabel>
                 <CFormInput v-model="deskripsi" id="deskripsi" />
               </CCol>
-            </CRow>
+            </CRow> -->
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
         </CModalBody>
@@ -99,7 +99,6 @@
           render: (data, type, row, meta) => meta.row + 1,
         },
         { title: "Nama Merek", data: "name" },
-        { title: "Deskripsi", data: "deskripsi" },
         {
           title: "Aksi",
           data: null,
@@ -130,13 +129,11 @@
     modalMode.value = mode;
     if (mode === "edit" && brand) {
       name.value = brand.name;
-      deskripsi.value = brand.deskripsi;
       editingId.value = brand.id;
       modalTitle.value = "Edit Merek";
       modalButtonText.value = "Update";
     } else {
       name.value = "";
-      deskripsi.value = "";
       editingId.value = null;
       modalTitle.value = "Tambah Merek";
       modalButtonText.value = "Simpan";

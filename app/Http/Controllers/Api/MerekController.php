@@ -28,14 +28,41 @@ class MerekController extends Controller
     {
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'deskripsi' => 'nullable|string',
         ]);
 
         try {
+            // Check if brand already exists
+            $existingBrand = Merek::where('name', $validatedData['name'])->first();
+            
+            if ($existingBrand) {
+                return response()->json($existingBrand);
+            }
+
             $merek = Merek::create($validatedData);
             return response()->json($merek, 201);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Gagal menambahkan merek. Silakan coba lagi nanti.'], 500);
+        }
+    }
+
+    /**
+     * Find or create a brand
+     */
+    public function findOrCreate(Request $request)
+    {
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $merek = Merek::firstOrCreate(
+                ['name' => $validatedData['name']],
+                $validatedData
+            );
+            
+            return response()->json($merek);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Gagal memproses merek. Silakan coba lagi nanti.'], 500);
         }
     }
 
@@ -57,7 +84,7 @@ class MerekController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|unique:mereks,name,' . $id,
-            'deskripsi' => 'nullable|string',
+            // 'deskripsi' => 'nullable|string',
         ]);
 
         $merek->update($validated);

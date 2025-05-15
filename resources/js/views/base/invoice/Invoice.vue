@@ -46,6 +46,12 @@
 
           <!-- Data Table for Invoices -->
           <div v-if="selectedProject">
+            <div class="mb-3">
+              <div class="alert alert-info">
+                <strong>Total Pemasukan Proyek:</strong>
+                <span class="float-end">{{ formatCurrency(projectTotalIncome) }}</span>
+              </div>
+            </div>
             <div style="overflow-x:auto; width:100%">
               <table ref="invoiceTableRef" class="display nowrap w-100"></table>
             </div>
@@ -166,11 +172,12 @@
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel>Jenis Pembayaran</CFormLabel>
-              <CFormCheck type="radio" label="Cash (Tanpa Termin)" v-model="form.is_cash" :value="true" />
-              <CFormCheck type="radio" label="Termin" v-model="form.is_cash" :value="false" />
+              <CFormCheck type="radio" label="Cash (Tanpa Termin)" v-model="form.is_cash" value="cash" />
+              <CFormCheck type="radio" label="Termin" v-model="form.is_cash" value="termin" />
             </CCol>
           </CRow>
-  <!-- Payment Method -->
+
+          <!-- Payment Method -->
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="payment_method_id">Metode Pembayaran</CFormLabel>
@@ -187,26 +194,8 @@
               </CFormSelect>
             </CCol>
           </CRow>
-          <div v-if="!form.is_cash">
-            <div v-for="(termin, idx) in form.termins" :key="idx" class="border p-2 mb-2">
-              <CRow>
-                <CCol md="4">
-                  <CFormInput v-model="termin.nama_termin" placeholder="Nama Termin" />
-                </CCol>
-                <CCol md="3">
-                  <CFormInput v-model.number="termin.nilai_termin" type="number" placeholder="Nilai Termin" />
-                </CCol>
-                <CCol md="3">
-                  <CFormInput v-model.number="termin.dp_percentage" type="number" placeholder="Persentase DP" />
-                </CCol>
-                <CCol md="2">
-                  <CButton color="danger" @click="form.termins.splice(idx,1)" v-if="form.termins.length > 1">Hapus</CButton>
-                </CCol>
-              </CRow>
-            </div>
-            <CButton color="success" @click="form.termins.push({nama_termin:'',nilai_termin:0,dp_percentage:0})">Tambah Termin</CButton>
-          </div>
 
+          <!-- Items Section -->
           <CRow class="mb-3">
             <CCol md="12">
               <h5>Items</h5>
@@ -307,15 +296,22 @@
                       :readonly="modalMode === 'view'"
                       :disabled="isServiceType(item)"
                       :class="{ 'bg-light': isServiceType(item) }"
+                      @change="handleMerekChange(item)"
                     >
                       <option value="">Pilih Merek</option>
+                      <option value="new">+ Tambah Merek Baru</option>
                       <option v-for="merek in mereks" :key="merek.id" :value="merek.id">
                         {{ merek.name }}
                       </option>
                     </CFormSelect>
-                    <small v-if="isServiceType(item)" class="text-muted">
-                      Merek otomatis diatur untuk jasa
-                    </small>
+                    <div v-if="item.merek_id === 'new'" class="mt-2">
+                      <CFormLabel for="newBrandName">Nama Merek Baru</CFormLabel>
+                      <CFormInput id="newBrandName" v-model="newBrandName" required />
+                      <div class="mt-2">
+                        <CButton color="primary" size="sm" @click="saveNewBrandInline(item)">Simpan</CButton>
+                        <CButton color="secondary" size="sm" @click="cancelNewBrand(item)">Batal</CButton>
+                      </div>
+                    </div>
                   </CCol>
                 </CRow>
                 <CRow class="mt-3">
@@ -345,9 +341,11 @@
                   </CCol>
                 </CRow>
               </div>
-              <CButton v-if="modalMode !== 'view'" color="success" size="sm" @click="addItem">
-                <CIcon icon="cil-plus" /> Tambah Item
-              </CButton>
+              <div class="mt-3">
+                <CButton v-if="modalMode !== 'view'" color="success" size="sm" @click="addItem">
+                  <CIcon icon="cil-plus" /> Tambah Item
+                </CButton>
+              </div>
             </CCol>
           </CRow>
 
@@ -405,7 +403,7 @@
                   </CCol>
                   <CCol md="6">
                     <div class="mb-2">
-                      <strong>Laba Bersih (30%):</strong>
+                      <strong>Laba Bersih ({{ form.profit_margin_percentage }}%):</strong>
                       <span class="float-end"> {{ formatCurrency(netProfit) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_final">
@@ -419,6 +417,26 @@
                     <div class="mb-2">
                       <strong>Total dengan Pajak:</strong>
                       <span class="float-end"> {{ formatCurrency(totalWithTax) }}</span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Total Pendapatan:</strong>
+                      <span class="float-end"> {{ formatCurrency(totalIncome) }}</span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Total Pengeluaran:</strong>
+                      <span class="float-end"> {{ formatCurrency(totalExpenses) }}</span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Laba/Rugi:</strong>
+                      <span class="float-end" :class="{'text-success': profitLoss > 0, 'text-danger': profitLoss < 0}">
+                        {{ formatCurrency(profitLoss) }}
+                      </span>
+                    </div>
+                    <div class="mb-2">
+                      <strong>Persentase Laba/Rugi:</strong>
+                      <span class="float-end" :class="{'text-success': profitLossPercentage > 0, 'text-danger': profitLossPercentage < 0}">
+                        {{ profitLossPercentage.toFixed(2) }}%
+                      </span>
                     </div>
                   </CCol>
                 </CRow>
@@ -436,6 +454,19 @@
         </CButton>
       </CModalFooter>
       <CModalFooter v-else><CButton color="secondary" @click="closeModal">Tutup</CButton></CModalFooter>
+    </CModal>
+
+    <CModal :visible="showBrandModal" @close="closeBrandModal" title="Tambah Merek Baru">
+      <CModalBody>
+        <CForm @submit.prevent="saveNewBrand">
+          <CFormLabel for="newBrandName">Nama Merek</CFormLabel>
+          <CFormInput id="newBrandName" v-model="newBrandName" required />
+        </CForm>
+      </CModalBody>
+      <CModalFooter>
+        <CButton color="secondary" @click="closeBrandModal">Batal</CButton>
+        <CButton color="primary" @click="saveNewBrand">Simpan</CButton>
+      </CModalFooter>
     </CModal>
   </CRow>
 </template>
@@ -472,6 +503,11 @@ export default {
     const modalMode = ref('add') // 'add', 'edit', 'view'
     const route = useRoute()
     const paymentMethods = ref([])
+    const showBrandModal = ref(false)
+    const newBrandName = ref('')
+    const brandItemRef = ref(null)
+    const projectTotalIncome = ref(0);
+    const editingId = ref(null)
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -589,12 +625,11 @@ export default {
         is_service: false,
         serviceCategories: []
       }],
-      is_cash: true,
+      is_cash: 'cash',
       termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}],
       payment_method_id: ''
     })
     const modalTitle = ref('Tambah Invoice')
-    const editingId = ref(null)
     let dataTable = null
 
     const formatCurrency = (value) => {
@@ -817,7 +852,7 @@ export default {
           is_service: false,
           serviceCategories: []
         }],
-        is_cash: true,
+        is_cash: 'cash',
         termins: [{nama_termin:'',nilai_termin:0,dp_percentage:0}],
         payment_method_id: ''
       }
@@ -862,7 +897,21 @@ export default {
         Swal.fire({ icon: 'error', title: 'Error', text: 'Tanggal invoice harus diisi!' });
         return false;
       }
+      if (!form.value.payment_method_id) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Metode pembayaran harus dipilih!' });
+        return false;
+      }
+      if (!form.value.purchase_materials || form.value.purchase_materials.length === 0) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Minimal satu item harus ditambahkan!' });
+        return false;
+      }
+
+      // Validasi untuk items
       for (const [i, item] of form.value.purchase_materials.entries()) {
+        if (!item.item || item.item.trim() === '') {
+          Swal.fire({ icon: 'error', title: 'Error', text: `Nama item ke-${i+1} harus diisi!` });
+          return false;
+        }
         if (!item.unit_id) {
           Swal.fire({ icon: 'error', title: 'Error', text: `Unit pada item ke-${i+1} harus dipilih!` });
           return false;
@@ -879,18 +928,11 @@ export default {
           Swal.fire({ icon: 'error', title: 'Error', text: `Harga pada item ke-${i+1} harus diisi dan > 0!` });
           return false;
         }
-        if (!item.type) {
-          Swal.fire({ icon: 'error', title: 'Error', text: `Type pada item ke-${i+1} harus diisi!` });
-          return false;
-        }
-        if (isServiceType(item)) {
-          const categories = getServiceCategoriesByUnit(item.unit_id)
-          if (categories.length > 0 && !item.service_category_id) {
+        const unit = units.value.find(u => String(u.id) === String(item.unit_id));
+        const isService = unit && ["jasa", "set", "transaksi"].includes(unit.unit_name.toLowerCase());
+        if (isService) {
+          if (!item.service_category_id) {
             Swal.fire({ icon: 'error', title: 'Error', text: `Kategori jasa pada item ke-${i+1} harus dipilih!` });
-            return false;
-          }
-          if (!item.harga || item.harga <= 0) {
-            Swal.fire({ icon: 'error', title: 'Error', text: `Harga jasa pada item ke-${i+1} tidak valid!` });
             return false;
           }
         } else {
@@ -898,20 +940,90 @@ export default {
             Swal.fire({ icon: 'error', title: 'Error', text: `Kategori material pada item ke-${i+1} harus dipilih!` });
             return false;
           }
+          if (!item.merek_id) {
+            Swal.fire({ icon: 'error', title: 'Error', text: `Merek pada item ke-${i+1} harus dipilih!` });
+            return false;
+          }
         }
       }
       return true;
     }
 
+    // Update computed properties untuk perhitungan termin
+    const totalTerminAmount = computed(() => {
+      if (!form.value.termins) return 0;
+      return form.value.termins.reduce((sum, termin) => sum + Number(termin.nilai_termin || 0), 0);
+    });
+
+    const totalTerminDP = computed(() => {
+      if (!form.value.termins) return 0;
+      return form.value.termins.reduce((sum, termin) => sum + Number(termin.nilai_dp || 0), 0);
+    });
+
+    const totalTerminPelunasan = computed(() => {
+      if (!form.value.termins) return 0;
+      return form.value.termins.reduce((sum, termin) => sum + Number(termin.nilai_pelunasan || 0), 0);
+    });
+
+    // Update fungsi calculateTerminValues
+    const calculateTerminValues = (termin) => {
+      if (termin.nilai_termin && termin.dp_percentage) {
+        termin.nilai_dp = (termin.nilai_termin * termin.dp_percentage) / 100;
+        termin.nilai_pelunasan = termin.nilai_termin - termin.nilai_dp;
+      }
+    };
+
+    // Update fungsi onTerminNilaiInput
+    const onTerminNilaiInput = (event, termin) => {
+      // Ambil hanya angka
+      let value = event.target.value.replace(/[^\d]/g, '');
+      // Hilangkan 0 di depan
+      value = value.replace(/^0+/, '');
+      // Set nilai termin
+      termin.nilai_termin = value ? Number(value) : 0;
+      // Hitung ulang nilai DP dan pelunasan
+      calculateTerminValues(termin);
+    };
+
+    // Update fungsi addTermin
+    const addTermin = () => {
+      const today = new Date().toISOString().split('T')[0];
+      form.value.termins.push({
+        nama_termin: '',
+        nilai_termin: 0,
+        dp_percentage: 0,
+        nilai_dp: 0,
+        nilai_pelunasan: 0,
+        tanggal_dp: today,
+        tanggal_pelunasan: today,
+        keterangan: '',
+        status_termin: 'Belum Dibayar'
+      });
+    };
+
+    // Update template untuk menampilkan summary termin
+    const terminSummary = computed(() => {
+      if (form.value.is_cash === 'termin') {
+        return {
+          total: totalTerminAmount.value,
+          dp: totalTerminDP.value,
+          pelunasan: totalTerminPelunasan.value
+        };
+      }
+      return {
+        total: 0,
+        dp: 0,
+        pelunasan: 0
+      };
+    });
+
+    // Update handleSubmit untuk memastikan nilai termin valid
     const handleSubmit = async () => {
       if (!validateForm()) return;
-
       try {
         const token = sessionStorage.getItem('token');
         const payload = {
           ...form.value,
-          is_cash: form.value.is_cash,
-          termins: form.value.is_cash ? [] : form.value.termins,
           purchase_materials: form.value.purchase_materials.map(item => ({
             ...item,
             harga: typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga
@@ -920,22 +1032,31 @@ export default {
           use_pph_non_final: form.value.use_pph_non_final,
           use_pph_final: form.value.use_pph_final
         };
-
+        // Hapus field termins jika cash
+        if (form.value.is_cash) {
+          delete payload.termins;
+        } else {
+          // Jika termin, jangan kirim termins sama sekali (biar backend yang handle)
+          delete payload.termins;
+        }
         const response = await axios.post('/api/invoices', payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
-
         if (response.data.status === 'error') {
           throw new Error(response.data.message || 'Gagal membuat invoice');
         }
-
-        Swal.fire({
-          icon: 'success',
-          title: 'Sukses',
-          text: 'Invoice berhasil ditambahkan'
-        });
-        closeModal();
-        loadInvoices();
+        const invoiceId = response.data.id || response.data.data?.id;
+        if (form.value.is_cash === false) {
+          window.location.href = `/termin?invoice_id=${invoiceId}`;
+        } else {
+          Swal.fire({
+            icon: 'success',
+            title: 'Sukses',
+            text: 'Invoice berhasil ditambahkan'
+          });
+          closeModal();
+          loadInvoices();
+        }
       } catch (error) {
         console.error('Error submitting form:', error);
         const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice';
@@ -1269,6 +1390,90 @@ export default {
       nextTick(mountCoreUIIcons);
     };
 
+    const openBrandModal = (item) => {
+      showBrandModal.value = true
+      newBrandName.value = ''
+      brandItemRef.value = item
+    }
+
+    const closeBrandModal = () => {
+      showBrandModal.value = false
+      newBrandName.value = ''
+      brandItemRef.value = null
+    }
+
+    const handleMerekChange = (item) => {
+      if (item.merek_id === 'new') {
+        openBrandModal(item)
+      }
+    }
+
+    const saveNewBrand = async () => {
+      if (!newBrandName.value.trim()) {
+        Swal.fire({ icon: 'error', title: 'Nama merek wajib diisi!' })
+        return
+      }
+      try {
+        const token = sessionStorage.getItem('token')
+        const response = await axios.post('/api/mereks', { name: newBrandName.value }, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        mereks.value.push(response.data)
+        if (brandItemRef.value) {
+          brandItemRef.value.merek_id = response.data.id
+        }
+        closeBrandModal()
+        Swal.fire({ icon: 'success', title: 'Berhasil!', text: 'Merek baru berhasil ditambahkan' })
+      } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menambahkan merek baru' })
+      }
+    }
+
+    const saveNewBrandInline = async (item) => {
+      if (!newBrandName.value.trim()) {
+        Swal.fire({ icon: 'error', title: 'Nama merek wajib diisi!' })
+        return
+      }
+      try {
+        const token = sessionStorage.getItem('token')
+        const response = await axios.post('/api/mereks', { name: newBrandName.value }, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        mereks.value.push(response.data)
+        item.merek_id = response.data.id
+        newBrandName.value = ''
+        Swal.fire({ icon: 'success', title: 'Berhasil!', text: 'Merek baru berhasil ditambahkan' })
+      } catch (error) {
+        Swal.fire({ icon: 'error', title: 'Error', text: 'Gagal menambahkan merek baru' })
+      }
+    }
+
+    const cancelNewBrand = (item) => {
+      item.merek_id = ''
+      newBrandName.value = ''
+    }
+
+    // Fetch summary proyek dari endpoint khusus
+    const fetchProjectSummary = async () => {
+      if (!selectedProject.value) {
+        projectTotalIncome.value = 0;
+        return;
+      }
+      try {
+        const token = sessionStorage.getItem('token');
+        const res = await axios.get(`/api/proyek/${selectedProject.value}/summary`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        projectTotalIncome.value = res.data.total_income || 0;
+      } catch (e) {
+        projectTotalIncome.value = 0;
+      }
+    };
+
+    watch(selectedProject, () => {
+      fetchProjectSummary();
+    });
+
     onMounted(() => {
       loadMasterData()
       loadProjects()
@@ -1281,6 +1486,7 @@ export default {
       onUnmounted(() => {
         window.removeEventListener('termin-updated', handler)
       })
+      fetchProjectSummary();
     })
 
     // Watch for changes in selectedProject
@@ -1299,6 +1505,46 @@ export default {
         }
       }
     )
+
+    // Tambahkan computed properties baru
+    const totalIncome = computed(() => {
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        return netProfit.value;
+      }
+      return invoices.value.reduce((sum, inv) => sum + parseFloat(inv.total_income || 0), 0);
+    });
+
+    const totalExpenses = computed(() => {
+      if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+        return 0;
+      }
+      return invoices.value.reduce((sum, inv) => sum + parseFloat(inv.total_expenses || 0), 0);
+    });
+
+    const profitLoss = computed(() => {
+      return totalIncome.value - totalExpenses.value;
+    });
+
+    const profitLossPercentage = computed(() => {
+      if (totalExpenses.value === 0) return 0;
+      return (profitLoss.value / totalExpenses.value) * 100;
+    });
+
+    // Add new method for navigation
+    const goToTermin = () => {
+      // Simpan data invoice sementara
+      const invoiceData = {
+        proyek_id: form.value.proyek_id,
+        invoice_date: form.value.invoice_date,
+        payment_method_id: form.value.payment_method_id,
+        notes: form.value.notes,
+        purchase_materials: form.value.purchase_materials
+      };
+      sessionStorage.setItem('tempInvoiceData', JSON.stringify(invoiceData));
+      
+      // Navigate to Termin page
+      window.location.href = '/termin';
+    };
 
     return {
       invoiceTableRef,
@@ -1343,7 +1589,30 @@ export default {
       ppnAmount,
       totalWithTax,
       paymentMethods,
-      fetchPaymentMethods
+      fetchPaymentMethods,
+      showBrandModal,
+      newBrandName,
+      openBrandModal,
+      closeBrandModal,
+      handleMerekChange,
+      saveNewBrand,
+      saveNewBrandInline,
+      cancelNewBrand,
+      totalIncome,
+      totalExpenses,
+      profitLoss,
+      profitLossPercentage,
+      projectTotalIncome,
+      modalMode,
+      editingId,
+      addTermin,
+      onTerminNilaiInput,
+      totalTerminAmount,
+      totalTerminDP,
+      totalTerminPelunasan,
+      terminSummary,
+      calculateTerminValues,
+      goToTermin
     }
   }
 }

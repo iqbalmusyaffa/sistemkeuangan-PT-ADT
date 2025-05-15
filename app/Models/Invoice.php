@@ -20,6 +20,11 @@ class Invoice extends Model
         'pph_final_amount',
         'ppn_amount',
         'net_profit',
+        'profit_margin_percentage',
+        'total_income',
+        'total_expenses',
+        'profit_loss',
+        'profit_loss_percentage',
         'use_ppn',
         'use_pph_non_final',
         'use_pph_final',
@@ -34,6 +39,11 @@ class Invoice extends Model
         'pph_final_amount' => 'decimal:2',
         'ppn_amount' => 'decimal:2',
         'net_profit' => 'decimal:2',
+        'profit_margin_percentage' => 'decimal:2',
+        'total_income' => 'decimal:2',
+        'total_expenses' => 'decimal:2',
+        'profit_loss' => 'decimal:2',
+        'profit_loss_percentage' => 'decimal:2',
         'use_ppn' => 'boolean',
         'use_pph_non_final' => 'boolean',
         'use_pph_final' => 'boolean',
@@ -149,4 +159,136 @@ class Invoice extends Model
             ->where('is_service', true)
             ->sum('total_harga');
     }
+
+    // Realtime: Total income (laba bersih invoice + income lain yang diterima)
+    public function getTotalIncomeAttribute()
+    {
+        $netProfit = $this->net_profit;
+        $otherIncomes = \App\Models\Income::where('proyek_id', $this->proyek_id)
+            ->whereNull('invoice_id')
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+        return $netProfit + $otherIncomes;
+    }
+
+    // Realtime: Total pengeluaran (semua expense yang statusnya Lunas)
+    public function getTotalExpensesAttribute()
+    {
+        return \App\Models\Expense::where('proyek_id', $this->proyek_id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
+    }
+
+    // Realtime: Laba/rugi
+    public function getProfitLossAttribute()
+    {
+        return $this->total_income - $this->total_expenses;
+    }
+
+    // Realtime: Persentase laba/rugi
+    public function getProfitLossPercentageAttribute()
+    {
+        if ($this->total_expenses == 0) return 0;
+        return ($this->profit_loss / $this->total_expenses) * 100;
+    }
+
+    // Get all incomes related to this project
+    public function getProjectIncomesAttribute()
+    {
+        return Income::where('proyek_id', $this->proyek_id)->get();
+    }
+
+    // Get total income from all sources for this project
+    public function getTotalProjectIncomeAttribute()
+    {
+        $invoiceIncome = $this->total_income;
+        $otherIncomes = Income::where('proyek_id', $this->proyek_id)
+            ->whereNull('invoice_id')
+            ->sum('jumlah');
+        return $invoiceIncome + $otherIncomes;
+    }
+
+    // Get total expenses for this project
+    public function getTotalProjectExpensesAttribute()
+    {
+        return Expense::where('proyek_id', $this->proyek_id)->sum('amount');
+    }
+
+    // Calculate overall project profit/loss
+    public function getProjectProfitLossAttribute()
+    {
+        return $this->total_project_income - $this->total_project_expenses;
+    }
+
+    // Calculate overall project profit/loss percentage
+    public function getProjectProfitLossPercentageAttribute()
+    {
+        if ($this->total_project_expenses == 0) return 0;
+        return ($this->project_profit_loss / $this->total_project_expenses) * 100;
+    }
+
+    // Calculate and update profit/loss
+    public function calculateProfitLoss()
+    {
+        // Calculate total income (net profit from invoice)
+        $this->total_income = $this->net_profit;
+
+        // Calculate total expenses
+        $this->total_expenses = $this->expenses()->sum('amount');
+
+        // Calculate profit/loss
+        $this->profit_loss = $this->total_income - $this->total_expenses;
+
+        // Calculate profit/loss percentage
+        $this->profit_loss_percentage = $this->total_expenses > 0
+            ? ($this->profit_loss / $this->total_expenses) * 100
+            : 0;
+
+        $this->save();
+    }
+
+    // Calculate net profit based on profit margin
+    public function calculateNetProfit()
+    {
+        $this->net_profit = $this->total_amount * ($this->profit_margin_percentage / 100);
+        $this->save();
+    }
 }
+
+    // Realtime: Summary laba/rugi proyek
+//     public function getProjectFinancialSummary()
+//     {
+//         $totalProjectIncome = \App\Models\Income::where('proyek_id', $this->proyek_id)
+//             ->where('status', 'Diterima')
+//             ->sum('jumlah');
+//         $totalProjectExpenses = \App\Models\Expense::where('proyek_id', $this->proyek_id)
+//             ->where('status', 'Lunas')
+//             ->sum('amount');
+//         $projectProfitLoss = $totalProjectIncome - $totalProjectExpenses;
+//         $projectProfitLossPercentage = $totalProjectExpenses > 0
+//             ? ($projectProfitLoss / $totalProjectExpenses) * 100
+//             : 0;
+//         return [
+//             'total_project_income' => $totalProjectIncome,
+//             'total_project_expenses' => $totalProjectExpenses,
+//             'project_profit_loss' => $projectProfitLoss,
+//             'project_profit_loss_percentage' => $projectProfitLossPercentage
+//         ];
+//     }
+
+//     // Override the save method to ensure calculations are always up to date
+//     public function save(array $options = [])
+//     {
+//         // Calculate net profit if total amount or profit margin changes
+//         if ($this->isDirty(['total_amount', 'profit_margin_percentage'])) {
+//             $this->calculateNetProfit();
+//         }
+
+//         // Calculate profit/loss if relevant fields change
+//         if ($this->isDirty(['net_profit', 'total_amount', 'profit_margin_percentage'])) {
+//             $this->calculateProfitLoss();
+//         }
+
+//         return parent::save($options);
+//     }
+// }

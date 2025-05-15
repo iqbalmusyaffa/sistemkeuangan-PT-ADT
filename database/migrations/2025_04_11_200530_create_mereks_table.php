@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('mereks', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->text('deskripsi')->nullable();
+            // $table->text('deskripsi')->nullable();
             $table->timestamps();
             // Index on name for faster searches
             $table->index('name');

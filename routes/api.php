@@ -63,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
     // Merek routes
     Route::apiResource('mereks', MerekController::class);
+    Route::post('/mereks/find-or-create', [MerekController::class, 'findOrCreate']);
     // Unit routes
     Route::apiResource('units', UnitsController::class);
     // Purchasematerial routes
@@ -78,6 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Additional proyek-related routes
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
     Route::get('proyeks/{id}/purchase-materials', [ProyekController::class, 'getPurchaseMaterials']);
+    Route::get('/proyeks/{id}/summary', [\App\Http\Controllers\Api\ProyekController::class, 'summary']);
 
     Route::post('/logout', [UserController::class, 'logout']);
 
@@ -132,3 +134,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);
+Route::get('/test-log', function() {
+    \Log::error('Test error log from API');
+    return response()->json(['message' => 'Logged!']);
+});

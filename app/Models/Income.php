@@ -10,31 +10,41 @@ use App\Models\PaymentMethod;
 use App\Models\Proyek;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Models\Termin;
+use App\Traits\Trackable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class Income extends Model
 {
-    use HasFactory;
+    use HasFactory, Trackable;
 
     protected $table = 'incomes';
 
     protected $fillable = [
-        'kode_transaksi',
-        'tanggal',
         'jumlah',
-        'kategori_id',
-        'deskripsi',
-        'payment_method_id',
         'status',
-        'bukti_pembayaran',
+        'type',
+        'termin_id',
+        'kategori_id',
+        'payment_method_id',
         'proyek_id',
+        'deskripsi',
+        'bukti_pembayaran',
         'created_by',
-        'updated_by',
+        'updated_by'
+    ];
+
+    protected $casts = [
+        'jumlah' => 'decimal:2',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
     /**
      * Relasi ke kategori pemasukan.
      */
-    public function kategori()
+    public function kategori(): BelongsTo
     {
         return $this->belongsTo(Kategori::class);
     }
@@ -42,7 +52,7 @@ class Income extends Model
     /**
      * Relasi ke metode pembayaran.
      */
-    public function paymentMethod()
+    public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
     }
@@ -50,7 +60,7 @@ class Income extends Model
     /**
      * Relasi ke proyek.
      */
-    public function proyek()
+    public function proyek(): BelongsTo
     {
         return $this->belongsTo(Proyek::class);
     }
@@ -58,7 +68,7 @@ class Income extends Model
     /**
      * Relasi ke user yang membuat data.
      */
-    public function createdBy()
+    public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
@@ -66,9 +76,17 @@ class Income extends Model
     /**
      * Relasi ke user yang terakhir mengubah data.
      */
-    public function updatedBy()
+    public function updater(): BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * Relasi ke termin.
+     */
+    public function termin(): BelongsTo
+    {
+        return $this->belongsTo(Termin::class);
     }
 
     // =====================
@@ -106,34 +124,16 @@ class Income extends Model
         parent::boot();
 
         static::creating(function ($income) {
-            if (empty($income->kode_transaksi)) {
-                self::generateKodeTransaksi($income);
+            $income->kode_transaksi = 'INV-' . strtoupper(Str::random(8));
+        });
+
+        static::saved(function ($income) {
+            if ($income->termin_id) {
+                $termin = $income->termin;
+                if ($termin) {
+                    $termin->updateStatusFromPayments();
+                }
             }
         });
-    }
-
-    protected static function generateKodeTransaksi(&$income)
-    {
-        try {
-            $date = Carbon::parse($income->tanggal);
-            $year = substr($date->format('Y'), -2);
-            $month = str_pad($date->format('m'), 2, "0", STR_PAD_LEFT);
-
-            $lastTransaction = self::where('kode_transaksi', 'like', "{$year}.{$month}.%")
-                ->orderBy('kode_transaksi', 'desc')
-                ->first();
-
-            $sequence = 1;
-
-            if ($lastTransaction) {
-                $parts = explode('.', $lastTransaction->kode_transaksi);
-                $lastSeq = count($parts) === 3 ? intval($parts[2]) : 0;
-                $sequence = $lastSeq + 1;
-            }
-
-            $income->kode_transaksi = sprintf("%s.%s.%03d", $year, $month, $sequence);
-        } catch (\Exception $e) {
-            Log::error("Error generating kode transaksi: " . $e->getMessage());
-        }
     }
 }

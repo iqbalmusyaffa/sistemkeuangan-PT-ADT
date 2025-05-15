@@ -41,7 +41,7 @@ class ServiceCategoryController extends BaseController
     {
         $validatedData = $request->validate([
             'nama_kategori' => 'required|string|max:255',
-            'jenis' => 'required|string',
+            'jenis' => 'required|string|in:pengeluaran',
             'harga' => 'required|numeric|min:0',
             'unit_id' => 'required|exists:units,id',
             'deskripsi' => 'nullable|string',
@@ -75,17 +75,16 @@ class ServiceCategoryController extends BaseController
      */
     public function update(Request $request, string $id)
     {
+        $validatedData = $request->validate([
+            'nama_kategori' => 'required|string|max:255',
+            'jenis' => 'required|string|in:pengeluaran',
+            'harga' => 'required|numeric|min:0',
+            'unit_id' => 'required|exists:units,id',
+            'deskripsi' => 'nullable|string',
+        ]);
+
         try {
             $serviceCategory = ServiceCategory::findOrFail($id);
-
-            $validatedData = $request->validate([
-                'nama_kategori' => 'required|string|max:255',
-                'jenis' => 'required|string',
-                'harga' => 'required|numeric|min:0',
-                'unit_id' => 'required|exists:units,id',
-                'deskripsi' => 'nullable|string',
-            ]);
-
             $serviceCategory->update($validatedData);
             return response()->json($serviceCategory);
         } catch (\Exception $e) {

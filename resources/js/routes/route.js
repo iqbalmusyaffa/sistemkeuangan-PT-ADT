@@ -105,12 +105,12 @@ const routes = [
         component: () => import('@/views/base/termin/Termin.vue'),
         meta: { requiresAuth: true },
       },
-      {
-        path: '/base/company',
-        name: 'DataPerusahaan',
-        component: () => import('@/views/base/company/Company.vue'),
-        meta: { requiresAuth: true },
-      },
+    //   {
+    //     path: '/base/company',
+    //     name: 'DataPerusahaan',
+    //     component: () => import('@/views/base/company/Company.vue'),
+    //     meta: { requiresAuth: true },
+    //   },
       {
         path: '/base/pemasukan',
         name: 'Pemasukan',
@@ -147,7 +147,7 @@ const routes = [
         component: () => import('@/views/base/kasbon/Kasbon.vue'),
         meta: { requiresAuth: true },
       },
-    
+
     //   {
     //     path: '/base',
     //     name: 'Base',

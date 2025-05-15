@@ -28,6 +28,25 @@ class InvoiceResource extends JsonResource
             'expenses' => $this->expenses ? ExpenseResource::collection($this->expenses) : [],
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+
+            // Tax information
+            // 'use_ppn' => $this->use_ppn,
+            // 'use_pph_non_final' => $this->use_pph_non_final,
+            // 'use_pph_final' => $this->use_pph_final,
+            // 'pph_non_final_amount' => $this->pph_non_final_amount,
+            // 'pph_final_amount' => $this->pph_final_amount,
+            // 'ppn_amount' => $this->ppn_amount,
+
+            // Profit/Loss information
+            // 'profit_margin_percentage' => $this->profit_margin_percentage,
+            // 'net_profit' => $this->net_profit,
+            // 'total_income' => $this->total_income,
+            // 'total_expenses' => $this->total_expenses,
+            // 'profit_loss' => $this->profit_loss,
+            // 'profit_loss_percentage' => $this->profit_loss_percentage,
+
+            // Project-level financial summary
+            // 'project_financial_summary' => $this->getProjectFinancialSummary(),
         ];
     }
 }

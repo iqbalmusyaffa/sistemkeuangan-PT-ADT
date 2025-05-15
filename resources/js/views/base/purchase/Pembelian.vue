@@ -118,8 +118,7 @@
                 <CFormSelect
                   v-model="form.merek_id"
                   id="merek_id"
-                  :required="!isServiceCategory"
-                  :disabled="isServiceCategory"
+                  :disabled="form.merek_disabled"
                 >
                   <option value="">Pilih Merek</option>
                   <option v-for="merek in mereks" :key="merek.id" :value="merek.id">
@@ -269,7 +268,8 @@ const form = ref({
   deskripsi: "",
   displayHarga: "0",
   displayTotalHarga: "0",
-  invoice_id: null
+  invoice_id: null,
+  merek_disabled: false
 });
 const mereks = ref([]);
 const units = ref([]);
@@ -381,13 +381,26 @@ const fetchServiceCategories = async (unitId) => {
     const token = sessionStorage.getItem("token");
     const response = await axios.get("/api/service-categories", {
       headers: { Authorization: `Bearer ${token}` },
+      params: { unit_id: unitId }
     });
 
     const data = Array.isArray(response.data) ? response.data :
                 (response.data.data ? response.data.data : []);
 
-    serviceCategories.value = data.filter(cat => String(cat.unit_id) === String(unitId));
+    serviceCategories.value = data;
+    console.log("Service categories loaded:", serviceCategories.value);
+
+    // Set service mode
+    form.value.is_service = true;
+    form.value.merek_id = null;
+    form.value.merek_disabled = true;
+
+    // Disable merek field
+    if (document.getElementById('merek_id')) {
+      document.getElementById('merek_id').disabled = true;
+    }
   } catch (err) {
+    console.error("Error fetching service categories:", err);
     Swal.fire({
       icon: "error",
       title: "Error",
@@ -414,18 +427,24 @@ const fetchPembelians = async (proyekId) => {
     ]);
 
     if (purchaseResponse.data && proyekResponse.data) {
-      pembelians.value = purchaseResponse.data.purchases.map(purchase => {
-        return {
-          ...purchase,
-          displayHarga: formatCurrency(purchase.harga),
-          displayTotalHarga: formatCurrency(purchase.total_harga),
-          nama_proyek: proyekResponse.data.nama_proyek,
-          nama_customer: proyekResponse.data.nama_customer,
-          category_name: purchase.is_service ?
-            (purchase.service_category?.nama_kategori || '-') :
-            (purchase.category?.nama_kategori || '-')
-        };
-      });
+      pembelians.value = Array.isArray(purchaseResponse.data.purchases)
+        ? purchaseResponse.data.purchases.map(purchase => ({
+            ...purchase,
+            nama_customer: purchase.proyek?.nama_customer || '-',
+            nama_proyek: purchase.proyek?.nama_proyek || '-',
+            item: purchase.item || '-',
+            merek: purchase.merek?.name || '-',
+            type: purchase.type || '-',
+            unit: purchase.unit?.unit_name || '-',
+            category_name: purchase.is_service
+              ? (purchase.service_category?.nama_kategori || '-')
+              : (purchase.category?.nama_kategori || '-'),
+            qty: purchase.qty ?? '-',
+            harga: purchase.harga ?? '-',
+            total_harga: purchase.total_harga ?? '-',
+            status: purchase.is_service ? 'Jasa' : 'Material'
+          }))
+        : [];
 
       selectedProjectDetails.value = proyekResponse.data;
       initDataTable();
@@ -455,82 +474,18 @@ const initDataTable = () => {
   $(pembelianTableRef.value).DataTable({
     data: pembelians.value,
     columns: [
-      {
-        title: "No",
-        data: null,
-        render: (data, type, row, meta) => meta.row + 1,
-        className: "text-center"
-      },
-      {
-        title: "Customer",
-        data: "nama_customer"
-      },
-      {
-        title: "Proyek",
-        data: "nama_proyek"
-      },
-      {
-        title: "Item",
-        data: "item"
-      },
-      {
-        title: "Merek",
-        data: "merek",
-        render: (data, type, row) => {
-          if (row.is_service) {
-            return "-";
-          }
-          return data ? data.name : "-";
-        }
-      },
-      {
-        title: "Tipe",
-        data: "type"
-      },
-      {
-        title: "Unit",
-        data: "unit",
-        render: (data) => data ? data.unit_name : "-"
-      },
-      {
-        title: "Kategori",
-        data: null,
-        render: (data, type, row) => {
-          if (row.is_service) {
-            return row.service_category?.nama_kategori || '-';
-          }
-          return row.category?.nama_kategori || '-';
-        }
-      },
-      {
-        title: "Jumlah",
-        data: "qty",
-        className: "text-center",
-        render: (data) => data.toLocaleString()
-      },
-      {
-        title: "Harga",
-        data: "harga",
-        className: "text-end",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
-      },
-      {
-        title: "Total",
-        data: "total_harga",
-        className: "text-end",
-        render: (data) => `Rp ${new Intl.NumberFormat('id-ID').format(data)}`
-      },
-      {
-        title: "Status",
-        data: "is_service",
-        render: (data, type, row) => {
-          if (row.is_service) {
-            return `<span class='badge bg-info'>Jasa</span>`;
-          }
-          return `<span class='badge bg-primary'>Material</span>`;
-        },
-        className: "text-center"
-      },
+      { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1, className: "text-center" },
+      { title: "Customer", data: "nama_customer" },
+      { title: "Proyek", data: "nama_proyek" },
+      { title: "Item", data: "item" },
+      { title: "Merek", data: "merek" },
+      { title: "Tipe", data: "type" },
+      { title: "Unit", data: "unit" },
+      { title: "Kategori", data: "category_name" },
+      { title: "Jumlah", data: "qty" },
+      { title: "Harga", data: "harga", render: data => data === '-' ? '-' : `Rp ${Number(data).toLocaleString('id-ID')}` },
+      { title: "Total", data: "total_harga", render: data => data === '-' ? '-' : `Rp ${Number(data).toLocaleString('id-ID')}` },
+      { title: "Status", data: "status", render: data => data === 'Jasa' ? `<span class='badge bg-info'>Jasa</span>` : `<span class='badge bg-primary'>Material</span>` },
       {
         title: "Aksi",
         data: null,
@@ -635,18 +590,19 @@ watch(
       try {
         const response = await axios.get("/api/service-categories", {
           headers: { Authorization: `Bearer ${token}` },
+          params: { unit_id: newValue }
         });
 
         const data = Array.isArray(response.data) ? response.data :
                     (response.data.data ? response.data.data : []);
 
-        // Filter categories by unit_id
-        serviceCategories.value = data.filter(cat => String(cat.unit_id) === String(newValue));
-        console.log("Service categories for unit:", serviceCategories.value);
+        serviceCategories.value = data;
+        console.log("Service categories loaded:", serviceCategories.value);
 
         // Set service mode
         form.value.is_service = true;
         form.value.merek_id = null;
+        form.value.merek_disabled = true;
 
         // Disable merek field
         if (document.getElementById('merek_id')) {
@@ -673,6 +629,7 @@ watch(
         // Reset service mode
         form.value.is_service = false;
         form.value.service_category_id = null;
+        form.value.merek_disabled = false;
 
         // Enable merek field
         if (document.getElementById('merek_id')) {
@@ -757,7 +714,8 @@ const openModal = (mode, pembelian = null) => {
       deskripsi: pembelian.deskripsi || "",
       displayHarga: formatCurrency(pembelian.harga),
       displayTotalHarga: formatCurrency(pembelian.total_harga),
-      invoice_id: pembelian.invoice_id
+      invoice_id: pembelian.invoice_id,
+      merek_disabled: isService
     };
 
     if (isService) {
@@ -784,7 +742,8 @@ const openModal = (mode, pembelian = null) => {
       deskripsi: "",
       displayHarga: "0",
       displayTotalHarga: "0",
-      invoice_id: null
+      invoice_id: null,
+      merek_disabled: false
     };
     editingId.value = null;
     modalTitle.value = "Tambah Pembelian";
@@ -886,7 +845,10 @@ const handleSubmit = async () => {
       is_service: isService,
       category_id: null,
       service_category_id: null,
-      invoice_id: form.value.invoice_id
+      invoice_id: form.value.invoice_id,
+      merek_id: isService
+        ? (mereks.value.find(m => m.name === '-')?.id || null)
+        : (form.value.merek_id || null)
     };
 
     // Add category data based on type

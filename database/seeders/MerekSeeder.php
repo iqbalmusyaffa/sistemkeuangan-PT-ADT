@@ -15,25 +15,25 @@ class MerekSeeder extends Seeder
         $mereks = [
             [
                 'name' => '-',
-                'deskripsi' => 'Untuk kategori jasa',
+                // 'deskripsi' => 'Untuk kategori jasa',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
                 'name' => 'Kenika',
-                'deskripsi' => 'Merek Kenika adalah produsen peralatan listrik berkualitas tinggi',
+                // 'deskripsi' => 'Merek Kenika adalah produsen peralatan listrik berkualitas tinggi',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
                 'name' => 'Solana',
-                'deskripsi' => 'Merek Solana dikenal dengan produk-produk inovatif dan ramah lingkungan',
+                // 'deskripsi' => 'Merek Solana dikenal dengan produk-produk inovatif dan ramah lingkungan',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
                 'name' => 'Deye',
-                'deskripsi' => 'Merek Deye adalah pemimpin dalam teknologi energi terbarukan',
+                // 'deskripsi' => 'Merek Deye adalah pemimpin dalam teknologi energi terbarukan',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
