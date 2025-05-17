@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\ServiceCategory;
 use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\Facades\DataTables;
+use App\Http\Resources\ServiceCategoryResource;
 
 class ServiceCategoryController extends BaseController
 {
@@ -27,7 +28,7 @@ class ServiceCategoryController extends BaseController
             }
 
             $categories = $query->get();
-            return response()->json($categories);
+            return ServiceCategoryResource::collection($categories);
         } catch (\Exception $e) {
             Log::error('Error in ServiceCategoryController@index: ' . $e->getMessage());
             return response()->json(['error' => 'Gagal memuat data kategori jasa.'], 500);
@@ -49,7 +50,7 @@ class ServiceCategoryController extends BaseController
 
         try {
             $serviceCategory = ServiceCategory::create($validatedData);
-            return response()->json($serviceCategory, 201);
+            return new ServiceCategoryResource($serviceCategory);
         } catch (\Exception $e) {
             Log::error('Error in ServiceCategoryController@store: ' . $e->getMessage());
             return response()->json(['error' => 'Gagal menambahkan kategori. Silakan coba lagi nanti.'], 500);
@@ -63,7 +64,7 @@ class ServiceCategoryController extends BaseController
     {
         try {
             $serviceCategory = ServiceCategory::with('unit')->findOrFail($id);
-            return response()->json($serviceCategory);
+            return new ServiceCategoryResource($serviceCategory);
         } catch (\Exception $e) {
             Log::error('Error in ServiceCategoryController@show: ' . $e->getMessage());
             return response()->json(['error' => 'Kategori tidak ditemukan.'], 404);
@@ -86,7 +87,7 @@ class ServiceCategoryController extends BaseController
         try {
             $serviceCategory = ServiceCategory::findOrFail($id);
             $serviceCategory->update($validatedData);
-            return response()->json($serviceCategory);
+            return new ServiceCategoryResource($serviceCategory);
         } catch (\Exception $e) {
             Log::error('Error in ServiceCategoryController@update: ' . $e->getMessage());
             return response()->json(['error' => 'Gagal mengupdate kategori.'], 500);

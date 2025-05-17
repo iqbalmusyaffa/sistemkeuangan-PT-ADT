@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Kategori;
+use App\Http\Resources\KategoriResource;
 use Yajra\DataTables\Facades\DataTables;
 
 class KategoriTransaksiController extends Controller
@@ -14,10 +15,14 @@ class KategoriTransaksiController extends Controller
     public function index(Request $request)
     {
         if ($request->ajax()) {
-            $data = Kategori::select(['id', 'nama_kategori', 'jenis', 'deskripsi']);
+            $data = Kategori::select(['id', 'nama_kategori', 'jenis', 'deskripsi', 'unit_id']);
             return DataTables::of($data)->make(true);
         }
-        return response()->json(Kategori::all());
+        $query = Kategori::query();
+        if ($request->has('unit_id')) {
+            $query->where('unit_id', $request->unit_id);
+        }
+        return KategoriResource::collection($query->get());
     }
 
     /**
@@ -29,11 +34,12 @@ class KategoriTransaksiController extends Controller
             'nama_kategori' => 'required|string|max:255',
             'jenis' => 'required|string',
             'deskripsi' => 'nullable|string',
+            'unit_id' => 'nullable|exists:units,id',
         ]);
 
         try {
             $kategori = Kategori::create($validatedData);
-            return response()->json($kategori, 201);
+            return new KategoriResource($kategori);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Gagal menambahkan kategori. Silakan coba lagi nanti.'], 500);
         }
@@ -45,7 +51,7 @@ class KategoriTransaksiController extends Controller
     public function show(string $id)
     {
         $kategori = Kategori::findOrFail($id);
-        return response()->json($kategori);
+        return new KategoriResource($kategori);
     }
 
     /**
@@ -59,11 +65,12 @@ class KategoriTransaksiController extends Controller
             'nama_kategori' => 'required|unique:kategoris,nama_kategori,' . $id,
             'jenis' => 'required|in:pemasukan,pengeluaran',
             'deskripsi' => 'nullable|string',
+            'unit_id' => 'nullable|exists:units,id',
         ]);
 
         $kategori->update($request->all());
 
-        return response()->json($kategori);
+        return new KategoriResource($kategori);
     }
 
     /**

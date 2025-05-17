@@ -89,6 +89,18 @@
                 </div>
               </div>
             </div>
+
+            <div v-if="anggaranProyek">
+              <div class="alert alert-warning" v-if="totalInvoice > anggaranProyek">
+                <strong>Peringatan!</strong> Total invoice melebihi anggaran proyek (Rp {{ formatCurrency(anggaranProyek) }})
+              </div>
+              <div class="progress mb-2">
+                <div class="progress-bar" :style="{ width: ((totalInvoice / anggaranProyek) * 100) + '%' }">
+                  {{ ((totalInvoice / anggaranProyek) * 100).toFixed(0) }}%
+                </div>
+              </div>
+              <p>Total terpakai: <b>Rp {{ formatCurrency(totalInvoice) }}</b> / <b>Rp {{ formatCurrency(anggaranProyek) }}</b></p>
+            </div>
           </div>
           <div v-else class="alert alert-info">
             Silakan pilih project terlebih dahulu untuk melihat data invoice
@@ -281,7 +293,7 @@
                       :disabled="!item.unit_id"
                     >
                       <option value="">Pilih Kategori Material</option>
-                      <option v-for="category in categories" :key="category.id" :value="category.id">
+                      <option v-for="category in getMaterialCategories(item.unit_id)" :key="category.id" :value="category.id">
                         {{ category.nama_kategori }}
                       </option>
                     </CFormSelect>
@@ -508,6 +520,7 @@ export default {
     const brandItemRef = ref(null)
     const projectTotalIncome = ref(0);
     const editingId = ref(null)
+    const anggaranProyek = ref(0);
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -518,6 +531,8 @@ export default {
 
     const handleUnitChange = (item) => {
       const oldHarga = item.harga
+      // Convert unit_id to string
+      item.unit_id = String(item.unit_id)
       item.category_id = ''
       item.service_category_id = ''
       const unit = units.value.find(u => String(u.id) === String(item.unit_id))
@@ -529,11 +544,18 @@ export default {
         if (defaultMerek) {
           item.merek_id = defaultMerek.id
         }
+        item.noMaterialCategory = false
       } else {
         item.is_service = false
         item.merek_id = ''
         item.harga = oldHarga
+        // Check if there are any material categories for this unit
+        const materialCategories = getMaterialCategories(item.unit_id)
+        item.noMaterialCategory = materialCategories.length === 0
       }
+      // Reset category when unit changes
+      item.category_id = ''
+      item.service_category_id = ''
     }
 
     const fetchServiceCategories = async (unitId, item) => {
@@ -592,11 +614,12 @@ export default {
           serviceCategories: serviceCategories.value
         })
       } catch (error) {
-        console.error('Error loading master data:', error)
+        error.value = 'Gagal memuat data master: ' + (error.response?.data?.message || error.message)
+        categories.value = [];
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Gagal memuat data master: ' + (error.response?.data?.message || error.message)
+          text: error.value
         })
       }
     }
@@ -666,17 +689,23 @@ export default {
     }
 
     const loadInvoices = async () => {
-      if (!selectedProject.value) return
+      if (!selectedProject.value) return;
 
-      loading.value = true
+      loading.value = true;
       try {
-        const token = sessionStorage.getItem('token')
+        const token = sessionStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
         const response = await axios.get('/api/invoices', {
           params: { proyek_id: selectedProject.value },
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
-        })
+        });
 
         console.log('Invoices API response:', response.data);
         invoices.value = response.data.data || [];
@@ -726,7 +755,7 @@ export default {
             ],
             order: [[1, 'desc']],
             responsive: true
-          })
+          });
 
           // Add event listeners for action buttons
           $(invoiceTableRef.value).on('click', '.view-btn', function() {
@@ -746,6 +775,11 @@ export default {
         }
       } catch (err) {
         console.error('Error loading invoices:', err)
+        if (err.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -841,7 +875,7 @@ export default {
           type: '',
           qty: 1,
           harga: '',
-          unit_id: '',
+          unit_id: '', // Ensure this is initialized as empty string
           total_harga: 0,
           spesifikasi: '',
           deskripsi: '',
@@ -1020,8 +1054,35 @@ export default {
     // Update handleSubmit untuk memastikan nilai termin valid
     const handleSubmit = async () => {
       if (!validateForm()) return;
+      if (anggaranProyek.value && totalInvoice.value > anggaranProyek.value) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Anggaran Melebihi Batas!',
+          text: 'Total invoice yang Anda input melebihi anggaran proyek. Silakan cek kembali.'
+        });
+        return;
+      }
+
       try {
         const token = sessionStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        // Check if token is still valid
+        try {
+          await axios.get('/api/user', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (error) {
+          if (error.response?.status === 401) {
+            sessionStorage.removeItem('token');
+            window.location.href = '/login';
+            return;
+          }
+        }
+
         const payload = {
           ...form.value,
           purchase_materials: form.value.purchase_materials.map(item => ({
@@ -1032,6 +1093,7 @@ export default {
           use_pph_non_final: form.value.use_pph_non_final,
           use_pph_final: form.value.use_pph_final
         };
+
         // Hapus field termins jika cash
         if (form.value.is_cash) {
           delete payload.termins;
@@ -1039,12 +1101,18 @@ export default {
           // Jika termin, jangan kirim termins sama sekali (biar backend yang handle)
           delete payload.termins;
         }
+
         const response = await axios.post('/api/invoices', payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
+
         if (response.data.status === 'error') {
           throw new Error(response.data.message || 'Gagal membuat invoice');
         }
+
         const invoiceId = response.data.id || response.data.data?.id;
         if (form.value.is_cash === false) {
           window.location.href = `/termin?invoice_id=${invoiceId}`;
@@ -1059,6 +1127,11 @@ export default {
         }
       } catch (error) {
         console.error('Error submitting form:', error);
+        if (error.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
         const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice';
         Swal.fire({
           icon: 'error',
@@ -1182,13 +1255,20 @@ export default {
       return serviceCategories.value.filter(cat => String(cat.unit_id) === String(unitId))
     }
 
+    // Fungsi untuk filter kategori material sesuai unit (jika ingin filter per unit, jika tidak, ambil semua)
+    const getMaterialCategories = (unitId) => {
+      if (!unitId) return [];
+      return categories.value.filter(cat => String(cat.unit_id) === String(unitId));
+    }
+
     const handleCategoryChange = (item) => {
-      if (isServiceType(item)) {
+      const unit = units.value.find(u => String(u.id) === String(item.unit_id))
+      const isService = unit && ['jasa', 'transaksi', 'set'].includes(unit.unit_name.toLowerCase())
+      if (isService) {
         const categories = getServiceCategoriesByUnit(item.unit_id)
         const selectedCategory = categories.find(cat => String(cat.id) === String(item.service_category_id))
         if (selectedCategory) {
           item.noServiceCategory = false
-          // Set harga otomatis dari kategori jasa jika ada
           if (selectedCategory.harga !== undefined && selectedCategory.harga !== null) {
             item.harga = Number(selectedCategory.harga)
           } else if (selectedCategory.price !== undefined && selectedCategory.price !== null) {
@@ -1199,6 +1279,20 @@ export default {
           item.harga = 0
           item.noServiceCategory = categories.length === 0
         }
+        item.category_id = null
+        item.noMaterialCategory = false
+      } else {
+        // Material
+        item.service_category_id = null
+        // Jika kategori material dipilih, hilangkan alert
+        if (item.category_id) {
+          item.noMaterialCategory = false
+        } else {
+          // Cek ulang jika memang tidak ada kategori material
+          const categories = getMaterialCategories(item.unit_id)
+          item.noMaterialCategory = categories.length === 0
+        }
+        // Tidak perlu set harga otomatis
       }
     }
 
@@ -1470,8 +1564,23 @@ export default {
       }
     };
 
-    watch(selectedProject, () => {
-      fetchProjectSummary();
+    const fetchProjectBudget = async (projectId) => {
+      try {
+        const token = sessionStorage.getItem('token');
+        const res = await axios.get(`/api/proyeks/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        anggaranProyek.value = res.data.anggaran_kontrak || 0;
+      } catch (e) {
+        anggaranProyek.value = 0;
+      }
+    };
+
+    watch(selectedProject, (newVal) => {
+      if (newVal) {
+        fetchProjectBudget(newVal);
+        loadInvoices();
+      }
     });
 
     onMounted(() => {
@@ -1546,6 +1655,18 @@ export default {
       window.location.href = '/termin';
     };
 
+    // Add axios interceptor for handling 401 responses
+    axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
+
     return {
       invoiceTableRef,
       selectedProject,
@@ -1577,6 +1698,7 @@ export default {
       handleUnitChange,
       isServiceType,
       getServiceCategoriesByUnit,
+      getMaterialCategories,
       handleCategoryChange,
       onHargaInput,
       validateForm,
@@ -1612,7 +1734,8 @@ export default {
       totalTerminPelunasan,
       terminSummary,
       calculateTerminValues,
-      goToTermin
+      goToTermin,
+      anggaranProyek
     }
   }
 }

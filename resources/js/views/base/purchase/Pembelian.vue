@@ -288,11 +288,12 @@ const selectedProjectDetails = ref(null);
 const serviceCategories = ref([]);
 const normalCategories = ref([]);
 const selectedUnitType = ref(null);
+const SERVICE_UNIT_NAMES = ['jasa', 'set', 'transaksi'];
 const isServiceUnit = computed(() => {
   if (!form.value.unit_id) return false;
   const selectedUnit = units.value.find(u => String(u.id) === String(form.value.unit_id));
   selectedUnitType.value = selectedUnit?.unit_name?.toLowerCase() || null;
-  return selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase());
+  return selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase());
 });
 
 // Add invoices ref
@@ -359,20 +360,16 @@ const fetchUnits = async () => {
 const fetchCategories = async () => {
   try {
     const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/categories", {
+    const response = await axios.get("/api/kategori", {
       headers: { Authorization: `Bearer ${token}` },
     });
-
-    // Pastikan response.data adalah array
-    const categoriesData = Array.isArray(response.data) ? response.data :
-                         (response.data.data ? response.data.data : []);
-
-    categories.value = categoriesData.map(cat => ({
-      ...cat,
-      is_service: false
-    }));
+    // Pastikan categories.value selalu array
+    categories.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data.data ? response.data.data : []);
   } catch (err) {
-    error.value = "Gagal memuat data kategori: " + (err.response?.data?.error || err.message);
+    error.value = "Gagal memuat data kategori: " + (err.response?.data?.message || err.message);
+    categories.value = [];
   }
 };
 
@@ -387,7 +384,7 @@ const fetchServiceCategories = async (unitId) => {
     const data = Array.isArray(response.data) ? response.data :
                 (response.data.data ? response.data.data : []);
 
-    serviceCategories.value = data;
+    serviceCategories.value = data.data;
     console.log("Service categories loaded:", serviceCategories.value);
 
     // Set service mode
@@ -586,7 +583,7 @@ watch(
     serviceCategories.value = [];
     normalCategories.value = [];
 
-    if (selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase())) {
+    if (selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase())) {
       try {
         const response = await axios.get("/api/service-categories", {
           headers: { Authorization: `Bearer ${token}` },
@@ -652,19 +649,13 @@ watch(
 watch(
   () => form.value.category_id,
   (newValue) => {
-    if (newValue) {
-      if (isServiceUnit.value) {
-        const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(newValue));
-        if (selectedCategory) {
-          form.value.service_category_id = selectedCategory.id;
-          form.value.harga = parseFloat(selectedCategory.harga);
-          form.value.displayHarga = formatCurrency(selectedCategory.harga);
-          // Hitung total harga berdasarkan qty
-          form.value.total_harga = form.value.qty * form.value.harga;
-          form.value.displayTotalHarga = formatCurrency(form.value.total_harga);
-        }
-      } else {
-        form.value.service_category_id = null;
+    if (isServiceUnit.value && newValue) {
+      const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(newValue));
+      if (selectedCategory) {
+        form.value.harga = parseFloat(selectedCategory.harga);
+        form.value.displayHarga = formatCurrency(selectedCategory.harga);
+        form.value.total_harga = form.value.qty * form.value.harga;
+        form.value.displayTotalHarga = formatCurrency(form.value.total_harga);
       }
     }
   }
@@ -774,7 +765,6 @@ const handleSubmit = async () => {
       });
       return;
     }
-
     if (!form.value.unit_id) {
       Swal.fire({
         icon: "error",
@@ -783,17 +773,27 @@ const handleSubmit = async () => {
       });
       return;
     }
-
-    if (!form.value.category_id) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Kategori harus dipilih"
-      });
-      return;
+    // Pastikan kategori sesuai jenis unit
+    if (isServiceUnit.value) {
+      if (!form.value.category_id) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Kategori jasa harus dipilih"
+        });
+        return;
+      }
+    } else {
+      if (!form.value.category_id) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Kategori material harus dipilih"
+        });
+        return;
+      }
     }
-
-    // Create invoice if not exists
+    // Pastikan invoice_id selalu ada
     if (!form.value.invoice_id) {
       try {
         const token = sessionStorage.getItem('token');
@@ -805,8 +805,8 @@ const handleSubmit = async () => {
             type: form.value.type || '-',
             spesifikasi: form.value.spesifikasi || '-',
             unit_id: form.value.unit_id,
-            qty: form.value.qty,
-            harga: unformatCurrency(form.value.displayHarga),
+            qty: Number(form.value.qty),
+            harga: Number(form.value.harga),
             deskripsi: form.value.deskripsi || '-',
             is_service: isServiceUnit.value,
             category_id: isServiceUnit.value ? null : form.value.category_id,
@@ -826,49 +826,26 @@ const handleSubmit = async () => {
         return;
       }
     }
-
     const token = sessionStorage.getItem('token');
     const selectedUnit = units.value.find(u => String(u.id) === String(form.value.unit_id));
-    const isService = selectedUnit && ["jasa", "set", "transaksi"].includes(selectedUnit.unit_name.toLowerCase());
-
-    // Prepare base payload
+    const isService = selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase());
+    // Siapkan payload sesuai controller
     const payload = {
       proyek_id: form.value.proyek_id,
+      invoice_id: form.value.invoice_id,
       item: form.value.item,
       type: form.value.type || '-',
       spesifikasi: form.value.spesifikasi || '-',
       unit_id: form.value.unit_id,
-      qty: form.value.qty,
-      harga: unformatCurrency(form.value.displayHarga),
-      total_harga: unformatCurrency(form.value.displayTotalHarga),
+      qty: Number(form.value.qty),
+      harga: Number(form.value.harga),
+      total_harga: Number(form.value.total_harga),
       deskripsi: form.value.deskripsi || '-',
       is_service: isService,
-      category_id: null,
-      service_category_id: null,
-      invoice_id: form.value.invoice_id,
-      merek_id: isService
-        ? (mereks.value.find(m => m.name === '-')?.id || null)
-        : (form.value.merek_id || null)
+      category_id: isService ? null : form.value.category_id,
+      service_category_id: isService ? form.value.category_id : null,
+      merek_id: isService ? null : form.value.merek_id
     };
-
-    // Add category data based on type
-    if (isService) {
-      payload.service_category_id = form.value.category_id;
-      payload.category_id = null;
-    } else {
-      payload.category_id = form.value.category_id;
-      payload.service_category_id = null;
-      if (!form.value.merek_id) {
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Merek harus dipilih untuk material non-jasa"
-        });
-        return;
-      }
-      payload.merek_id = form.value.merek_id;
-    }
-
     let response;
     if (modalMode.value === "edit") {
       response = await axios.put(`/api/purchasematerials/${editingId.value}`, payload, {
@@ -881,7 +858,6 @@ const handleSubmit = async () => {
       });
       Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil ditambahkan" });
     }
-
     closeModal();
     await fetchPembelians(form.value.proyek_id);
   } catch (err) {
@@ -962,14 +938,14 @@ const calculateTotal = () => {
 // Update handleHargaInput function
 const handleHargaInput = (event) => {
   if (isServiceUnit.value) {
-    // Untuk service, harga tidak bisa diubah manual
+    // Untuk jasa, harga otomatis dari kategori
     const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(form.value.category_id));
     if (selectedCategory) {
       form.value.harga = parseFloat(selectedCategory.harga);
       form.value.displayHarga = formatCurrency(selectedCategory.harga);
     }
   } else {
-    // Untuk material, bisa diubah manual
+    // Untuk material, bisa diinput manual
     const unformattedValue = unformatCurrency(event.target.value);
     form.value.harga = unformattedValue;
     form.value.displayHarga = formatCurrency(unformattedValue);
@@ -1035,12 +1011,63 @@ const changeProject = () => {
   }
 };
 
+// Pastikan allCategories dan allServiceCategories sudah di-fetch di onMounted
+const allCategories = ref([]);
+const allServiceCategories = ref([]);
+
+const fetchAllCategories = async () => {
+  try {
+    const token = sessionStorage.getItem("token");
+    const [catRes, svcRes] = await Promise.all([
+      axios.get("/api/categories", { headers: { Authorization: `Bearer ${token}` } }),
+      axios.get("/api/service-categories", { headers: { Authorization: `Bearer ${token}` } })
+    ]);
+    allCategories.value = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data ? catRes.data.data : []);
+    allServiceCategories.value = Array.isArray(svcRes.data) ? svcRes.data : (svcRes.data.data ? svcRes.data.data : []);
+  } catch (err) {
+    error.value = "Gagal memuat data kategori: " + (err.response?.data?.error || err.message);
+  }
+};
+
+// Helper: get unit type by id
+const getUnitType = (unit_id) => {
+  const unit = units.value.find(u => String(u.id) === String(unit_id));
+  return unit ? unit.unit_name.toLowerCase() : '';
+};
+
+// Update the updateItemCategories function
+function updateItemCategories(item) {
+  if (!item.unit_id) {
+    item.categories = [];
+    item.serviceCategories = [];
+    return;
+  }
+  const unitType = getUnitType(item.unit_id);
+  if (SERVICE_UNIT_NAMES.includes(unitType)) {
+    item.is_service = true;
+    item.serviceCategories = allServiceCategories.value.filter(cat => String(cat.unit_id) === String(item.unit_id));
+    item.categories = [];
+    item.category_id = '';
+  } else {
+    item.is_service = false;
+    // Ambil semua kategori dengan jenis 'pengeluaran' (material), tanpa filter unit_id
+    item.categories = allCategories.value.filter(cat => cat.jenis === 'pengeluaran');
+    item.serviceCategories = [];
+    item.service_category_id = '';
+  }
+}
+
+// Update the onUnitChange function
+function onUnitChange(item) {
+  updateItemCategories(item);
+}
+
 // Initial Fetching
 onMounted(() => {
   fetchProjects();
   fetchMereks();
   fetchUnits();
-  fetchCategories();
+  fetchAllCategories();
   fetchPembelians();
 });
 </script>

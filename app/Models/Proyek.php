@@ -4,14 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+// use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\Trackable;
 use App\Traits\BudgetMonitor;
 
 class Proyek extends Model
 {
     use HasFactory, Trackable, BudgetMonitor;
+    // use SoftDeletes; // Optional: aktifkan jika butuh soft delete
 
     protected $fillable = [
+        'user_id',
         'nama_customer',
         'nama_proyek',
         'nama_perusahaan',
@@ -32,17 +35,20 @@ class Proyek extends Model
         'anggaran_kontrak' => 'decimal:2'
     ];
 
-    /**
-     * Get the termins for the project.
-     */
+    // ===========================
+    // Relations
+    // ===========================
+
+    public function user()
+    {
+        return $this->belongsTo(User::class)->withDefault();
+    }
+
     public function termins()
     {
         return $this->hasMany(Termin::class);
     }
 
-    /**
-     * Get the purchase materials for the project.
-     */
     public function purchaseMaterials()
     {
         return $this->hasMany(PurchaseMaterial::class);
@@ -50,35 +56,19 @@ class Proyek extends Model
 
     public function expenses()
     {
-        return $this->hasMany(\App\Models\Expense::class, 'proyek_id');
+        return $this->hasMany(Expense::class, 'proyek_id');
     }
 
-    /**
-     * Get the user associated with the project.
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    protected static function booted()
-    {
-        static::saved(function ($proyek) {
-            // Check if budget is exceeded whenever the project is saved
-            $proyek->checkBudgetExceeded();
-        });
-    }
+    // ===========================
+    // Accessors
+    // ===========================
 
     public function getTotalIncomeAttribute()
     {
         return $this->termins()
             ->with('incomes')
             ->get()
-            ->sum(function ($termin) {
-                return $termin->incomes()
-                    ->where('status', 'Diterima')
-                    ->sum('jumlah');
-            });
+            ->sum(fn($termin) => $termin->incomes()->where('status', 'Diterima')->sum('jumlah'));
     }
 
     public function getTotalIncomeDpAttribute()
@@ -86,12 +76,7 @@ class Proyek extends Model
         return $this->termins()
             ->with('incomes')
             ->get()
-            ->sum(function ($termin) {
-                return $termin->incomes()
-                    ->where('type', 'dp')
-                    ->where('status', 'Diterima')
-                    ->sum('jumlah');
-            });
+            ->sum(fn($termin) => $termin->incomes()->where('type', 'dp')->where('status', 'Diterima')->sum('jumlah'));
     }
 
     public function getTotalIncomePelunasanAttribute()
@@ -99,11 +84,25 @@ class Proyek extends Model
         return $this->termins()
             ->with('incomes')
             ->get()
-            ->sum(function ($termin) {
-                return $termin->incomes()
-                    ->where('type', 'pelunasan')
-                    ->where('status', 'Diterima')
-                    ->sum('jumlah');
-            });
+            ->sum(fn($termin) => $termin->incomes()->where('type', 'pelunasan')->where('status', 'Diterima')->sum('jumlah'));
+    }
+
+    public function getBudgetPercentageAttribute()
+    {
+        $totalExpenses = $this->expenses()->sum('amount');
+        return $this->anggaran_kontrak > 0
+            ? round(($totalExpenses / $this->anggaran_kontrak) * 100, 2)
+            : 0;
+    }
+
+    // ===========================
+    // Events
+    // ===========================
+
+    protected static function booted()
+    {
+        static::saved(function ($proyek) {
+            $proyek->checkBudgetExceeded();
+        });
     }
 }

@@ -50,6 +50,16 @@ class Expense extends Model
 
     protected $with = ['proyek', 'category', 'serviceCategory'];
 
+    // Tambahkan constant status dan source_type
+    const STATUS_PENDING = 'pending';
+    const STATUS_APPROVED = 'approved';
+    const STATUS_REJECTED = 'rejected';
+    const STATUS_LUNAS = 'Lunas';
+
+    const SOURCE_TERMIN = 'termin';
+    const SOURCE_PURCHASE = 'purchase';
+    const SOURCE_INVOICE = 'invoice';
+
     public function user()
     {
         return $this->belongsTo(User::class)->withDefault(function ($user) {
@@ -146,6 +156,13 @@ class Expense extends Model
                 self::generateKodeTransaksi($expense);
             }
         });
+
+        // Contoh observer anti-duplikat (jika ingin trigger otomatis)
+        // static::saved(function ($expense) {
+        //     if ($expense->wasChanged('status') && $expense->status === self::STATUS_LUNAS) {
+        //         // Cek duplikat, dsb
+        //     }
+        // });
     }
 
     protected static function generateKodeTransaksi(&$expense)

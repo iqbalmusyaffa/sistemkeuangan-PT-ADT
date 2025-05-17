@@ -13,21 +13,22 @@ class CreateIncomesTable extends Migration
     {
         Schema::create('incomes', function (Blueprint $table) {
             $table->id();
-            $table->string('kode_transaksi')->unique();
-            $table->foreignId('kategori_id')->constrained('kategoris')->onDelete('restrict');
-            $table->foreignId('payment_method_id')->constrained('payment_methods')->onDelete('restrict');
-            $table->foreignId('proyek_id')->nullable()->constrained('proyeks')->onDelete('set null');
-            $table->foreignId('termin_id')->nullable()->constrained('termins')->onDelete('set null');
-            $table->enum('type', ['dp', 'pelunasan'])->nullable();
-            $table->decimal('jumlah', 15, 2);
-            $table->text('deskripsi')->nullable();
-            $table->date('tanggal');
-            $table->enum('status', ['Pending', 'Diterima', 'Ditolak'])->default('Pending');
-            $table->string('bukti_pembayaran')->nullable();
-            $table->foreignId('created_by')->constrained('users')->onDelete('restrict');
-            $table->foreignId('updated_by')->constrained('users')->onDelete('restrict');
-            $table->timestamps();
-            $table->softDeletes();
+             $table->string('kode_transaksi')->unique();
+    $table->foreignId('kategori_id')->constrained('kategoris')->onDelete('restrict');
+    $table->foreignId('payment_method_id')->constrained('payment_methods')->onDelete('restrict');
+    $table->foreignId('proyek_id')->nullable()->constrained('proyeks')->onDelete('set null');
+    $table->foreignId('termin_id')->nullable()->constrained('termins')->onDelete('set null');
+    $table->foreignId('invoice_id')->nullable()->constrained('invoices')->onDelete('set null');
+    $table->enum('type', ['dp', 'pelunasan'])->nullable();
+    $table->decimal('jumlah', 15, 2);
+    $table->text('deskripsi')->nullable();
+    $table->date('tanggal');
+    $table->enum('status', ['pending', 'diterima', 'ditolak'])->default('pending');
+    $table->string('bukti_pembayaran')->nullable();
+    $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+    $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+    $table->timestamps();
+    $table->softDeletes();
         });
     }
 

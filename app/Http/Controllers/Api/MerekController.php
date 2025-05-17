@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Merek;
+use App\Http\Resources\MerekResource;
 use Yajra\DataTables\Facades\DataTables;
 
 class MerekController extends Controller
@@ -18,7 +19,7 @@ class MerekController extends Controller
             $data = Merek::select(['id', 'name', 'deskripsi']);
             return DataTables::of($data)->make(true);
         }
-        return response()->json(Merek::all());
+        return MerekResource::collection(Merek::all());
     }
 
     /**
@@ -35,11 +36,11 @@ class MerekController extends Controller
             $existingBrand = Merek::where('name', $validatedData['name'])->first();
             
             if ($existingBrand) {
-                return response()->json($existingBrand);
+                return new MerekResource($existingBrand);
             }
 
             $merek = Merek::create($validatedData);
-            return response()->json($merek, 201);
+            return new MerekResource($merek);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Gagal menambahkan merek. Silakan coba lagi nanti.'], 500);
         }
@@ -60,7 +61,7 @@ class MerekController extends Controller
                 $validatedData
             );
             
-            return response()->json($merek);
+            return new MerekResource($merek);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Gagal memproses merek. Silakan coba lagi nanti.'], 500);
         }
@@ -72,7 +73,7 @@ class MerekController extends Controller
     public function show(string $id)
     {
         $merek = Merek::findOrFail($id);
-        return response()->json($merek);
+        return new MerekResource($merek);
     }
 
     /**
@@ -84,12 +85,11 @@ class MerekController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|unique:mereks,name,' . $id,
-            // 'deskripsi' => 'nullable|string',
         ]);
 
         $merek->update($validated);
 
-        return response()->json($merek);
+        return new MerekResource($merek);
     }
 
     /**

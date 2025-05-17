@@ -32,7 +32,8 @@ class Income extends Model
         'deskripsi',
         'bukti_pembayaran',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'invoice_id'
     ];
 
     protected $casts = [
@@ -87,6 +88,14 @@ class Income extends Model
     public function termin(): BelongsTo
     {
         return $this->belongsTo(Termin::class);
+    }
+
+    /**
+     * Relasi ke invoice.
+     */
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Invoice::class);
     }
 
     // =====================

@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('proyek_id')->constrained('proyeks')->onDelete('cascade');
             $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->onDelete('set null');
             $table->string('invoice_number')->unique();
-            $table->date('invoice_date');
+            $table->date('invoice_date')->index;
             $table->decimal('total_amount', 18, 2);
             $table->decimal('amount_paid', 18, 2)->default(0);
             $table->decimal('pph_non_final_amount', 18, 2)->default(0);
@@ -31,6 +31,8 @@ return new class extends Migration
             $table->boolean('use_ppn')->default(false);
             $table->boolean('use_pph_non_final')->default(false);
             $table->boolean('use_pph_final')->default(false);
+            $table->decimal('pph_jasa_amount', 18, 2)->default(0);
+$table->decimal('pph_barang_amount', 18, 2)->default(0);
             $table->text('notes')->nullable();
             $table->enum('status', ['unpaid', 'partially_paid', 'paid', 'cancelled'])->default('unpaid');
             $table->timestamps();
@@ -49,4 +51,4 @@ return new class extends Migration
     {
         Schema::dropIfExists('invoices');
     }
-}; 
+};

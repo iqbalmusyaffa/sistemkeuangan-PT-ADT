@@ -118,9 +118,16 @@ class InvoiceController extends Controller
 
                 // Create purchase materials
                 $totalPurchaseAmount = 0;
+                $totalBarang = 0;
+                $totalJasa = 0;
                 foreach ($request->purchase_materials as $item) {
                     $totalHarga = $item['qty'] * $item['harga'];
                     $totalPurchaseAmount += $totalHarga;
+                    if (!empty($item['is_service'])) {
+                        $totalJasa += $totalHarga;
+                    } else {
+                        $totalBarang += $totalHarga;
+                    }
 
                     PurchaseMaterial::create([
                         'invoice_id' => $invoice->id,
@@ -143,8 +150,10 @@ class InvoiceController extends Controller
                 // Calculate taxes and profit
                 $pphNonFinalTotal = $request->use_pph_non_final ? ($totalPurchaseAmount * 0.02) : 0;
                 $pphFinal = $request->use_pph_final ? ($totalPurchaseAmount * 0.05) : 0;
-                $ppnAmount = $request->use_ppn ? ($totalPurchaseAmount * 0.11) : 0;
-                $netProfit = $totalPurchaseAmount * ($invoice->profit_margin_percentage / 100);
+                $pphJasa = $request->use_pph_jasa ? ($totalJasa * 0.02) : 0;
+                $pphBarang = $request->use_pph_barang ? ($totalBarang * 0.015) : 0;
+                $ppnAmount = $request->use_ppn ? (($totalBarang + $totalJasa) * 0.11) : 0;
+                $netProfit = ($totalBarang + $totalJasa) * ($invoice->profit_margin_percentage / 100);
 
                 // Update invoice with calculated amounts
                 $invoice->update([
@@ -153,6 +162,8 @@ class InvoiceController extends Controller
                     'pph_final_amount' => $pphFinal,
                     'ppn_amount' => $ppnAmount,
                     'net_profit' => $netProfit,
+                    'pph_jasa_amount' => $pphJasa,
+                    'pph_barang_amount' => $pphBarang,
                 ]);
 
                 // Handle termins if provided
@@ -257,28 +268,112 @@ class InvoiceController extends Controller
         }
     }
 
-    // Add a new method to get project financial summary
-    public function getProjectFinancialSummary($projectId)
+    // Record payment for an invoice
+    public function recordPayment(Request $request, $id)
     {
-        try {
-            $invoice = Invoice::where('proyek_id', $projectId)->first();
-            if (!$invoice) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'No invoice found for this project'
-                ], 404);
-            }
+        $validator = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0',
+            'payment_method_id' => 'nullable|exists:payment_methods,id',
+        ]);
 
-            $summary = $invoice->getProjectFinancialSummary();
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $invoice = Invoice::findOrFail($id);
+            $expense = $invoice->recordPayment($request->amount, $request->payment_method_id);
+            
+            // Calculate project profit/loss after payment
+            $invoice->calculateProjectProfitLoss();
+
             return response()->json([
                 'status' => 'success',
-                'data' => $summary
+                'message' => 'Payment recorded successfully',
+                'data' => [
+                    'invoice' => new InvoiceResource($invoice),
+                    'expense' => $expense
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to get project financial summary',
-                'error' => $e->getMessage()
+                'message' => 'Failed to record payment: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Get project financial summary
+    public function getProjectFinancialSummary($projectId)
+    {
+        try {
+            $invoices = Invoice::where('proyek_id', $projectId)->get();
+            
+            if ($invoices->isEmpty()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'No invoices found for this project'
+                ], 404);
+            }
+
+            $totalIncome = $invoices->sum('total_income');
+            $totalExpenses = $invoices->sum('total_expenses');
+            $totalProfitLoss = $invoices->sum('profit_loss');
+            $totalProfitLossPercentage = $totalExpenses > 0 ? ($totalProfitLoss / $totalExpenses) * 100 : 0;
+
+            $paymentSummary = [
+                'total_invoice_amount' => $invoices->sum('total_amount'),
+                'total_paid_amount' => $invoices->sum('amount_paid'),
+                'total_remaining' => $invoices->sum('total_amount') - $invoices->sum('amount_paid'),
+                'total_termin_amount' => $invoices->sum(function($invoice) {
+                    return $invoice->termins->sum('nilai_termin');
+                }),
+                'total_paid_termin' => $invoices->sum(function($invoice) {
+                    return $invoice->termins->where('status_termin', 'Lunas')->sum('nilai_termin');
+                }),
+                'total_dp_paid' => $invoices->sum(function($invoice) {
+                    return $invoice->termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
+                })
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'total_income' => $totalIncome,
+                    'total_expenses' => $totalExpenses,
+                    'total_profit_loss' => $totalProfitLoss,
+                    'total_profit_loss_percentage' => $totalProfitLossPercentage,
+                    'payment_summary' => $paymentSummary,
+                    'invoices' => InvoiceResource::collection($invoices)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to get project financial summary: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Get payment status for an invoice
+    public function getPaymentStatus($id)
+    {
+        try {
+            $invoice = Invoice::findOrFail($id);
+            $paymentStatus = $invoice->getPaymentStatusSummary();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $paymentStatus
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to get payment status: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -4,10 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class Invoice extends Model
 {
     use HasFactory;
+
+    // Tambahkan constant status
+    const STATUS_UNPAID = 'unpaid';
+    const STATUS_PARTIALLY_PAID = 'partially_paid';
+    const STATUS_PAID = 'paid';
+    const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
         'proyek_id',
@@ -29,7 +37,9 @@ class Invoice extends Model
         'use_pph_non_final',
         'use_pph_final',
         'notes',
-        'status'
+        'status',
+        'pph_jasa_amount',
+        'pph_barang_amount'
     ];
 
     protected $casts = [
@@ -48,7 +58,9 @@ class Invoice extends Model
         'use_pph_non_final' => 'boolean',
         'use_pph_final' => 'boolean',
         'invoice_date' => 'date',
-        'status' => 'string'
+        'status' => 'string',
+        'pph_jasa_amount' => 'decimal:2',
+        'pph_barang_amount' => 'decimal:2'
     ];
 
     // Relationships
@@ -252,6 +264,137 @@ class Invoice extends Model
     {
         $this->net_profit = $this->total_amount * ($this->profit_margin_percentage / 100);
         $this->save();
+    }
+
+    // Calculate project financial summary
+    public function getProjectFinancialSummary()
+    {
+        $totalIncome = $this->total_income;
+        $totalExpenses = $this->total_expenses;
+        $profitLoss = $this->profit_loss;
+        $profitLossPercentage = $this->profit_loss_percentage;
+
+        // Get all termins for this project
+        $termins = $this->termins;
+        $totalTerminAmount = $termins->sum('nilai_termin');
+        $totalPaidTermin = $termins->where('status_termin', 'Lunas')->sum('nilai_termin');
+        $totalDPPaid = $termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
+
+        // Get all expenses for this project
+        $expenses = $this->expenses;
+        $totalExpenseAmount = $expenses->sum('amount');
+
+        return [
+            'total_income' => $totalIncome,
+            'total_expenses' => $totalExpenses,
+            'profit_loss' => $profitLoss,
+            'profit_loss_percentage' => $profitLossPercentage,
+            'total_termin_amount' => $totalTerminAmount,
+            'total_paid_termin' => $totalPaidTermin,
+            'total_dp_paid' => $totalDPPaid,
+            'total_expense_amount' => $totalExpenseAmount,
+            'remaining_payment' => $totalTerminAmount - $totalPaidTermin - $totalDPPaid
+        ];
+    }
+
+    // Update payment status and create expense record
+    public function recordPayment($amount, $paymentMethodId = null)
+    {
+        DB::beginTransaction();
+        try {
+            // Update invoice payment
+            $this->amount_paid += $amount;
+            $this->status = $this->determineStatus();
+            if ($paymentMethodId) {
+                $this->payment_method_id = $paymentMethodId;
+            }
+            $this->save();
+
+            // Create expense record for the payment
+            $expense = Expense::create([
+                'user_id' => auth()->id(),
+                'proyek_id' => $this->proyek_id,
+                'invoice_id' => $this->id,
+                'amount' => $amount,
+                'description' => "Pembayaran Invoice {$this->invoice_number}",
+                'transaction_date' => now(),
+                'status' => 'approved',
+                'payment_method' => $paymentMethodId ? PaymentMethod::find($paymentMethodId)->name : 'Cash',
+                'source_type' => 'invoice',
+                'source_id' => $this->id
+            ]);
+
+            DB::commit();
+            return $expense;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    // Calculate profit/loss for the project
+    public function calculateProjectProfitLoss()
+    {
+        $totalIncome = $this->total_income;
+        $totalExpenses = $this->total_expenses;
+        $profitLoss = $totalIncome - $totalExpenses;
+        $profitLossPercentage = $totalExpenses > 0 ? ($profitLoss / $totalExpenses) * 100 : 0;
+
+        $this->profit_loss = $profitLoss;
+        $this->profit_loss_percentage = $profitLossPercentage;
+        $this->save();
+
+        return [
+            'profit_loss' => $profitLoss,
+            'profit_loss_percentage' => $profitLossPercentage
+        ];
+    }
+
+    // Get payment status summary
+    public function getPaymentStatusSummary()
+    {
+        $termins = $this->termins;
+        $totalTerminAmount = $termins->sum('nilai_termin');
+        $totalPaidTermin = $termins->where('status_termin', 'Lunas')->sum('nilai_termin');
+        $totalDPPaid = $termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
+        $remainingPayment = $totalTerminAmount - $totalPaidTermin - $totalDPPaid;
+
+        return [
+            'total_amount' => $totalTerminAmount,
+            'total_paid' => $totalPaidTermin + $totalDPPaid,
+            'remaining_payment' => $remainingPayment,
+            'payment_status' => $this->status,
+            'termins' => $termins->map(function($termin) {
+                return [
+                    'nama_termin' => $termin->nama_termin,
+                    'nilai_termin' => $termin->nilai_termin,
+                    'status' => $termin->status_termin,
+                    'tanggal_dp' => $termin->tanggal_dp,
+                    'tanggal_pelunasan' => $termin->tanggal_pelunasan
+                ];
+            })
+        ];
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saved(function ($invoice) {
+            // Cek perubahan status
+            if ($invoice->wasChanged('status')) {
+                if ($invoice->status === self::STATUS_PAID) {
+                    // Cek income sudah ada?
+                    if (!\App\Models\Income::where('invoice_id', $invoice->id)->exists()) {
+                        app(\App\Http\Controllers\Api\IncomeController::class)->createFromInvoice($invoice);
+                    }
+                } elseif ($invoice->status === self::STATUS_UNPAID) {
+                    if (!\App\Models\Expense::where('invoice_id', $invoice->id)->exists()) {
+                        app(\App\Http\Controllers\Api\ExpenseController::class)->createFromInvoice($invoice);
+                    }
+                }
+            }
+        });
     }
 }
 

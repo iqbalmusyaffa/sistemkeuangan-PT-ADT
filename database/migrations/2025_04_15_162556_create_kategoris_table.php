@@ -11,8 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('hutangs', function (Blueprint $table) {
+        Schema::create('kategoris', function (Blueprint $table) {
             $table->id();
+            $table->string('nama_kategori');
+            $table->enum('jenis', ['pemasukan', 'pengeluaran']);
+            $table->foreignId('unit_id')->nullable()->constrained('units')->onDelete('set null');
+            $table->text('deskripsi')->nullable();
             $table->timestamps();
         });
     }
@@ -22,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('hutangs');
+        Schema::dropIfExists('kategoris');
     }
 };
