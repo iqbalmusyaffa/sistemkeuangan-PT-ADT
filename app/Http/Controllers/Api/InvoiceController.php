@@ -16,7 +16,15 @@ class InvoiceController extends Controller
     // Menampilkan daftar invoice
     public function index(Request $request)
     {
-        $query = Invoice::with(['proyek', 'purchaseMaterials']);
+        $query = Invoice::with([
+            'proyek',
+            'purchaseMaterials.category',
+            'purchaseMaterials.serviceCategory',
+            'purchaseMaterials.unit',
+            'purchaseMaterials.merek',
+            'termins',
+            'expenses',
+        ]);
         if ($request->has('proyek_id')) {
             $query->where('proyek_id', $request->proyek_id);
         }
@@ -27,7 +35,15 @@ class InvoiceController extends Controller
     // Menampilkan detail invoice
     public function show($id)
     {
-        $invoice = Invoice::with(['proyek', 'purchaseMaterials', 'termins', 'expenses'])->findOrFail($id);
+        $invoice = Invoice::with([
+            'proyek',
+            'purchaseMaterials.category',
+            'purchaseMaterials.serviceCategory',
+            'purchaseMaterials.unit',
+            'purchaseMaterials.merek',
+            'termins',
+            'expenses',
+        ])->findOrFail($id);
         return new InvoiceResource($invoice);
     }
 

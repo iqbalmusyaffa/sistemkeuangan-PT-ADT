@@ -72,13 +72,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('termins', TerminController::class);
     Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);
     Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']);
+    Route::post('/termins/{termin}/update-status', [TerminController::class, 'updateStatus']);
     Route::get('/proyeks/{proyekId}/invoices', [TerminController::class, 'getInvoicesByProject']);
     Route::get('/termins/export-excel/{projectId}', [TerminController::class, 'exportExcel']);
     Route::get('/termins/export-pdf/{projectId}', [TerminController::class, 'exportPDF']);
     Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
-    Route::post('/termins/{id}/update-status', [TerminController::class, 'updateStatus']);
-    Route::post('/termins/{id}/approve', [TerminController::class, 'approveStatus']);
-    Route::post('/termins/{id}/reject', [TerminController::class, 'rejectStatus']);
+    Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
+    Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
 
     // Additional proyek-related routes
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);

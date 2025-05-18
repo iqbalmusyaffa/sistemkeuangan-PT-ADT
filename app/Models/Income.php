@@ -33,7 +33,8 @@ class Income extends Model
         'bukti_pembayaran',
         'created_by',
         'updated_by',
-        'invoice_id'
+        'invoice_id',
+        'tanggal' // <--- tambahkan agar mass assignment tanggal bisa
     ];
 
     protected $casts = [

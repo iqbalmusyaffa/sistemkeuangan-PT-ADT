@@ -13,6 +13,17 @@ class Proyek extends Model
     use HasFactory, Trackable, BudgetMonitor;
     // use SoftDeletes; // Optional: aktifkan jika butuh soft delete
 
+    public function updateStatusFromInvoices()
+    {
+        $invoices = $this->invoices;
+        if ($invoices->count() && $invoices->every(fn($inv) => $inv->status === 'paid')) {
+            $this->status_project = 'Selesai';
+        } else {
+            $this->status_project = 'Berjalan';
+        }
+        $this->save();
+    }
+
     protected $fillable = [
         'user_id',
         'nama_customer',

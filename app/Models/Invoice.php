@@ -124,6 +124,10 @@ class Invoice extends Model
             $this->status = 'partially_paid';
         }
         $this->save();
+        // Update status proyek juga
+        if ($this->proyek) {
+            $this->proyek->updateStatusFromInvoices();
+        }
     }
 
     // Query Scopes

@@ -68,7 +68,11 @@ class Termin extends Model
         'is_pelunasan',
         'is_termin_bertahap'
     ];
-    protected $isUpdatingStatus = false;
+    public $isUpdatingStatus = false;
+
+    protected $hidden = [
+        'isUpdatingStatus',
+    ];
 
 
     // RELATIONS
@@ -203,7 +207,7 @@ class Termin extends Model
             'tanggal_pelunasan_dibayar' => 'nullable|date|after_or_equal:tanggal_dp_dibayar',
             'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
             'keterangan' => 'nullable|string',
-            'bukti_pembayaran' => 'nullable|string',
+            'bukti_pembayaran' => 'nullable',
             'dibayar_oleh' => 'nullable|exists:users,id'
         ];
     }
@@ -228,7 +232,7 @@ class Termin extends Model
                 // Handle bukti pembayaran
                 if ($termin->bukti_pembayaran instanceof \Illuminate\Http\UploadedFile) {
                     $file = $termin->bukti_pembayaran;
-                    
+
                     // Validate file size
                     if ($file->getSize() > 2048 * 1024) { // 2MB in bytes
                         throw new \Exception('File size exceeds 2MB limit');
@@ -238,16 +242,16 @@ class Termin extends Model
                     $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
                     if (!in_array($file->getMimeType(), $allowedTypes)) {
                         throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
-                    }
+            }
 
                     $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
                     $path = 'uploads/bukti_pembayaran/' . $filename;
-                    
+
                     // Ensure directory exists
                     if (!Storage::exists('uploads/bukti_pembayaran')) {
                         Storage::makeDirectory('uploads/bukti_pembayaran');
                     }
-                    
+
                     // Upload file
                     if (!$file->storeAs('uploads/bukti_pembayaran', $filename)) {
                         throw new \Exception('Failed to store file');
@@ -271,18 +275,18 @@ class Termin extends Model
                     'changes' => $termin->getDirty()
                 ]);
 
-                // Update tanggal pembayaran berdasarkan status
-                if ($termin->status_termin === 'DP Dibayar' && !$termin->tanggal_dp_dibayar) {
-                    $termin->tanggal_dp_dibayar = now();
-                }
-                if ($termin->status_termin === 'Lunas' && !$termin->tanggal_pelunasan_dibayar) {
-                    $termin->tanggal_pelunasan_dibayar = now();
-                }
+            // Update tanggal pembayaran berdasarkan status
+            if ($termin->status_termin === 'DP Dibayar' && !$termin->tanggal_dp_dibayar) {
+                $termin->tanggal_dp_dibayar = now();
+            }
+            if ($termin->status_termin === 'Lunas' && !$termin->tanggal_pelunasan_dibayar) {
+                $termin->tanggal_pelunasan_dibayar = now();
+            }
 
                 // Handle bukti pembayaran
                 if ($termin->bukti_pembayaran instanceof \Illuminate\Http\UploadedFile) {
                     $file = $termin->bukti_pembayaran;
-                    
+
                     // Validate file size
                     if ($file->getSize() > 2048 * 1024) { // 2MB in bytes
                         throw new \Exception('File size exceeds 2MB limit');
@@ -296,12 +300,12 @@ class Termin extends Model
 
                     $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
                     $path = 'uploads/bukti_pembayaran/' . $filename;
-                    
+
                     // Ensure directory exists
                     if (!Storage::exists('uploads/bukti_pembayaran')) {
                         Storage::makeDirectory('uploads/bukti_pembayaran');
                     }
-                    
+
                     // Upload file
                     if (!$file->storeAs('uploads/bukti_pembayaran', $filename)) {
                         throw new \Exception('Failed to store file');
@@ -336,7 +340,7 @@ class Termin extends Model
             $isUpdatingStatus = false;
 
             if ($termin->status_termin !== $oldStatus && $termin->invoice) {
-                $termin->invoice->updateStatusFromTermins();
+                    $termin->invoice->updateStatusFromTermins();
             }
         });
 
@@ -402,16 +406,16 @@ class Termin extends Model
                 'proyek_id' => $this->proyek_id,
                 'category_id' => null,
                 'amount' => $this->status_termin === 'Lunas' ? $this->nilai_pelunasan : $this->nilai_dp,
-                'description' => $this->status_termin === 'Lunas' 
+                'description' => $this->status_termin === 'Lunas'
                     ? "Pelunasan Termin {$this->nama_termin}"
                     : "Pembayaran DP Termin {$this->nama_termin}",
-                'transaction_date' => $this->status_termin === 'Lunas' 
-                    ? $this->tanggal_pelunasan 
+                'transaction_date' => $this->status_termin === 'Lunas'
+                    ? $this->tanggal_pelunasan
                     : $this->tanggal_dp,
                 'status' => 'Lunas',
                 'payment_method' => null,
-                'prepared_fund' => $this->status_termin === 'Lunas' 
-                    ? $this->nilai_pelunasan 
+                'prepared_fund' => $this->status_termin === 'Lunas'
+                    ? $this->nilai_pelunasan
                     : $this->nilai_dp,
                 'source_type' => 'termin',
                 'source_id' => $this->id
