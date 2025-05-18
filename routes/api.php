@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\ProfitLossReportController;
 use App\Http\Controllers\Api\BudgetController;
 use App\Http\Controllers\Api\KasbonController;
 use App\Http\Controllers\Api\NotificationController;
+// use App\Http\Controllers\Api\KategoriController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,16 +35,12 @@ use App\Http\Controllers\Api\NotificationController;
 |
 */
 
-// Route::post('/register', [UserController::class, 'register']);
-Route::post('/login', [UserController::class, 'login']);
-
-// Kategori routes - moved outside auth middleware for testing
-Route::apiResource('kategori', KategoriTransaksiController::class);
-
+Route::post ('/login', [UserController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     // Route::get('/user', function (Request $request) {
     //     return $request->user();
     // });
+
     Route::apiResource('users', UserController::class);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -75,6 +72,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('termins', TerminController::class);
     Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);
     Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']);
+    Route::post('/termins/{termin}/update-status', [TerminController::class, 'updateStatus']);
+    Route::get('/proyeks/{proyekId}/invoices', [TerminController::class, 'getInvoicesByProject']);
+    Route::get('/termins/export-excel/{projectId}', [TerminController::class, 'exportExcel']);
+    Route::get('/termins/export-pdf/{projectId}', [TerminController::class, 'exportPDF']);
+    Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
+    Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
+    Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
 
     // Additional proyek-related routes
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
@@ -123,15 +127,34 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/kasbons/{kasbon}/payments', [KasbonController::class, 'addPayment']);
     Route::get('/kasbon-attachments/{attachment}/download', [KasbonController::class, 'downloadAttachment']);
 
-    // ini adalah route untuk download file excel
-    Route::get('/termins/export-pdf/{project}', [TerminController::class, 'exportPDF']);
-    Route::get('/termins/export-excel/{project}', [TerminController::class, 'exportExcel']);
-    Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
-
     // Notification Routes
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
+
+    // Invoice routes
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
+    Route::post('/invoices', [InvoiceController::class, 'store']);
+    Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
+    Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
+
+    // New routes for invoice payments and financials
+    Route::post('/invoices/{id}/payment', [InvoiceController::class, 'recordPayment']);
+    Route::get('/invoices/{id}/payment-status', [InvoiceController::class, 'getPaymentStatus']);
+    Route::get('/projects/{projectId}/financial-summary', [InvoiceController::class, 'getProjectFinancialSummary']);
+
+    // Purchase Material Routes
+    Route::get('/purchase-materials', [PurchaseMaterialController::class, 'index']);
+    Route::get('/purchase-materials/{id}', [PurchaseMaterialController::class, 'show']);
+    Route::post('/purchase-materials', [PurchaseMaterialController::class, 'store']);
+    Route::put('/purchase-materials/{id}', [PurchaseMaterialController::class, 'update']);
+    Route::delete('/purchase-materials/{id}', [PurchaseMaterialController::class, 'destroy']);
+    Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
+    Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
+
+    // Kategori routes
+    Route::apiResource('kategori', KategoriTransaksiController::class);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);
 Route::get('/test-log', function() {

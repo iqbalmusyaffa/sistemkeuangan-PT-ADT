@@ -20,9 +20,9 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
          $this->call([
+             UnitsSeeder::class, // Memanggil seeder unit
             KategoriTransaksiSeeder::class, // Memanggil seeder kategori transaksi
             UserSeeder::class, // Memanggil seeder user
-            UnitsSeeder::class, // Memanggil seeder unit
             MerekSeeder::class, // Memanggil seeder merek
             ProjectSeeder::class, // Memanggil seeder proyek
             ServiceCategorySeeder::class, // Memanggil seeder kategori layanan

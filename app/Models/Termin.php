@@ -5,137 +5,173 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Traits\Trackable;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\ExpenseController;
+use Illuminate\Support\Facades\Storage;
 
 class Termin extends Model
 {
-    use HasFactory;
-    use Trackable;
-    use SoftDeletes;
+    use HasFactory, Trackable;
 
     protected $fillable = [
         'proyek_id',
         'invoice_id',
         'nama_termin',
+        'jenis_termin',
+        'termin_ke',
         'nilai_termin',
-        'dp_percentage',
+        'persentase_dp',
         'nilai_dp',
         'nilai_pelunasan',
-        'total_dp_paid',
-        'total_pelunasan_paid',
         'tanggal_dp',
         'tanggal_pelunasan',
+        'tanggal_dp_dibayar',
+        'tanggal_pelunasan_dibayar',
         'status_termin',
         'keterangan',
+        'bukti_pembayaran',
+        'dibayar_oleh',
+        'expense_id',
+        'status_approval',
+        'approved_by',
+        'approved_at'
     ];
 
     protected $casts = [
-        'tanggal_dp' => 'date',
-        'tanggal_pelunasan' => 'date',
         'nilai_termin' => 'decimal:2',
-        'dp_percentage' => 'decimal:2',
+        'persentase_dp' => 'decimal:2',
         'nilai_dp' => 'decimal:2',
         'nilai_pelunasan' => 'decimal:2',
-        'total_dp_paid' => 'decimal:2',
-        'total_pelunasan_paid' => 'decimal:2',
+        'tanggal_dp' => 'date',
+        'tanggal_pelunasan' => 'date',
+        'tanggal_dp_dibayar' => 'date',
+        'tanggal_pelunasan_dibayar' => 'date',
+        'approved_at' => 'datetime',
+        'termin_ke' => 'integer',
+        'jenis_termin' => 'string',
+        'status_termin' => 'string'
     ];
 
     protected $appends = [
         'total_paid',
+        'total_dp_paid',
+        'total_pelunasan_paid',
         'remaining_dp',
         'remaining_pelunasan',
-        'remaining_total'
+        'remaining_total',
+        'is_dp',
+        'is_pelunasan',
+        'is_termin_bertahap'
+    ];
+    public $isUpdatingStatus = false;
+
+    protected $hidden = [
+        'isUpdatingStatus',
     ];
 
-    /**
-     * Get the proyek that owns the termin.
-     */
+
+    // RELATIONS
     public function proyek(): BelongsTo
     {
-        return $this->belongsTo(Proyek::class)->withTrashed();
+        return $this->belongsTo(Proyek::class, 'proyek_id');
     }
 
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(Invoice::class)->withTrashed();
+        return $this->belongsTo(Invoice::class);
     }
 
-    public function purchaseMaterials()
+    public function purchaseMaterials(): HasMany
     {
         return $this->hasMany(PurchaseMaterial::class);
     }
 
-    /**
-     * Get the incomes associated with this termin.
-     */
     public function incomes(): HasMany
     {
         return $this->hasMany(Income::class);
     }
 
-    /**
-     * Get total pembayaran DP untuk termin ini
-     */
+    public function expense(): BelongsTo
+    {
+        return $this->belongsTo(Expense::class);
+    }
+
+    public function pembayar(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'dibayar_oleh');
+    }
+
+    public function approvedByUser()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // ACCESSORS
     public function getTotalDpPaidAttribute()
     {
-        return $this->incomes()
-            ->where('type', 'dp')
-            ->where('status', 'Diterima')
-            ->sum('jumlah');
+        return Cache::remember("termin_{$this->id}_total_dp_paid", 3600, function () {
+            return $this->incomes()
+                ->where('type', 'dp')
+                ->where('status', 'Diterima')
+                ->sum('jumlah');
+        });
     }
 
-    /**
-     * Get total pembayaran pelunasan untuk termin ini
-     */
     public function getTotalPelunasanPaidAttribute()
     {
-        return $this->incomes()
-            ->where('type', 'pelunasan')
-            ->where('status', 'Diterima')
-            ->sum('jumlah');
+        return Cache::remember("termin_{$this->id}_total_pelunasan_paid", 3600, function () {
+            return $this->incomes()
+                ->where('type', 'pelunasan')
+                ->where('status', 'Diterima')
+                ->sum('jumlah');
+        });
     }
 
-    /**
-     * Get total pembayaran untuk termin ini
-     */
     public function getTotalPaidAttribute()
     {
-        return $this->incomes()
-            ->where('status', 'Diterima')
-            ->sum('jumlah');
+        return Cache::remember("termin_{$this->id}_total_paid", 3600, function () {
+            return $this->incomes()
+                ->where('status', 'Diterima')
+                ->sum('jumlah');
+        });
     }
 
-    /**
-     * Get remaining DP amount
-     */
     public function getRemainingDpAttribute()
     {
-        return $this->nilai_dp - $this->total_dp_paid;
+        return max(0, $this->nilai_dp - $this->total_dp_paid);
     }
 
-    /**
-     * Get remaining pelunasan amount
-     */
     public function getRemainingPelunasanAttribute()
     {
-        return $this->nilai_pelunasan - $this->total_pelunasan_paid;
+        return max(0, $this->nilai_pelunasan - $this->total_pelunasan_paid);
     }
 
-    /**
-     * Get remaining total amount
-     */
     public function getRemainingTotalAttribute()
     {
-        return $this->nilai_termin - $this->total_paid;
+        return max(0, $this->nilai_termin - $this->total_paid);
     }
 
-    /**
-     * Update termin status based on payments
-     */
+    public function getIsDpAttribute(): bool
+    {
+        return $this->jenis_termin === 'DP';
+    }
+
+    public function getIsPelunasanAttribute(): bool
+    {
+        return $this->jenis_termin === 'Pelunasan';
+    }
+
+    public function getIsTerminBertahapAttribute(): bool
+    {
+        return $this->jenis_termin === 'Termin Bertahap';
+    }
+
+    // UPDATE STATUS BERDASARKAN PEMBAYARAN
     public function updateStatusFromPayments()
     {
         $totalDpPaid = $this->total_dp_paid;
@@ -152,105 +188,243 @@ class Termin extends Model
         $this->save();
     }
 
-    /**
-     * Get validation rules for the termin
-     */
+    // VALIDASI RULES UNTUK REQUEST
     public static function getValidationRules($id = null)
     {
         return [
             'proyek_id' => 'required|exists:proyeks,id',
             'invoice_id' => 'required|exists:invoices,id',
             'nama_termin' => 'required|string|max:255',
+            'jenis_termin' => 'required|in:DP,Pelunasan,Termin Bertahap',
+            'termin_ke' => 'nullable|integer|min:1',
             'nilai_termin' => 'required|numeric|min:0',
-            'dp_percentage' => 'required|numeric|min:0|max:100',
+            'persentase_dp' => 'required|numeric|min:0|max:100',
             'nilai_dp' => 'required|numeric|min:0',
             'nilai_pelunasan' => 'required|numeric|min:0',
             'tanggal_dp' => 'nullable|date',
             'tanggal_pelunasan' => 'nullable|date|after_or_equal:tanggal_dp',
+            'tanggal_dp_dibayar' => 'nullable|date',
+            'tanggal_pelunasan_dibayar' => 'nullable|date|after_or_equal:tanggal_dp_dibayar',
             'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
-            'keterangan' => 'nullable|string'
+            'keterangan' => 'nullable|string',
+            'bukti_pembayaran' => 'nullable',
+            'dibayar_oleh' => 'nullable|exists:users,id'
         ];
     }
 
+    // LIFECYCLE HOOKS
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($termin) {
-            // Validate total amount
-            if ($termin->nilai_dp + $termin->nilai_pelunasan !== $termin->nilai_termin) {
-                throw new \Exception('Total DP dan Pelunasan harus sama dengan Nilai Termin');
+            try {
+                Log::info('Creating new termin:', $termin->toArray());
+
+                // Set nilai DP dan pelunasan jika belum diset
+                if (!$termin->nilai_dp && $termin->persentase_dp) {
+                    $termin->nilai_dp = round($termin->nilai_termin * ($termin->persentase_dp / 100), 2);
+                }
+                if (!$termin->nilai_pelunasan) {
+                    $termin->nilai_pelunasan = round($termin->nilai_termin - $termin->nilai_dp, 2);
+                }
+
+                // Handle bukti pembayaran
+                if ($termin->bukti_pembayaran instanceof \Illuminate\Http\UploadedFile) {
+                    $file = $termin->bukti_pembayaran;
+
+                    // Validate file size
+                    if ($file->getSize() > 2048 * 1024) { // 2MB in bytes
+                        throw new \Exception('File size exceeds 2MB limit');
+                    }
+
+                    // Validate file type
+                    $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                    if (!in_array($file->getMimeType(), $allowedTypes)) {
+                        throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
+            }
+
+                    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
+                    $path = 'uploads/bukti_pembayaran/' . $filename;
+
+                    // Ensure directory exists
+                    if (!Storage::exists('uploads/bukti_pembayaran')) {
+                        Storage::makeDirectory('uploads/bukti_pembayaran');
+                    }
+
+                    // Upload file
+                    if (!$file->storeAs('uploads/bukti_pembayaran', $filename)) {
+                        throw new \Exception('Failed to store file');
+                    }
+
+                    $termin->bukti_pembayaran = $path;
+                    Log::info('Bukti pembayaran uploaded:', ['path' => $path]);
+                }
+
+                Log::info('Termin creation validation passed');
+            } catch (\Exception $e) {
+                Log::error('Error in Termin model creating: ' . $e->getMessage());
+                throw $e;
             }
         });
 
         static::updating(function ($termin) {
-            // Validate status transition
-            $oldTermin = static::find($termin->id);
-            if ($oldTermin && $oldTermin->status_termin !== $termin->status_termin) {
-                static::validateStatusTransition($oldTermin->status_termin, $termin->status_termin);
-            }
-        });
+            try {
+                Log::info('Updating termin:', [
+                    'id' => $termin->id,
+                    'changes' => $termin->getDirty()
+                ]);
 
-        static::deleting(function ($termin) {
-            // Check if termin can be deleted
-            if ($termin->total_paid > 0) {
-                throw new \Exception('Tidak dapat menghapus termin yang sudah memiliki pembayaran');
+            // Update tanggal pembayaran berdasarkan status
+            if ($termin->status_termin === 'DP Dibayar' && !$termin->tanggal_dp_dibayar) {
+                $termin->tanggal_dp_dibayar = now();
+            }
+            if ($termin->status_termin === 'Lunas' && !$termin->tanggal_pelunasan_dibayar) {
+                $termin->tanggal_pelunasan_dibayar = now();
+            }
+
+                // Handle bukti pembayaran
+                if ($termin->bukti_pembayaran instanceof \Illuminate\Http\UploadedFile) {
+                    $file = $termin->bukti_pembayaran;
+
+                    // Validate file size
+                    if ($file->getSize() > 2048 * 1024) { // 2MB in bytes
+                        throw new \Exception('File size exceeds 2MB limit');
+                    }
+
+                    // Validate file type
+                    $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                    if (!in_array($file->getMimeType(), $allowedTypes)) {
+                        throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
+                    }
+
+                    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
+                    $path = 'uploads/bukti_pembayaran/' . $filename;
+
+                    // Ensure directory exists
+                    if (!Storage::exists('uploads/bukti_pembayaran')) {
+                        Storage::makeDirectory('uploads/bukti_pembayaran');
+                    }
+
+                    // Upload file
+                    if (!$file->storeAs('uploads/bukti_pembayaran', $filename)) {
+                        throw new \Exception('Failed to store file');
+                    }
+
+                    // Delete old file if exists
+                    if ($termin->getOriginal('bukti_pembayaran')) {
+                        Storage::delete($termin->getOriginal('bukti_pembayaran'));
+                    }
+
+                    $termin->bukti_pembayaran = $path;
+                    Log::info('Bukti pembayaran uploaded:', ['path' => $path]);
+                }
+
+                Log::info('Termin update validation passed');
+            } catch (\Exception $e) {
+                Log::error('Error in Termin model updating: ' . $e->getMessage());
+                throw $e;
             }
         });
 
         static::saving(function ($termin) {
-            // Calculate totals from incomes
-            $termin->total_dp_paid = $termin->incomes()
-                ->where('type', 'dp')
-                ->where('status', 'Diterima')
-                ->sum('jumlah');
-                
-            $termin->total_pelunasan_paid = $termin->incomes()
-                ->where('type', 'pelunasan')
-                ->where('status', 'Diterima')
-                ->sum('jumlah');
+            // Use a static variable inside the closure to prevent infinite loop
+            static $isUpdatingStatus = false;
+            if ($isUpdatingStatus) {
+                return;
+            }
+            $isUpdatingStatus = true;
 
-            // Update status based on payments
-            if ($termin->isDirty(['total_dp_paid', 'total_pelunasan_paid'])) {
-                $termin->updateStatusFromPayments();
+            $oldStatus = $termin->getOriginal('status_termin');
+            $termin->updateStatusFromPayments();
+            $isUpdatingStatus = false;
+
+            if ($termin->status_termin !== $oldStatus && $termin->invoice) {
+                    $termin->invoice->updateStatusFromTermins();
             }
         });
 
         static::created(function ($termin) {
-            // Clear any cached calculations
             $termin->clearCache();
+            if ($termin->invoice) {
+                $termin->invoice->updateStatusFromTermins();
+            }
         });
 
         static::updated(function ($termin) {
-            // Clear any cached calculations
             $termin->clearCache();
         });
 
         static::deleted(function ($termin) {
-            // Clear any cached calculations
             $termin->clearCache();
+            if ($termin->invoice) {
+                $termin->invoice->updateStatusFromTermins();
+            }
         });
     }
 
-    // Status Transition Validation
-    protected static function validateStatusTransition($oldStatus, $newStatus)
-    {
-        $validTransitions = [
-            'Belum Dibayar' => ['DP Dibayar', 'Lunas'],
-            'DP Dibayar' => ['Lunas'],
-            'Lunas' => []
-        ];
-
-        if (!in_array($newStatus, $validTransitions[$oldStatus])) {
-            throw new \Exception("Tidak dapat mengubah status dari {$oldStatus} ke {$newStatus}");
-        }
-    }
-
-    // Clear Cache
+    // CLEAR CACHE
     public function clearCache()
     {
         Cache::forget("termin_{$this->id}_total_dp_paid");
         Cache::forget("termin_{$this->id}_total_pelunasan_paid");
         Cache::forget("termin_{$this->id}_total_paid");
+    }
+
+    // SCOPES
+    public function scopeBelumDibayar($query)
+    {
+        return $query->where('status_termin', 'Belum Dibayar');
+    }
+
+    public function scopeDpDibayar($query)
+    {
+        return $query->where('status_termin', 'DP Dibayar');
+    }
+
+    public function scopeLunas($query)
+    {
+        return $query->where('status_termin', 'Lunas');
+    }
+
+    public function scopeByProyek($query, $proyekId)
+    {
+        return $query->where('proyek_id', $proyekId);
+    }
+
+    public function scopeByInvoice($query, $invoiceId)
+    {
+        return $query->where('invoice_id', $invoiceId);
+    }
+
+    // TRANSACTIONS
+    public function createExpense()
+    {
+        return DB::transaction(function () {
+            $expense = Expense::create([
+                'user_id' => auth()->id(),
+                'proyek_id' => $this->proyek_id,
+                'category_id' => null,
+                'amount' => $this->status_termin === 'Lunas' ? $this->nilai_pelunasan : $this->nilai_dp,
+                'description' => $this->status_termin === 'Lunas'
+                    ? "Pelunasan Termin {$this->nama_termin}"
+                    : "Pembayaran DP Termin {$this->nama_termin}",
+                'transaction_date' => $this->status_termin === 'Lunas'
+                    ? $this->tanggal_pelunasan
+                    : $this->tanggal_dp,
+                'status' => 'Lunas',
+                'payment_method' => null,
+                'prepared_fund' => $this->status_termin === 'Lunas'
+                    ? $this->nilai_pelunasan
+                    : $this->nilai_dp,
+                'source_type' => 'termin',
+                'source_id' => $this->id
+            ]);
+
+            $this->expense_id = $expense->id;
+            $this->save();
+
+            return $expense;
+        });
     }
 }

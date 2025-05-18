@@ -10,7 +10,7 @@
               <CIcon icon="cil-cloud-download" /> PDF
             </CButton>
             <CButton color="success" @click="exportToExcel" class="me-2">
-              <CIcon icon="cid-spreadsheet" /> Excel
+              <CIcon icon="cil-spreadsheet" /> Excel
             </CButton>
             <CButton color="warning" @click="$refs.fileInput.click()">
               <CIcon icon="cil-cloud-upload" /> Import
@@ -24,46 +24,134 @@
             >
           </div>
 
-          <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject">
+          <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject || !selectedInvoice">
             Tambah Termin
           </CButton>
         </CCardHeader>
-        <CCardBody>
-          <CAlert v-if="error" color="danger">{{ error }}</CAlert>
-          <CSpinner v-if="loading" color="primary" />
 
-          <!-- Project Filter -->
+        <CCardBody>
+          <!-- Project Selection -->
           <CRow class="mb-3">
             <CCol md="6">
-              <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
-              <CFormSelect v-model="selectedProject" id="project_filter" @change="filterByProject">
-                <option value="">-- Pilih Proyek --</option>
-                <option v-for="project in projects" :key="project.id" :value="String(project.id)">
-                  {{ project.nama_customer }} - {{ project.nama_proyek }}
-                </option>
-              </CFormSelect>
+              <CFormLabel>Pilih Proyek</CFormLabel>
+              <CFormSelect
+                v-model="selectedProject"
+                :options="[{ value: '', label: '-- Pilih Proyek --' }, ...projectOptions]"
+                @change="handleProjectChange"
+              />
             </CCol>
             <CCol md="6">
-              <CFormLabel for="invoice_filter">Pilih Invoice</CFormLabel>
-              <CFormSelect v-model="selectedInvoice" id="invoice_filter" :disabled="!selectedProject || !!selectedInvoice">
-                <option value="">-- Pilih Invoice --</option>
-                <option v-for="invoice in invoices" :key="invoice.id" :value="String(invoice.id)">
-                  {{ invoice.invoice_number }} - {{ invoice.invoice_date }}
-                </option>
-              </CFormSelect>
+              <CFormLabel>Pilih Invoice</CFormLabel>
+              <CFormSelect
+                v-model="selectedInvoice"
+                :options="[{ value: '', label: '-- Pilih Invoice --' }, ...invoiceOptions]"
+                :disabled="!selectedProject"
+                @change="handleInvoiceChange"
+              />
             </CCol>
           </CRow>
 
-          <!-- Tabel Termin -->
-          <div v-if="selectedProject">
-            <table ref="terminTableRef" class="table table-striped table-bordered w-100"></table>
+          <!-- Summary Cards -->
+          <CRow class="mb-4" v-if="selectedProject && selectedInvoice">
+            <CCol md="3">
+              <CCard class="bg-primary text-white">
+                <CCardBody>
+                  <h6>Total Termin</h6>
+                  <h3>{{ formatCurrency(totalTermin) }}</h3>
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol md="3">
+              <CCard class="bg-success text-white">
+                <CCardBody>
+                  <h6>Total DP</h6>
+                  <h3>{{ formatCurrency(totalDP) }}</h3>
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol md="3">
+              <CCard class="bg-info text-white">
+                <CCardBody>
+                  <h6>Total Pelunasan</h6>
+                  <h3>{{ formatCurrency(totalPelunasan) }}</h3>
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol md="3">
+              <CCard class="bg-warning text-white">
+                <CCardBody>
+                  <h6>Total Keseluruhan</h6>
+                  <h3>{{ formatCurrency(totalKeseluruhan) }}</h3>
+                </CCardBody>
+              </CCard>
+            </CCol>
+          </CRow>
+
+          <!-- DataTable -->
+          <div class="w-100" v-if="selectedProject && selectedInvoice">
+            <table id="terminTable" class="display" style="width:100%">
+              <thead>
+                <tr>
+                  <th>Nama Termin</th>
+                  <th>Jenis Termin</th>
+                  <th>Termin Ke</th>
+                  <th>Nilai Termin</th>
+                  <th>Persentase DP</th>
+                  <th>Nilai DP</th>
+                  <th>Nilai Pelunasan</th>
+                  <th>Tanggal DP</th>
+                  <th>Deadline Pembayaran</th>
+                  <th>Status</th>
+                  <th>Status Approval</th>
+                  <th>Disetujui Oleh</th>
+                  <th>Waktu Disetujui</th>
+                  <th>Tgl DP Dibayar</th>
+                  <th>Tgl Pelunasan Dibayar</th>
+                  <th>Keterangan</th>
+                  <th>Bukti Pembayaran</th>
+                  <th>Dibuat</th>
+                  <th>Diupdate</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in termins" :key="item.id">
+                  <td>{{ item.nama_termin }}</td>
+                  <td>{{ item.jenis_termin }}</td>
+                  <td>{{ item.termin_ke }}</td>
+                  <td>{{ formatCurrency(item.nilai_termin) }}</td>
+                  <td>{{ item.persentase_dp }}</td>
+                  <td>{{ formatCurrency(item.nilai_dp) }}</td>
+                  <td>{{ formatCurrency(item.nilai_pelunasan) }}</td>
+                  <td>{{ item.tanggal_dp }}</td>
+                  <td>{{ item.tanggal_pelunasan }}</td>
+                  <td>{{ item.status_termin }}</td>
+                  <td>{{ item.status_approval }}</td>
+                  <td>{{ item.approved_by }}</td>
+                  <td>{{ item.approved_at }}</td>
+                  <td>{{ item.tanggal_dp_dibayar }}</td>
+                  <td>{{ item.tanggal_pelunasan_dibayar }}</td>
+                  <td>{{ item.keterangan }}</td>
+                  <td>
+                    <a v-if="item.bukti_pembayaran_url" :href="item.bukti_pembayaran_url" target="_blank">Lihat</a>
+                  </td>
+                  <td>{{ item.created_at }}</td>
+                  <td>{{ item.updated_at }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-info" @click="openStatusModal(item)">Update Status</button>
+                    <template v-if="isApprover && item.status_approval === 'Pending' && ['DP Dibayar','Lunas'].includes(item.status_termin)">
+                      <button class="btn btn-sm btn-success" @click="approveTermin(item)">Approve</button>
+                      <button class="btn btn-sm btn-danger" @click="rejectTermin(item)">Reject</button>
+                      <button class="btn btn-sm btn-warning" @click="pendingTermin(item)">Pending</button>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <CAlert v-else color="info">
-            Silakan pilih proyek terlebih dahulu untuk melihat data termin
-          </CAlert>
         </CCardBody>
       </CCard>
-      <CCard v-if="selectedProject" class="mt-3">
+      <CCard v-if="selectedProject && selectedInvoice" class="mt-3">
         <CCardHeader>
           <strong>Ringkasan Termin</strong>
         </CCardHeader>
@@ -74,23 +162,23 @@
                 <CTableBody>
                   <CTableRow>
                     <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPurchases) }}</CTableDataCell>
+                    <CTableDataCell class="text-end"> {{ formatCurrency(totalInvoiceAmount) }}</CTableDataCell>
                   </CTableRow>
                   <CTableRow>
                     <CTableDataCell>Total Nilai Termin</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalTermin) }}</CTableDataCell>
+                    <CTableDataCell class="text-end"> {{ formatCurrency(totalTermin) }}</CTableDataCell>
                   </CTableRow>
                   <CTableRow>
                     <CTableDataCell>Total DP</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalDP) }}</CTableDataCell>
+                    <CTableDataCell class="text-end"> {{ formatCurrency(totalDP) }}</CTableDataCell>
                   </CTableRow>
                   <CTableRow>
                     <CTableDataCell>Total Pelunasan</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
+                    <CTableDataCell class="text-end"> {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
                   </CTableRow>
                   <CTableRow class="fw-bold">
                     <CTableDataCell>Total Keseluruhan</CTableDataCell>
-                    <CTableDataCell class="text-end">Rp {{ formatCurrency(totalKeseluruhan) }}</CTableDataCell>
+                    <CTableDataCell class="text-end"> {{ formatCurrency(totalKeseluruhan) }}</CTableDataCell>
                   </CTableRow>
                 </CTableBody>
               </CTable>
@@ -107,7 +195,7 @@
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="project_id">Proyek</CFormLabel>
-              <CFormSelect v-model="form.project_id" id="project_id" required>
+              <CFormSelect v-model="form.proyek_id" id="project_id" required>
                 <option value="">Pilih Proyek</option>
                 <optgroup v-for="(projectGroup, customer) in groupedProjects"
                          :key="customer"
@@ -129,8 +217,22 @@
           </CRow>
           <CRow class="mb-3">
             <CCol md="6">
+              <CFormLabel for="jenis_termin">Jenis Termin</CFormLabel>
+              <CFormSelect v-model="form.jenis_termin" id="jenis_termin" required>
+                <option value="Termin Bertahap">Termin Bertahap</option>
+                <option value="DP">DP</option>
+                <option value="Pelunasan">Pelunasan</option>
+              </CFormSelect>
+            </CCol>
+            <CCol md="6">
+              <CFormLabel for="termin_ke">Termin Ke</CFormLabel>
+              <CFormInput type="number" v-model="form.termin_ke" id="termin_ke" min="1" />
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
               <CFormLabel for="nilai_termin">Nilai Termin</CFormLabel>
-              <div class="input-group">
+              <div class="input-group align-items-center">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
                   type="text"
@@ -138,29 +240,43 @@
                   @input="handleNilaiTerminInput"
                   id="nilai_termin"
                   required
-                  :readonly="true"
-                  class="bg-light"
+                  :readonly="!manualNilaiTermin"
                 />
+                <CFormCheck v-model="manualNilaiTermin" class="ms-2" label="Input manual" />
               </div>
               <small class="text-muted">
-                Nilai termin diambil dari Total Belanja (Invoice)
+                Maksimal nilai termin:  {{ formatCurrency(modalTotalInvoiceAmount) }}
               </small>
             </CCol>
             <CCol md="6">
               <CFormLabel for="dp_percentage">Persentase DP (%)</CFormLabel>
-              <CFormInput type="number" v-model.number="form.dp_percentage" id="dp_percentage" required @input="calculateValues" min="0" max="100" />
+              <CFormInput type="number" v-model.number="form.persentase_dp" id="dp_percentage" required @input="calculateValues" min="0" max="100" />
             </CCol>
           </CRow>
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="nilai_dp">Nilai DP</CFormLabel>
-              <div class="input-group">
+              <div class="input-group align-items-center">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
                   type="text"
                   :value="form.displayNilaiDP"
                   @input="handleNilaiDPInput"
                   id="nilai_dp"
+                  :readonly="!manualNilaiDP"
+                />
+                <CFormCheck v-model="manualNilaiDP" class="ms-2" label="Input manual" />
+              </div>
+            </CCol>
+            <CCol md="6">
+              <CFormLabel for="remaining_dp">Sisa DP (Remaining DP)</CFormLabel>
+              <div class="input-group">
+                <span class="input-group-text">Rp</span>
+                <CFormInput
+                  type="text"
+                  :value="formatCurrency(form.remaining_dp !== undefined ? form.remaining_dp : 0)"
+                  id="remaining_dp"
+                  readonly
                 />
               </div>
             </CCol>
@@ -171,12 +287,36 @@
                 <CFormInput
                   type="text"
                   :value="form.displayNilaiPelunasan"
+                  @input="handleNilaiPelunasanInput"
                   id="nilai_pelunasan"
                   readonly
-                  class="bg-light"
                 />
               </div>
             </CCol>
+          <CCol md="6">
+            <CFormLabel for="remaining_pelunasan">Sisa Pelunasan</CFormLabel>
+            <div class="input-group">
+              <span class="input-group-text">Rp</span>
+              <CFormInput
+                type="text"
+                :value="formatCurrency(form.remaining_pelunasan !== undefined ? form.remaining_pelunasan : 0)"
+                id="remaining_pelunasan"
+                readonly
+              />
+            </div>
+          </CCol>
+          <CCol md="6">
+            <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
+            <div class="input-group">
+              <span class="input-group-text">Rp</span>
+              <CFormInput
+                type="text"
+                :value="formatCurrency(form.remaining_total !== undefined ? form.remaining_total : 0)"
+                id="remaining_total"
+                readonly
+              />
+            </div>
+          </CCol>
           </CRow>
           <CRow class="mb-3">
             <CCol md="6">
@@ -184,8 +324,9 @@
               <CFormInput type="date" v-model="form.tanggal_dp" id="tanggal_dp" />
             </CCol>
             <CCol md="6">
-              <CFormLabel for="tanggal_pelunasan">Tanggal Pelunasan</CFormLabel>
+              <CFormLabel for="tanggal_pelunasan">Tanggal Deadline Pembayaran</CFormLabel>
               <CFormInput type="date" v-model="form.tanggal_pelunasan" id="tanggal_pelunasan" />
+              <small class="text-muted">Tanggal jatuh tempo pembayaran termin ini.</small>
             </CCol>
           </CRow>
           <CRow class="mb-3">
@@ -204,38 +345,116 @@
               <CFormTextarea v-model="form.keterangan" id="keterangan" rows="3" />
             </CCol>
           </CRow>
+          <!-- Field Bukti Pembayaran (opsional, hanya saat create/edit termin) -->
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel for="bukti_pembayaran">Bukti Pembayaran (Opsional)</CFormLabel>
+              <CFormInput type="file" id="bukti_pembayaran" accept="image/*,.pdf" @change="handleBuktiPembayaranForm" />
+              <small class="text-muted">Format: JPEG, PNG, PDF (Max 2MB). Tidak wajib diisi.</small>
+              <div v-if="form.bukti_pembayaran_url" class="mt-2">
+                <a :href="form.bukti_pembayaran_url" target="_blank">Lihat Bukti Pembayaran</a>
+              </div>
+            </CCol>
+          </CRow>
+// Handler untuk upload bukti pembayaran pada form create/edit termin
+const handleBuktiPembayaranForm = (event) => {
+  const file = event.target.files[0];
+  form.value.bukti_pembayaran = file || null;
+};
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel for="invoice_id">Invoice</CFormLabel>
+              <CFormSelect v-model="form.invoice_id" id="invoice_id" required :disabled="modalMode === 'edit'">
+                <option value="">Pilih Invoice</option>
+                <option v-for="inv in invoiceOptions" :key="inv.value" :value="inv.value">
+                  {{ inv.label }}
+                </option>
+              </CFormSelect>
+              <small v-if="modalMode === 'edit'" class="text-muted">Invoice terkunci. Hanya bisa diganti jika invoice dihapus/hilang.</small>
+            </CCol>
+          </CRow>
           <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
         </CForm>
       </CModalBody>
     </CModal>
 
     <!-- Status Update Modal -->
-    <CModal :visible="showStatusModal" @close="closeStatusModal" title="Update Status Termin" size="sm">
+    <CModal :visible="showStatusModal" @close="closeStatusModal" title="Update Status Termin">
       <CModalBody>
-        <CForm @submit.prevent="handleStatusUpdate">
+        <CForm @submit.prevent="handleStatusSubmit">
+
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel for="status_update">Status Termin</CFormLabel>
-              <CFormSelect v-model="statusForm.status_termin" id="status_update" required>
+              <CFormLabel>Status Termin</CFormLabel>
+              <CFormSelect v-model="statusForm.status_termin" required>
                 <option value="Belum Dibayar">Belum Dibayar</option>
                 <option value="DP Dibayar">DP Dibayar</option>
                 <option value="Lunas">Lunas</option>
               </CFormSelect>
             </CCol>
           </CRow>
+
+          <CRow class="mb-3" v-if="statusForm.status_termin === 'DP Dibayar'">
+            <CCol md="12">
+              <CFormLabel>Tanggal DP Dibayar</CFormLabel>
+              <CFormInput type="date" v-model="statusForm.tanggal_dp_dibayar" required />
+            </CCol>
+          </CRow>
+
+          <CRow class="mb-3" v-if="statusForm.status_termin === 'Lunas'">
+            <CCol md="12">
+              <CFormLabel>Tanggal Pelunasan Dibayar</CFormLabel>
+              <CFormInput type="date" v-model="statusForm.tanggal_pelunasan_dibayar" required />
+            </CCol>
+          </CRow>
+
+          <CRow class="mb-3" v-if="['DP Dibayar', 'Lunas'].includes(statusForm.status_termin)">
+            <CCol md="12">
+              <CFormLabel>Bukti Pembayaran</CFormLabel>
+              <CFormInput type="file" @change="handleBuktiPembayaran" accept="image/*,.pdf" :required="!statusForm.bukti_pembayaran_url" />
+              <small class="text-muted">Format: JPEG, PNG, PDF (Max 2MB)</small>
+              <div v-if="statusForm.bukti_pembayaran_url" class="mt-2">
+                <a :href="statusForm.bukti_pembayaran_url" target="_blank">Lihat Bukti Pembayaran</a>
+              </div>
+            </CCol>
+          </CRow>
+
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel for="tanggal_dp_update">Tanggal DP</CFormLabel>
-              <CFormInput type="date" v-model="statusForm.tanggal_dp" id="tanggal_dp_update" />
+              <CFormLabel>Keterangan</CFormLabel>
+              <CFormTextarea v-model="statusForm.keterangan" rows="3" />
+            </CCol>
+          </CRow>
+
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel>Status Approval</CFormLabel>
+              <CFormSelect v-model="statusForm.status_approval" required
+                :disabled="statusForm.status_termin === 'Belum Dibayar'">
+                <option value="Pending">Pending</option>
+                <option value="Approved">Disetujui</option>
+                <option value="Rejected">Ditolak</option>
+              </CFormSelect>
+              <small v-if="statusForm.status_termin === 'Belum Dibayar'" class="text-muted">Approval hanya bisa dilakukan jika termin sudah DP Dibayar atau Lunas.</small>
+            </CCol>
+            <CCol md="6">
+              <CFormLabel>Disetujui/Ditolak Oleh</CFormLabel>
+              <CFormInput :value="statusForm.approved_by_name" readonly />
             </CCol>
           </CRow>
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel for="tanggal_pelunasan_update">Tanggal Pelunasan</CFormLabel>
-              <CFormInput type="date" v-model="statusForm.tanggal_pelunasan" id="tanggal_pelunasan_update" />
+              <CFormLabel>Waktu Disetujui/Ditolak</CFormLabel>
+              <CFormInput :value="statusForm.approved_at" readonly />
             </CCol>
           </CRow>
-          <CButton type="submit" color="primary">Update Status</CButton>
+
+          <div class="d-flex justify-content-end gap-2">
+            <CButton color="secondary" @click="closeStatusModal">Batal</CButton>
+            <CButton type="submit" color="primary">Simpan</CButton>
+            <CButton v-if="isApprover && statusForm.status_approval === 'Pending' && ['DP Dibayar','Lunas'].includes(statusForm.status_termin)" color="success" @click.prevent="confirmApproveStatus">Approve</CButton>
+            <CButton v-if="isApprover && statusForm.status_approval === 'Pending' && ['DP Dibayar','Lunas'].includes(statusForm.status_termin)" color="danger" @click.prevent="confirmRejectStatus">Reject</CButton>
+          </div>
         </CForm>
       </CModalBody>
     </CModal>
@@ -251,33 +470,49 @@ import "datatables.net-dt/css/dataTables.dataTables.min.css";
 import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
 import "datatables.net-responsive-dt";
 
-const terminTableRef = ref(null);
+
 const form = ref({
-  project_id: "",
-  invoice_id: "",
-  nama_termin: "",
+  proyek_id: '',
+  invoice_id: '',
+  nama_termin: '',
+  jenis_termin: 'Termin Bertahap',
+  termin_ke: 1,
   nilai_termin: 0,
-  dp_percentage: 50,
+  persentase_dp: 0,
   nilai_dp: 0,
   nilai_pelunasan: 0,
-  tanggal_dp: "",
-  tanggal_pelunasan: "",
-  status_termin: "Belum Dibayar",
-  keterangan: "",
-  displayNilaiTermin: "0",
-  displayNilaiDP: "0",
-  displayNilaiPelunasan: "0"
+  tanggal_dp: '',
+  tanggal_pelunasan: '',
+  tanggal_dp_dibayar: '',
+  tanggal_pelunasan_dibayar: '',
+  status_termin: 'Belum Dibayar',
+  keterangan: '',
+  bukti_pembayaran: null,
+  dibayar_oleh: '',
+  expense_id: null,
+  remaining_dp: 0,
+  remaining_pelunasan: 0,
+  remaining_total: 0
 });
 
 const statusForm = ref({
-  status_termin: "",
-  tanggal_dp: "",
-  tanggal_pelunasan: ""
+  status_termin: '',
+  tanggal_dp_dibayar: '',
+  tanggal_pelunasan_dibayar: '',
+  keterangan: '',
+  bukti_pembayaran: null,
+  bukti_pembayaran_url: '',
+  status_approval: '',
+  approved_by_name: '',
+  approved_at: ''
 });
 
 const projects = ref([]);
-const termins = ref([]);
+const projectOptions = ref([]);
+const invoices = ref([]);
+const invoiceOptions = ref([]);
 const purchases = ref([]);
+const termins = ref([]);
 const error = ref("");
 const loading = ref(false);
 const showModal = ref(false);
@@ -288,12 +523,13 @@ const modalMode = ref("tambah");
 const editingId = ref(null);
 const updatingStatusId = ref(null);
 const selectedProject = ref("");
-const selectedProjectDetails = ref(null);
 const selectedInvoice = ref("");
-const invoices = ref([]);
-const API_URL = ""; // Jika perlu, isi dengan base URL API kamu, misal: "http://localhost:8000/api"
 
-// Add groupedProjects computed property
+// Manual mode state
+const manualNilaiTermin = ref(false);
+const manualNilaiDP = ref(false);
+
+// Computed Properties
 const groupedProjects = computed(() => {
   const grouped = {};
   projects.value.forEach(project => {
@@ -304,674 +540,6 @@ const groupedProjects = computed(() => {
   });
   return grouped;
 });
-
-// Add handleNilaiTerminInput method
-const handleNilaiTerminInput = (event) => {
-  // Nilai termin is now read-only, always using total purchases
-  form.value.nilai_termin = totalPurchases.value;
-  form.value.displayNilaiTermin = formatCurrency(totalPurchases.value);
-  calculateValues();
-};
-
-// Add handleNilaiDPInput method
-const handleNilaiDPInput = (event) => {
-  const value = event.target.value.replace(/[^\d]/g, '');
-  form.value.nilai_dp = Number(value) || 0;
-  form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-
-  // Calculate percentage based on DP value
-  if (form.value.nilai_termin > 0) {
-    form.value.dp_percentage = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
-    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-  }
-};
-
-// Add onMounted hook
-onMounted(async () => {
-  await fetchProjects();
-});
-
-// Fetch Projects
-const fetchProjects = async () => {
-  try {
-    const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/proyeks", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (response.data && response.data.data) {
-      projects.value = response.data.data.map(project => ({
-        id: project.id,
-        nama_customer: project.nama_customer || '-',
-        nama_proyek: project.nama_proyek || project.nama_project || '-'
-      }));
-
-      if (projects.value.length === 0) {
-        error.value = "Tidak ada data proyek tersedia";
-      }
-    } else {
-      projects.value = [];
-      error.value = "Format data tidak sesuai";
-    }
-  } catch (err) {
-    error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: error.value
-    });
-  }
-};
-
-const fetchTermins = async () => {
-  error.value = "";
-  if (!selectedInvoice.value) {
-    termins.value = [];
-    nextTick(() => {
-      initDataTable();
-    });
-    return;
-  }
-  try {
-    const token = sessionStorage.getItem("token");
-    const params = { proyek_id: selectedProject.value };
-    if (selectedInvoice.value) params.invoice_id = selectedInvoice.value;
-    const response = await axios.get("/api/termins", {
-      headers: { Authorization: `Bearer ${token}` },
-      params
-    });
-    if (Array.isArray(response.data)) {
-      termins.value = response.data;
-    } else if (response.data && Array.isArray(response.data.data)) {
-      termins.value = response.data.data;
-    } else if (response.data) {
-      termins.value = [response.data];
-    } else {
-      termins.value = [];
-    }
-    nextTick(() => {
-      initDataTable();
-    });
-  } catch (err) {
-    error.value = "Gagal memuat data termin: " + (err.response?.data?.message || err.message);
-    termins.value = [];
-  }
-};
-
-// Calculate DP and Pelunasan values
-const calculateValues = () => {
-  if (form.value.dp_percentage) {
-    // Calculate DP based on percentage
-    form.value.nilai_dp = form.value.nilai_termin * (form.value.dp_percentage / 100);
-    // Calculate final payment as total minus DP
-    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-
-    // Update display values
-    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-  }
-};
-
-// DataTable initialization
-const initDataTable = () => {
-  // Destroy existing DataTable if it exists
-  if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
-    $(terminTableRef.value).DataTable().destroy();
-  }
-
-  // Clear the table contents
-  $(terminTableRef.value).empty();
-
-
-  const dataTableConfig = {
-    data: termins.value,
-    columns: [
-      {
-        title: "No",
-        data: null,
-        render: (data, type, row, meta) => meta.row + 1,
-        className: "text-center",
-        width: "30px"
-      },
-      {
-        title: "Nama Termin",
-        data: "nama_termin",
-        render: data => data || "-",
-        className: "text-start"
-      },
-      {
-        title: "Nilai Termin",
-        data: "nilai_termin",
-        render: data => `Rp ${formatCurrency(data || 0)}`,
-        className: "text-end"
-      },
-      {
-        title: "DP (%)",
-        data: "dp_percentage",
-        render: data => `${data || 0}%`,
-        className: "text-center"
-      },
-      {
-        title: "Nilai DP",
-        data: "nilai_dp",
-        render: data => `Rp ${formatCurrency(data || 0)}`,
-        className: "text-end"
-      },
-      {
-        title: "Nilai Pelunasan",
-        data: "nilai_pelunasan",
-        render: data => `Rp ${formatCurrency(data || 0)}`,
-        className: "text-end"
-      },
-      {
-        title: "Tanggal DP",
-        data: "tanggal_dp",
-        render: data => data ? new Date(data).toLocaleDateString("id-ID") : "-",
-        className: "text-center"
-      },
-      {
-        title: "Tanggal Pelunasan",
-        data: "tanggal_pelunasan",
-        render: data => data ? new Date(data).toLocaleDateString("id-ID") : "-",
-        className: "text-center"
-      },
-      {
-        title: "Status",
-        data: "status_termin",
-        render: data => {
-          const statusClass = {
-            "Belum Dibayar": "danger",
-            "DP Dibayar": "warning",
-            "Lunas": "success"
-          };
-          return `<span class="badge bg-${statusClass[data] || "secondary"}">${data || "-"}</span>`;
-        },
-        className: "text-center"
-      },
-      {
-        title: "Aksi",
-        data: null,
-        orderable: false,
-        className: "text-center",
-        render: (data, type, row) => `
-          <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-primary btn-sm edit-btn" data-id="${row.id}" title="Edit">
-              <i class="cil-pencil"></i>
-            </button>
-            <button type="button" class="btn btn-info btn-sm status-btn" data-id="${row.id}" title="Status">
-              <i class="cil-task"></i>
-            </button>
-            <button type="button" class="btn btn-danger btn-sm delete-btn" data-id="${row.id}" title="Hapus">
-              <i class="cil-trash"></i>
-            </button>
-          </div>
-        `
-      }
-    ],
-    responsive: false,
-    autoWidth: false,
-    scrollX: true,
-    dom: '<"row mb-2"<"col-sm-6"l><"col-sm-6 text-end"f>>rt<"row mt-2"<"col-sm-6"i><"col-sm-6 text-end"p>>',
-    language: {
-      emptyTable: "Tidak ada data",
-      search: "Cari:",
-      lengthMenu: "Tampilkan _MENU_ entri",
-      info: "Menampilkan _START_ - _END_ dari _TOTAL_ entri",
-      paginate: {
-        previous: "&laquo;",
-        next: "&raquo;"
-      }
-    },
-    drawCallback: function() {
-      // Attach actions
-      $(this).find(".edit-btn").off().on("click", function () {
-        const id = $(this).data("id");
-        const termin = termins.value.find(t => t.id === id);
-        if (termin) openModal("edit", termin);
-      });
-
-      $(this).find(".status-btn").off().on("click", function () {
-        const id = $(this).data("id");
-        const termin = termins.value.find(t => t.id === id);
-        if (termin) openStatusModal(termin);
-      });
-
-      $(this).find(".delete-btn").off().on("click", function () {
-        const id = $(this).data("id");
-        if (id) deleteTermin(id);
-      });
-    }
-  };
-
-  const table = $(terminTableRef.value).DataTable(dataTableConfig);
-
-  $(window).on("resize", () => table.columns.adjust());
-
-  return table;
-};
-
-const filterByProject = async () => {
-  await fetchInvoices(String(selectedProject.value));
-  purchases.value = [];
-  selectedInvoice.value = "";
-  termins.value = [];
-  nextTick(() => {
-    initDataTable();
-  });
-};
-
-const filterByInvoice = async (...args) => {
-  await fetchPurchases(selectedProject.value, selectedInvoice.value);
-  await fetchTermins();
-};
-
-watch(selectedProject, async (newVal) => {
-  await fetchInvoices(String(newVal));
-  purchases.value = [];
-  selectedInvoice.value = "";
-  await fetchTermins();
-});
-
-watch(selectedInvoice, (newVal) => {
-  if (newVal) {
-    fetchPurchases(selectedProject.value, newVal);
-    fetchTermins();
-  } else {
-    purchases.value = [];
-    termins.value = [];
-    nextTick(() => {
-      initDataTable();
-    });
-  }
-});
-
-watch(selectedInvoice, (newVal) => {
-  if (!newVal) return;
-  const invoice = invoices.value.find(inv => inv.id == newVal);
-  if (invoice) {
-    form.value.invoice_id = invoice.id;
-    form.value.nilai_termin = Number(invoice.total_amount) || 0;
-    form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
-    // Default DP 50%
-    form.value.dp_percentage = 50;
-    form.value.nilai_dp = form.value.nilai_termin * 0.5;
-    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-  }
-});
-
-// Open Modal for Add/Edit
-const openModal = async (mode, termin = null) => {
-  modalMode.value = mode;
-  if (mode === "edit" && termin) {
-    // Format dates for input type="date"
-    const formatDateForInput = (dateString) => {
-      if (!dateString) return "";
-      const date = new Date(dateString);
-      return date.toISOString().split('T')[0];
-    };
-
-    form.value = {
-      project_id: termin.proyek_id || selectedProject.value,
-      invoice_id: termin.invoice_id || selectedInvoice.value || "",
-      nama_termin: termin.nama_termin,
-      nilai_termin: termin.nilai_termin,
-      dp_percentage: termin.dp_percentage,
-      nilai_dp: termin.nilai_dp,
-      nilai_pelunasan: termin.nilai_pelunasan,
-      tanggal_dp: formatDateForInput(termin.tanggal_dp),
-      tanggal_pelunasan: formatDateForInput(termin.tanggal_pelunasan),
-      status_termin: termin.status_termin,
-      keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(termin.nilai_termin),
-      displayNilaiDP: formatCurrency(termin.nilai_dp),
-      displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan)
-    };
-    editingId.value = termin.id;
-    modalTitle.value = "Edit Termin";
-    modalButtonText.value = "Update";
-  } else {
-    // Set nilai dari invoice yang dipilih
-    const invoice = invoices.value.find(inv => inv.id == selectedInvoice.value);
-    const nilai_termin = invoice ? Number(invoice.total_amount) : 0;
-    const dp = nilai_termin * 0.5;
-    const pelunasan = nilai_termin - dp;
-    const today = new Date().toISOString().split('T')[0];
-    form.value = {
-      project_id: selectedProject.value,
-      invoice_id: selectedInvoice.value || "",
-      nama_termin: "",
-      nilai_termin: nilai_termin,
-      dp_percentage: 50,
-      nilai_dp: dp,
-      nilai_pelunasan: pelunasan,
-      tanggal_dp: today,
-      tanggal_pelunasan: "",
-      status_termin: "Belum Dibayar",
-      keterangan: "",
-      displayNilaiTermin: formatCurrency(nilai_termin),
-      displayNilaiDP: formatCurrency(dp),
-      displayNilaiPelunasan: formatCurrency(pelunasan)
-    };
-    editingId.value = null;
-    modalTitle.value = "Tambah Termin";
-    modalButtonText.value = "Simpan";
-  }
-  showModal.value = true;
-};
-
-// Open Status Update Modal
-const openStatusModal = (termin) => {
-  statusForm.value = {
-    status_termin: termin.status_termin,
-    tanggal_dp: termin.tanggal_dp || "",
-    tanggal_pelunasan: termin.tanggal_pelunasan || ""
-  };
-  updatingStatusId.value = termin.id;
-  showStatusModal.value = true;
-};
-
-// Close the modal
-const closeModal = () => {
-  showModal.value = false;
-};
-
-// Close the status modal
-const closeStatusModal = () => {
-  showStatusModal.value = false;
-};
-
-// Handle Submit of Form
-const handleSubmit = async () => {
-  loading.value = true;
-  error.value = "";
-
-  // Basic validation for both modes
-  if (!form.value.project_id) {
-    error.value = "Proyek wajib dipilih!";
-    loading.value = false;
-    return;
-  }
-
-  if (!form.value.nama_termin.trim()) {
-    error.value = "Nama termin wajib diisi!";
-    loading.value = false;
-    return;
-  }
-
-  if (!form.value.nilai_termin || form.value.nilai_termin <= 0) {
-    error.value = "Nilai termin harus lebih dari 0!";
-    loading.value = false;
-    return;
-  }
-
-  if (!form.value.dp_percentage || form.value.dp_percentage <= 0 || form.value.dp_percentage > 100) {
-    error.value = "Persentase DP harus antara 0-100%!";
-    loading.value = false;
-    return;
-  }
-
-  // Get the original termin data if we're editing
-  const originalTermin = modalMode.value === "edit" ? termins.value.find(t => t.id === editingId.value) : null;
-
-  // Check if we're only editing non-numeric fields
-  const isEditingNonNumeric = modalMode.value === "edit" && originalTermin &&
-    form.value.nilai_termin === originalTermin.nilai_termin &&
-    form.value.dp_percentage === originalTermin.dp_percentage;
-
-  // Skip validation for non-numeric field edits
-  if (!isEditingNonNumeric) {
-    // Validate total termin amount
-    const totalTermin = termins.value
-      .filter(t => t.id !== editingId.value)
-      .reduce((sum, t) => sum + Number(t.nilai_termin), 0);
-
-    const totalWithNewTermin = totalTermin + Number(form.value.nilai_termin);
-    const totalInvoice = selectedInvoice.value ? Number(selectedInvoice.value.total_amount) : 0;
-
-    if (totalWithNewTermin > totalInvoice) {
-      error.value = "Total nilai termin tidak boleh melebihi total invoice!";
-      loading.value = false;
-      return;
-    }
-
-    // Validate budget
-    const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
-    const totalTerminBaru = form.value.nilai_termin || 0;
-    if (totalTerminBaru > sisaAnggaran) {
-      await Swal.fire({
-        icon: 'warning',
-        title: 'Anggaran Melebihi Batas!',
-        text: 'Jumlah termin melebihi sisa anggaran proyek. Silakan cek kembali nilai termin.',
-      });
-      loading.value = false;
-      return;
-    }
-  }
-
-  calculateValues();
-
-  try {
-    const token = sessionStorage.getItem("token");
-
-    // Format dates for API
-    const formatDateForAPI = (dateString) => {
-      if (!dateString) return null;
-      const date = new Date(dateString);
-      return date.toISOString().split('T')[0];
-    };
-
-    const payload = {
-      proyek_id: form.value.project_id,
-      invoice_id: form.value.invoice_id,
-      nama_termin: form.value.nama_termin,
-      nilai_termin: form.value.nilai_termin,
-      dp_percentage: form.value.dp_percentage,
-      nilai_dp: form.value.nilai_dp,
-      nilai_pelunasan: form.value.nilai_pelunasan,
-      tanggal_dp: formatDateForAPI(form.value.tanggal_dp),
-      tanggal_pelunasan: formatDateForAPI(form.value.tanggal_pelunasan),
-      status_termin: form.value.status_termin,
-      keterangan: form.value.keterangan || ""
-    };
-
-    let response;
-    if (modalMode.value === "edit") {
-      response = await axios.put(`/api/termins/${editingId.value}`, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin diperbarui." });
-    } else {
-      response = await axios.post("/api/termins", payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      Swal.fire({ icon: "success", title: "Berhasil!", text: "Data termin ditambahkan." });
-    }
-
-    // Update invoice status after termin operation
-    if (form.value.invoice_id) {
-      try {
-        // Get current invoice with termins
-        const invoiceResponse = await axios.get(`/api/invoices/${form.value.invoice_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        const invoice = invoiceResponse.data.data;
-        const termins = invoice.termins || [];
-
-        // Calculate total paid amount and check termin statuses
-        let totalPaid = 0;
-        let allTerminsPaid = true;
-        let hasTermins = termins.length > 0;
-
-        termins.forEach(termin => {
-          if (termin.status_termin === "Lunas") {
-            totalPaid += parseFloat(termin.nilai_termin);
-          } else if (termin.status_termin === "DP Dibayar") {
-            totalPaid += parseFloat(termin.nilai_dp);
-            allTerminsPaid = false;
-          } else {
-            allTerminsPaid = false;
-          }
-        });
-
-        // Determine new invoice status
-        let newStatus = 'unpaid';
-        if (hasTermins) {
-          if (allTerminsPaid && totalPaid >= parseFloat(invoice.total_amount)) {
-            newStatus = 'paid';
-          } else if (totalPaid > 0) {
-            newStatus = 'partially_paid';
-          }
-        }
-
-        // Update invoice status and amount_paid
-        await axios.put(`/api/invoices/${form.value.invoice_id}`, {
-          status: newStatus,
-          amount_paid: totalPaid
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (err) {
-        console.error("Error updating invoice status:", err);
-      }
-    }
-
-    closeModal();
-    await fetchTermins();
-    // Dispatch event to notify invoice component
-    window.dispatchEvent(new Event('termin-updated'));
-  } catch (err) {
-    const errorMessage = err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: errorMessage
-    });
-  } finally {
-    loading.value = false;
-  }
-};
-
-// Add watch for status_termin changes in form
-watch(() => form.value.status_termin, (newStatus) => {
-  if (newStatus === "Lunas") {
-    // If status is Lunas, set pelunasan date to today if not already set
-    if (!form.value.tanggal_pelunasan) {
-      form.value.tanggal_pelunasan = new Date().toISOString().split('T')[0];
-    }
-    form.value.nilai_pelunasan = 0;
-    form.value.displayNilaiPelunasan = formatCurrency(0);
-    form.value.nilai_dp = form.value.nilai_termin;
-    form.value.displayNilaiDP = formatCurrency(form.value.nilai_termin);
-    form.value.dp_percentage = 100;
-  } else if (newStatus === "DP Dibayar") {
-    // If status is DP Dibayar, set DP date to today if not already set
-    if (!form.value.tanggal_dp) {
-      form.value.tanggal_dp = new Date().toISOString().split('T')[0];
-    }
-  }
-});
-
-// Add watch for project_id changes in form
-watch(() => form.value.project_id, (newProjectId) => {
-  if (newProjectId) {
-    const project = projects.value.find(p => p.id === parseInt(newProjectId));
-    if (project) {
-      selectedProject.value = String(project.id);
-    }
-  }
-});
-
-// Modify handleStatusUpdate function
-const handleStatusUpdate = async () => {
-  loading.value = true;
-  error.value = "";
-
-  try {
-    const token = sessionStorage.getItem("token");
-    const termin = termins.value.find(t => t.id === updatingStatusId.value);
-
-    // Format dates for API
-    const formatDateForAPI = (dateString) => {
-      if (!dateString) return null;
-      const date = new Date(dateString);
-      return date.toISOString().split('T')[0];
-    };
-
-    const payload = {
-      status_termin: statusForm.value.status_termin,
-      tanggal_dp: formatDateForAPI(statusForm.value.tanggal_dp),
-      tanggal_pelunasan: formatDateForAPI(statusForm.value.tanggal_pelunasan)
-    };
-
-    // Update termin status
-    await axios.put(`/api/termins/${updatingStatusId.value}/status`, payload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    // Create expense entry based on status
-    if (statusForm.value.status_termin === "DP Dibayar" || statusForm.value.status_termin === "Lunas") {
-      const today = new Date();
-      const formattedDate = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
-
-      const expenseData = {
-        tanggal: formattedDate,
-        kategori: "Pembayaran Termin",
-        deskripsi: `Pembayaran ${statusForm.value.status_termin} untuk termin ${termin.nama_termin}`,
-        jumlah: statusForm.value.status_termin === "Lunas" ? termin.nilai_termin : termin.nilai_dp,
-        metode_pembayaran: "Transfer",
-        status: "Selesai"
-      };
-
-      await axios.post("/api/expenses", expenseData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    }
-
-    Swal.fire({
-      icon: "success",
-      title: "Berhasil!",
-      text: "Status termin berhasil diperbarui"
-    });
-
-    closeStatusModal();
-    await fetchTermins();
-  } catch (err) {
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: err.response?.data?.message || "Gagal memperbarui status termin"
-    });
-  } finally {
-    loading.value = false;
-  }
-};
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('id-ID').format(value || 0);
-};
-
-const changeProject = () => {
-  selectedProject.value = "";
-  termins.value = [];
-  purchases.value = [];
-  if ($.fn.DataTable.isDataTable(terminTableRef.value)) {
-    $(terminTableRef.value).DataTable().destroy();
-    $(terminTableRef.value).empty();
-  }
-};
 
 const totalTermin = computed(() => {
   return termins.value.reduce((sum, termin) => sum + (Number(termin.nilai_termin) || 0), 0);
@@ -993,174 +561,898 @@ const totalKeseluruhan = computed(() => {
   return totalPurchases.value;
 });
 
-const deleteTermin = async (id) => {
+const selectedInvoiceObj = computed(() => {
+  return invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+});
+
+const totalInvoiceAmount = computed(() => {
+  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  return inv ? Number(inv.total_amount) : 0;
+});
+
+const totalInvoicePaid = computed(() => {
+  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  return inv ? Number(inv.amount_paid) : 0;
+});
+
+const totalInvoiceUnpaid = computed(() => {
+  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  return inv ? Number(inv.total_amount) - Number(inv.amount_paid) : 0;
+});
+
+const modalInvoiceObj = computed(() => {
+  return invoices.value.find(inv => String(inv.id) === String(form.value.invoice_id));
+});
+
+const modalTotalInvoiceAmount = computed(() => {
+  return modalInvoiceObj.value && modalInvoiceObj.value.total_amount ? Number(modalInvoiceObj.value.total_amount) : 0;
+});
+
+// Helper Methods
+const formatCurrency = (value) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR'
+  }).format(value);
+};
+
+const formatDate = (date) => {
+  if (!date) return '-';
+  return new Date(date).toISOString().split('T')[0];
+};
+
+// Methods
+const handleNilaiTerminInput = (event) => {
+  if (!manualNilaiTermin.value) return;
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > modalTotalInvoiceAmount.value) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Nilai termin tidak boleh melebihi total invoice'
+    });
+    return;
+  }
+  form.value.nilai_termin = newValue;
+  form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
+  if (!manualNilaiDP.value) calculateValues();
+};
+
+const handleNilaiDPInput = (event) => {
+  if (!manualNilaiDP.value) return;
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > form.value.nilai_termin) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Nilai DP tidak boleh melebihi nilai termin'
+    });
+    return;
+  }
+  form.value.nilai_dp = newValue;
+  form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+  if (form.value.nilai_termin > 0) {
+    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
+    if (!manualNilaiTermin.value) {
+      form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+      form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+    }
+  }
+};
+
+const handleNilaiPelunasanInput = (event) => {
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > form.value.nilai_termin) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: 'Nilai pelunasan tidak boleh melebihi nilai termin'
+    });
+    return;
+  }
+  form.value.nilai_pelunasan = newValue;
+  form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+  if (form.value.nilai_termin > 0 && !manualNilaiDP.value) {
+    form.value.nilai_dp = form.value.nilai_termin - form.value.nilai_pelunasan;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
+  }
+};
+
+const calculateValues = () => {
+  if (!manualNilaiDP.value && form.value.persentase_dp) {
+    form.value.nilai_dp = form.value.nilai_termin * (form.value.persentase_dp / 100);
+    form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+    form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+  }
+};
+
+watch(() => form.value.persentase_dp, (val) => {
+  if (!manualNilaiDP.value) calculateValues();
+});
+
+watch(() => form.value.nilai_termin, (val) => {
+  if (!manualNilaiDP.value) calculateValues();
+});
+
+// API Calls
+const fetchProjects = async () => {
   try {
-    const result = await Swal.fire({
-      title: "Apakah anda yakin?",
-      text: "Data yang dihapus tidak dapat dikembalikan!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Ya, hapus!",
-      cancelButtonText: "Batal"
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/proyeks", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    projects.value = response.data.data || [];
+    projectOptions.value = projects.value.map(proyek => ({
+      value: proyek.id,
+      label: (proyek.nama_customer || '-') + ' - ' + (proyek.nama_proyek || '-')
+    }));
+  } catch (err) {
+    projects.value = [];
+    projectOptions.value = [];
+  }
+};
+
+const fetchTermins = async () => {
+  try {
+    const token = sessionStorage.getItem("token");
+    let url = "/api/termins";
+    const params = {};
+
+    if (selectedProject.value) {
+      params.proyek_id = selectedProject.value;
+    }
+    if (selectedInvoice.value) {
+      params.invoice_id = selectedInvoice.value;
+    }
+
+    const response = await axios.get(url, {
+      params,
+      headers: { Authorization: `Bearer ${token}` }
     });
 
-    if (result.isConfirmed) {
-      const token = sessionStorage.getItem("token");
-      await axios.delete(`/api/termins/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      Swal.fire({
-        icon: "success",
-        title: "Berhasil!",
-        text: "Data termin berhasil dihapus"
-      });
-
-      await fetchTermins();
-    }
+    termins.value = response.data.data;
   } catch (err) {
+    console.error("Error fetching termins:", err);
     Swal.fire({
       icon: "error",
       title: "Error",
-      text: err.response?.data?.message || "Gagal menghapus data termin"
+      text: "Gagal mengambil data termin"
     });
   }
 };
 
-// Update fetchPurchases to use rest parameters
-const fetchPurchases = async (...args) => {
-  const [projectId, invoiceId] = args;
-  if (!projectId || !invoiceId) {
+const fetchInvoices = async (proyekId) => {
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get(`/api/proyeks/${proyekId}/invoices`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    let invoiceArr = Array.isArray(response.data)
+      ? response.data
+      : (response.data.data || []);
+    invoices.value = invoiceArr;
+    invoiceOptions.value = invoiceArr.map(inv => ({
+      value: inv.id,
+      label: inv.invoice_number
+    }));
+  } catch (err) {
+    invoices.value = [];
+    invoiceOptions.value = [];
+  }
+};
+
+const fetchPurchases = async (proyekId, invoiceId) => {
+  if (!proyekId || !invoiceId) {
     purchases.value = [];
     return;
   }
+
   try {
     const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/purchasematerials", {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { proyek_id: projectId }
+    const invoiceResponse = await axios.get(`/api/invoices/${invoiceId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
     });
+
+    if (!invoiceResponse.data) {
+      throw new Error("Data invoice tidak ditemukan");
+    }
+
+    const response = await axios.get("/api/purchasematerials", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      params: { proyek_id: proyekId }
+    });
+
     let allPurchases = [];
-    if (response.data && response.data.purchases) {
-      allPurchases = response.data.purchases;
-    } else if (response.data && response.data.data) {
+    if (response.data && response.data.status === 'success' && Array.isArray(response.data.data)) {
       allPurchases = response.data.data;
     }
+
     purchases.value = allPurchases.filter(p => String(p.invoice_id) === String(invoiceId));
+
+    const invoiceTotal = Number(invoiceResponse.data.total_amount) || 0;
+    form.value.nilai_termin = invoiceTotal;
+    form.value.displayNilaiTermin = formatCurrency(invoiceTotal);
+
+    if (form.value.persentase_dp) {
+      calculateValues();
+    }
   } catch (err) {
-    error.value = 'Gagal memuat data pembelian';
+    error.value = err.response?.data?.message || 'Gagal memuat data pembelian';
     purchases.value = [];
-  }
-};
-
-// Fetch invoices by project
-const fetchInvoices = async (projectId) => {
-  if (!projectId) {
-    invoices.value = [];
-    return;
-  }
-  try {
-    const token = sessionStorage.getItem("token");
-    const response = await axios.get("/api/invoices", {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { proyek_id: projectId }
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: error.value
     });
-    invoices.value = response.data.data || [];
-  } catch (err) {
-    invoices.value = [];
   }
 };
 
-const exportToPDF = () => {
-  if (!selectedProject.value) {
-    Swal.fire('Peringatan!', 'Pilih proyek terlebih dahulu', 'warning');
-    return;
-  }
-  if (!selectedInvoice.value) {
-    Swal.fire('Peringatan!', 'Pilih invoice terlebih dahulu', 'warning');
-    return;
-  }
-  const token = sessionStorage.getItem("token");
-  if (!token) {
-    Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
-    return;
-  }
-  axios.get(`/api/termins/export-pdf/${selectedProject.value}`, {
-    responseType: 'blob',
-    headers: { Authorization: `Bearer ${token}` }
-  }).then(response => {
-    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `termin_${new Date().toISOString().split('T')[0]}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  }).catch(err => {
-    Swal.fire('Error', err.response?.data?.message || 'Gagal download PDF', 'error');
+// Event Handlers
+const filterByProject = async () => {
+  await fetchInvoices(String(selectedProject.value));
+  purchases.value = [];
+  selectedInvoice.value = "";
+  termins.value = [];
+  nextTick(() => {
   });
 };
 
-const exportToExcel = () => {
-  if (!selectedProject.value) {
-    Swal.fire('Peringatan!', 'Pilih proyek terlebih dahulu', 'warning');
+const openModal = async (mode, termin = null) => {
+  // Defensive: hanya boleh buka modal tambah jika syarat terpenuhi
+  if (mode === 'tambah' && (!selectedProject.value || !selectedInvoice.value)) {
+    Swal.fire({ icon: 'warning', title: 'Pilih proyek dan invoice terlebih dahulu!' });
     return;
   }
-  if (!selectedInvoice.value) {
-    Swal.fire('Peringatan!', 'Pilih invoice terlebih dahulu', 'warning');
-    return;
+  modalMode.value = mode;
+  if (mode === "edit" && termin) {
+    // Hitung sisa DP, pelunasan, total (kecuali termin yang sedang diedit)
+    const invoiceId = termin.invoice_id || selectedInvoice.value;
+    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId) && t.id !== termin.id);
+    const totalDPdibayar = filteredTermins.reduce((sum, t) => {
+      if (t.status_termin === 'DP Dibayar') {
+        return sum + (Number(t.nilai_dp) || 0);
+      } else if (t.status_termin === 'Lunas') {
+        return sum + (Number(t.nilai_dp) || 0);
+      }
+      return sum;
+    }, 0);
+    const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (t.status_termin === 'Lunas' ? Number(t.nilai_pelunasan) || 0 : 0), 0);
+    const totalTerminDibayar = filteredTermins.reduce((sum, t) => {
+      if (t.status_termin === 'DP Dibayar') {
+        return sum + (Number(t.nilai_dp) || 0);
+      } else if (t.status_termin === 'Lunas') {
+        return sum + (Number(t.nilai_dp) || 0) + (Number(t.nilai_pelunasan) || 0);
+      }
+      return sum;
+    }, 0);
+    const invoice = invoices.value.find(inv => String(inv.id) === String(invoiceId));
+    const invoiceTotal = invoice && invoice.total_amount ? Number(invoice.total_amount) : 0;
+    form.value = {
+      proyek_id: termin.proyek_id || selectedProject.value,
+      invoice_id: String(invoiceId || ""),
+      nama_termin: termin.nama_termin,
+      nilai_termin: termin.nilai_termin,
+      persentase_dp: termin.persentase_dp,
+      nilai_dp: termin.nilai_dp,
+      nilai_pelunasan: termin.nilai_pelunasan,
+      tanggal_dp: termin.tanggal_dp ? new Date(termin.tanggal_dp).toISOString().split('T')[0] : "",
+      tanggal_pelunasan: termin.tanggal_pelunasan ? new Date(termin.tanggal_pelunasan).toISOString().split('T')[0] : "",
+      tanggal_dp_dibayar: termin.tanggal_dp_dibayar ? new Date(termin.tanggal_dp_dibayar).toISOString().split('T')[0] : "",
+      tanggal_pelunasan_dibayar: termin.tanggal_pelunasan_dibayar ? new Date(termin.tanggal_pelunasan_dibayar).toISOString().split('T')[0] : "",
+      status_termin: termin.status_termin,
+      keterangan: termin.keterangan || "",
+      displayNilaiTermin: formatCurrency(termin.nilai_termin),
+      displayNilaiDP: formatCurrency(termin.nilai_dp),
+      displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan),
+      bukti_pembayaran: null,
+      bukti_pembayaran_url: termin.bukti_pembayaran_url || null,
+      remaining_dp: Math.max((Number(termin.nilai_dp) || 0) - totalDPdibayar, 0),
+      remaining_pelunasan: Math.max((Number(termin.nilai_pelunasan) || 0) - totalPelunasanDibayar, 0),
+      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+    };
+    editingId.value = termin.id;
+    modalTitle.value = "Edit Termin";
+    modalButtonText.value = "Update";
+  } else {
+    const selectedInvoiceObj = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+    const nilai_termin = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    const today = new Date().toISOString().split('T')[0];
+    // Hitung sisa DP, pelunasan, total dari termin yang sudah dibayar pada invoice ini
+    const invoiceId = selectedInvoice.value;
+    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId));
+    const totalDPdibayar = filteredTermins.reduce((sum, t) => {
+      if (t.status_termin === 'DP Dibayar') {
+        return sum + (Number(t.nilai_dp) || 0);
+      } else if (t.status_termin === 'Lunas') {
+        return sum + (Number(t.nilai_dp) || 0);
+      }
+      return sum;
+    }, 0);
+    const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (t.status_termin === 'Lunas' ? Number(t.nilai_pelunasan) || 0 : 0), 0);
+    const totalTerminDibayar = filteredTermins.reduce((sum, t) => {
+      if (t.status_termin === 'DP Dibayar') {
+        return sum + (Number(t.nilai_dp) || 0);
+      } else if (t.status_termin === 'Lunas') {
+        return sum + (Number(t.nilai_dp) || 0) + (Number(t.nilai_pelunasan) || 0);
+      }
+      return sum;
+    }, 0);
+    const invoiceTotal = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    form.value = {
+      proyek_id: selectedProject.value,
+      invoice_id: String(selectedInvoice.value || ""),
+      nama_termin: "",
+      nilai_termin: nilai_termin,
+      persentase_dp: 0,
+      nilai_dp: 0,
+      nilai_pelunasan: 0,
+      tanggal_dp: today,
+      tanggal_pelunasan: "",
+      tanggal_dp_dibayar: "",
+      tanggal_pelunasan_dibayar: "",
+      status_termin: "Belum Dibayar",
+      keterangan: "",
+      displayNilaiTermin: formatCurrency(nilai_termin),
+      displayNilaiDP: formatCurrency(0),
+      displayNilaiPelunasan: formatCurrency(0),
+      bukti_pembayaran: null,
+      bukti_pembayaran_url: null,
+      remaining_dp: 0,
+      remaining_pelunasan: 0,
+      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+    };
+// Watcher untuk update sisa DP & pelunasan otomatis saat input berubah
+// (sudah diimport di baris 465)
+// Watcher untuk update sisa DP & pelunasan otomatis saat input berubah (top-level, bukan di dalam fungsi)
+// Watcher untuk update sisa DP & pelunasan otomatis saat input atau data termin berubah
+watch([
+  () => form.value.nilai_dp,
+  () => form.value.nilai_pelunasan,
+  () => termins.value.map(t => [t.id, t.total_dp_paid, t.total_pelunasan_paid, t.total_paid, t.status_termin]).join('-')
+], ([newNilaiDP, newNilaiPelunasan]) => {
+  // Ambil termin yang sedang diedit/ditambah
+  const invoiceId = form.value.invoice_id;
+  const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId) && (!editingId.value || t.id !== editingId.value));
+  // Hitung total pembayaran DP & pelunasan real-time dari backend (bukan hanya status termin)
+  const totalDPdibayar = filteredTermins.reduce((sum, t) => sum + (Number(t.total_dp_paid) || 0), 0);
+  const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (Number(t.total_pelunasan_paid) || 0), 0);
+  form.value.remaining_dp = Math.max((Number(newNilaiDP) || 0) - totalDPdibayar, 0);
+  form.value.remaining_pelunasan = Math.max((Number(newNilaiPelunasan) || 0) - totalPelunasanDibayar, 0);
+});
+    editingId.value = null;
+    modalTitle.value = "Tambah Termin";
+    modalButtonText.value = "Simpan";
   }
-  const token = sessionStorage.getItem("token");
-  if (!token) {
-    Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
-    return;
-  }
-  axios.get(`/api/termins/export-excel/${selectedProject.value}`, {
-    responseType: 'blob',
-    headers: { Authorization: `Bearer ${token}` }
-  }).then(response => {
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `termin_${new Date().toISOString().split('T')[0]}.xlsx`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  }).catch(err => {
-    Swal.fire('Error', err.response?.data?.message || 'Gagal download Excel', 'error');
-  });
+  showModal.value = true;
 };
 
-const handleExcelImport = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+const openStatusModal = (termin) => {
+  statusForm.value = {
+    status_termin: termin.status_termin,
+    tanggal_dp_dibayar: termin.tanggal_dp_dibayar ? new Date(termin.tanggal_dp_dibayar).toISOString().split('T')[0] : '',
+    tanggal_pelunasan_dibayar: termin.tanggal_pelunasan_dibayar ? new Date(termin.tanggal_pelunasan_dibayar).toISOString().split('T')[0] : '',
+    keterangan: termin.keterangan || '',
+    bukti_pembayaran: null,
+    bukti_pembayaran_url: termin.bukti_pembayaran_url || '',
+    status_approval: termin.status_approval || '',
+    approved_by_name: termin.approved_by_name || '',
+    approved_at: termin.approved_at || ''
+  };
+  updatingStatusId.value = termin.id;
+  showStatusModal.value = true;
+};
 
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('project_id', selectedProject.value);
+const closeModal = () => {
+  showModal.value = false;
+};
+
+const closeStatusModal = () => {
+  showStatusModal.value = false;
+};
+
+const handleSubmit = async () => {
+  loading.value = true;
+  error.value = "";
 
   try {
+    // Validasi dasar
+  if (!form.value.proyek_id) {
+      throw new Error("Proyek wajib dipilih!");
+    }
+
+    if (!form.value.invoice_id) {
+      throw new Error("Invoice wajib dipilih!");
+  }
+
+    if (!form.value.nama_termin?.trim()) {
+      throw new Error("Nama termin wajib diisi!");
+  }
+
+  if (!form.value.nilai_termin || form.value.nilai_termin <= 0) {
+      throw new Error("Nilai termin harus lebih dari 0!");
+  }
+
+  if (!form.value.persentase_dp || form.value.persentase_dp < 0 || form.value.persentase_dp > 100) {
+      throw new Error("Persentase DP harus antara 0-100%!");
+  }
+
+    // Hitung ulang nilai DP dan pelunasan
+  calculateValues();
+
+    // Pastikan total DP + Pelunasan = Nilai Termin
+    const total = form.value.nilai_dp + form.value.nilai_pelunasan;
+    if (Math.abs(total - form.value.nilai_termin) > 0.01) {
+      throw new Error("Total DP dan Pelunasan harus sama dengan Nilai Termin");
+    }
+
     const token = sessionStorage.getItem("token");
-    const response = await axios.post(`${API_URL}/termins/import-excel`, formData, {
+    if (!token) {
+      throw new Error("Token tidak ditemukan. Silakan login kembali.");
+    }
+
+    // Format data untuk API
+    const formattedData = {
+      proyek_id: Number(form.value.proyek_id),
+      invoice_id: Number(form.value.invoice_id),
+      nama_termin: form.value.nama_termin.trim(),
+        jenis_termin: form.value.jenis_termin,
+      termin_ke: form.value.termin_ke ? Number(form.value.termin_ke) : null,
+      nilai_termin: Number(form.value.nilai_termin),
+      persentase_dp: Number(form.value.persentase_dp),
+      nilai_dp: Number(form.value.nilai_dp),
+      nilai_pelunasan: Number(form.value.nilai_pelunasan),
+      tanggal_dp: form.value.tanggal_dp || null,
+      tanggal_pelunasan: form.value.tanggal_pelunasan || null,
+      tanggal_dp_dibayar: form.value.tanggal_dp_dibayar || null,
+      tanggal_pelunasan_dibayar: form.value.tanggal_pelunasan_dibayar || null,
+        status_termin: form.value.status_termin,
+      keterangan: form.value.keterangan?.trim() || null
+      };
+
+    console.log('Sending data to API:', formattedData);
+
+    let response;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+      if (form.value.bukti_pembayaran) {
+      const formData = new FormData();
+      Object.entries(formattedData).forEach(([key, value]) => {
+        if (value !== null) {
+          formData.append(key, value);
+        }
+      });
+      formData.append('bukti_pembayaran', form.value.bukti_pembayaran);
+      headers['Content-Type'] = 'multipart/form-data';
+
+      if (modalMode.value === "edit") {
+        response = await axios.post(`/api/termins/${editingId.value}?_method=PUT`, formData, { headers });
+      } else {
+        response = await axios.post("/api/termins", formData, { headers });
+      }
+    } else {
+      if (modalMode.value === "edit") {
+        response = await axios.put(`/api/termins/${editingId.value}`, formattedData, { headers });
+      } else {
+        response = await axios.post("/api/termins", formattedData, { headers });
+      }
+    }
+
+    console.log('Response from API:', response.data);
+
+    if (response.data.status === 'success') {
+    Swal.fire({
+      icon: "success",
+      title: "Berhasil!",
+        text: modalMode.value === "edit" ? "Data termin diperbarui." : "Data termin ditambahkan."
+    });
+      closeModal();
+    await fetchTermins();
+      window.dispatchEvent(new Event('termin-updated'));
+    } else {
+      throw new Error(response.data.message || "Terjadi kesalahan saat menyimpan data");
+    }
+
+  } catch (err) {
+    console.error('Error in handleSubmit:', err);
+    const errorMessage = err.response?.data?.message || err.message || "Terjadi kesalahan saat menyimpan data";
+    const validationErrors = err.response?.data?.errors;
+
+    console.error('Error details:', {
+      message: errorMessage,
+      validationErrors,
+      response: err.response?.data,
+      status: err.response?.status
+    });
+
+    if (validationErrors) {
+      // Format validation errors into a readable message
+      const errorList = Object.entries(validationErrors)
+        .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+        .join('\n');
+
+      Swal.fire({
+        icon: "error",
+        title: "Validasi Gagal",
+        html: `<pre style="text-align: left">${errorList}</pre>`
+      });
+    } else {
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+        text: errorMessage
+    });
+  }
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleStatusSubmit = async () => {
+  // Validasi dasar
+  if (!statusForm.value.status_termin) {
+    Swal.fire({ icon: 'error', title: 'Status termin wajib dipilih!' });
+    return;
+  }
+  if (!statusForm.value.status_approval) {
+    Swal.fire({ icon: 'error', title: 'Status approval wajib dipilih!' });
+    return;
+  }
+  if ((['DP Dibayar', 'Lunas'].includes(statusForm.value.status_termin)) && !statusForm.value.bukti_pembayaran && !statusForm.value.bukti_pembayaran_url) {
+    Swal.fire('Peringatan', 'Bukti pembayaran wajib diupload', 'warning');
+    return;
+  }
+  const actionText = statusForm.value.status_approval === 'Approved' ? 'Menyetujui' : (statusForm.value.status_approval === 'Rejected' ? 'Menolak' : 'Menunda');
+  const confirmResult = await Swal.fire({
+    title: `Konfirmasi`,
+    text: `Anda yakin ingin ${actionText.toLowerCase()} termin ini?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya',
+    cancelButtonText: 'Batal'
+  });
+  if (!confirmResult.isConfirmed) return;
+
+  try {
+    const token = sessionStorage.getItem('token');
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+    const formData = new FormData();
+    formData.append('status_termin', statusForm.value.status_termin);
+    formData.append('status_approval', statusForm.value.status_approval);
+    formData.append('approved_by', user.id);
+    formData.append('approved_at', new Date().toISOString());
+    formData.append('tanggal_dp_dibayar', statusForm.value.tanggal_dp_dibayar || '');
+    formData.append('tanggal_pelunasan_dibayar', statusForm.value.tanggal_pelunasan_dibayar || '');
+    formData.append('keterangan', statusForm.value.keterangan || '');
+    if (statusForm.value.bukti_pembayaran) {
+      formData.append('bukti_pembayaran', statusForm.value.bukti_pembayaran);
+    }
+    await axios.post(`/api/termins/${updatingStatusId.value}/update-status`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
       }
     });
-
-    Swal.fire('Sukses!', response.data.message, 'success');
+    Swal.fire('Berhasil', 'Status termin berhasil diperbarui', 'success');
+    closeStatusModal();
     await fetchTermins();
-  } catch (error) {
-    Swal.fire('Error!', error.response?.data?.message || 'Gagal mengimpor data', 'error');
-  } finally {
-    event.target.value = '';
+  } catch (err) {
+    Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
   }
 };
 
+const handleBuktiPembayaran = (event) => {
+  statusForm.value.bukti_pembayaran = event.target.files[0];
+};
+
+const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+const isApprover = computed(() => ['admin', 'superadmin'].includes(user.role));
+
+const confirmApproveStatus = async () => {
+  const result = await Swal.fire({
+    title: 'Setujui Termin?',
+    text: 'Apakah Anda yakin ingin menyetujui termin ini?',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Setujui',
+    cancelButtonText: 'Batal'
+  });
+  if (result.isConfirmed) {
+    handleApproveStatus();
+  }
+};
+
+const confirmRejectStatus = async () => {
+  const result = await Swal.fire({
+    title: 'Tolak Termin?',
+    text: 'Apakah Anda yakin ingin menolak termin ini?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Tolak',
+    cancelButtonText: 'Batal'
+  });
+  if (result.isConfirmed) {
+    handleRejectStatus();
+  }
+};
+
+// Watch for project selection changes
+watch(selectedProject, async (newValue) => {
+  if (newValue) {
+    await fetchInvoices(newValue);
+    termins.value = [];
+  } else {
+    invoices.value = [];
+    termins.value = [];
+  }
+});
+
+// Watch for invoice selection changes
+watch(selectedInvoice, async (newValue) => {
+  if (newValue && selectedProject.value) {
+    await fetchTermins();
+  } else {
+    termins.value = [];
+  }
+});
+
+// Setelah fetchTermins selesai, inisialisasi DataTable
+watch(termins, async (newVal) => {
+  await nextTick();
+  if ($.fn.DataTable.isDataTable('#terminTable')) {
+    $('#terminTable').DataTable().destroy();
+  }
+  $('#terminTable').DataTable();
+});
+
+onMounted(async () => {
+  await fetchProjects();
+  // DataTable akan diinisialisasi otomatis oleh watcher
+});
+
+const fields = [
+  { key: 'nama_termin', label: 'Nama Termin' },
+  { key: 'jenis_termin', label: 'Jenis Termin' },
+  { key: 'termin_ke', label: 'Termin Ke' },
+  { key: 'nilai_termin', label: 'Nilai Termin' },
+  { key: 'nilai_dp', label: 'Nilai DP' },
+  { key: 'nilai_pelunasan', label: 'Nilai Pelunasan' },
+  { key: 'status_termin', label: 'Status' },
+  { key: 'tanggal_dp', label: 'Tanggal DP' },
+  { key: 'tanggal_pelunasan', label: 'Deadline Pembayaran' },
+  { key: 'keterangan', label: 'Keterangan' }
+];
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'Lunas':
+      return 'success';
+    case 'DP Dibayar':
+      return 'info';
+    case 'Belum Dibayar':
+      return 'warning';
+    default:
+      return 'secondary';
+  }
+};
+
+const handleProjectChange = async () => {
+  selectedInvoice.value = '';
+  await fetchInvoices(selectedProject.value);
+};
+
+const handleInvoiceChange = async () => {
+  await fetchTermins();
+};
+
+const approveTermin = async (item) => {
+  await updateTerminApproval(item, 'Approved');
+};
+const rejectTermin = async (item) => {
+  await updateTerminApproval(item, 'Rejected');
+};
+const pendingTermin = async (item) => {
+  await updateTerminApproval(item, 'Pending');
+};
+
+const updateTerminApproval = async (item, status) => {
+  const token = sessionStorage.getItem('token');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+  const formData = new FormData();
+  // Kirim semua field yang diwajibkan backend
+  formData.append('status_termin', item.status_termin);
+  formData.append('status_approval', status);
+  formData.append('approved_by', user.id);
+  formData.append('approved_at', new Date().toISOString());
+  // Optional: keterangan jika ada// ... existing code ...
+
+const errors = ref({
+  nilai_termin: '',
+  nilai_dp: '',
+  nilai_pelunasan: ''
+});
+
+const handleNilaiTerminInput = (event) => {
+  if (!manualNilaiTermin.value) return;
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > modalTotalInvoiceAmount.value) {
+    errors.value.nilai_termin = 'Nilai termin tidak boleh melebihi total invoice';
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: errors.value.nilai_termin
+    });
+    return;
+  }
+  errors.value.nilai_termin = '';
+  form.value.nilai_termin = newValue;
+  form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
+  if (!manualNilaiDP.value) calculateValues();
+};
+
+const handleNilaiDPInput = (event) => {
+  if (!manualNilaiDP.value) return;
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > form.value.nilai_termin) {
+    errors.value.nilai_dp = 'Nilai DP tidak boleh melebihi nilai termin';
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: errors.value.nilai_dp
+    });
+    return;
+  }
+  errors.value.nilai_dp = '';
+  form.value.nilai_dp = newValue;
+  form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+  if (form.value.nilai_termin > 0) {
+    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
+    if (!manualNilaiTermin.value) {
+      form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+      form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+    }
+  }
+};
+
+const handleNilaiPelunasanInput = (event) => {
+  const value = event.target.value.replace(/[^\d]/g, '');
+  const newValue = Number(value) || 0;
+  if (newValue > form.value.nilai_termin) {
+    errors.value.nilai_pelunasan = 'Nilai pelunasan tidak boleh melebihi nilai termin';
+    Swal.fire({
+      icon: 'warning',
+      title: 'Peringatan',
+      text: errors.value.nilai_pelunasan
+    });
+    return;
+  }
+  errors.value.nilai_pelunasan = '';
+  form.value.nilai_pelunasan = newValue;
+  form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+  if (form.value.nilai_termin > 0 && !manualNilaiDP.value) {
+    form.value.nilai_dp = form.value.nilai_termin - form.value.nilai_pelunasan;
+    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
+  }
+};
+
+// ... existing code ...
+const handleStatusSubmit = async () => {
+  // Validasi dasar
+  if (!statusForm.value.status_termin) {
+    Swal.fire({ icon: 'error', title: 'Status termin wajib dipilih!' });
+    return;
+  }
+  if (!statusForm.value.status_approval) {
+    Swal.fire({ icon: 'error', title: 'Status approval wajib dipilih!' });
+    return;
+  }
+  if ((['DP Dibayar', 'Lunas'].includes(statusForm.value.status_termin)) && !statusForm.value.bukti_pembayaran && !statusForm.value.bukti_pembayaran_url) {
+    Swal.fire('Peringatan', 'Bukti pembayaran wajib diupload', 'warning');
+    return;
+  }
+  const actionText = statusForm.value.status_approval === 'Approved' ? 'Menyetujui' : (statusForm.value.status_approval === 'Rejected' ? 'Menolak' : 'Menunda');
+  const confirmResult = await Swal.fire({
+    title: `Konfirmasi`,
+    text: `Anda yakin ingin ${actionText.toLowerCase()} termin ini?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya',
+    cancelButtonText: 'Batal'
+  });
+  if (!confirmResult.isConfirmed) return;
+
+  try {
+    const token = sessionStorage.getItem('token');
+    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+    const formData = new FormData();
+    formData.append('status_termin', statusForm.value.status_termin);
+    formData.append('status_approval', statusForm.value.status_approval);
+    formData.append('approved_by', user.id);
+    formData.append('approved_at', new Date().toISOString());
+    formData.append('tanggal_dp_dibayar', statusForm.value.tanggal_dp_dibayar || '');
+    formData.append('tanggal_pelunasan_dibayar', statusForm.value.tanggal_pelunasan_dibayar || '');
+    formData.append('keterangan', statusForm.value.keterangan || '');
+    if (statusForm.value.bukti_pembayaran) {
+      formData.append('bukti_pembayaran', statusForm.value.bukti_pembayaran);
+    }
+    await axios.post(`/api/termins/${updatingStatusId.value}/update-status`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    Swal.fire('Berhasil', 'Status termin berhasil diperbarui', 'success');
+    closeStatusModal();
+    await fetchTermins();
+  } catch (err) {
+    const validationErrors = err.response?.data?.errors;
+    if (validationErrors) {
+      const errorList = Object.entries(validationErrors)
+        .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+        .join('\n');
+      Swal.fire({
+        icon: 'error',
+        title: 'Validasi Gagal',
+        html: `<pre style="text-align: left">${errorList}</pre>`
+      });
+    } else {
+      Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
+    }
+  }
+};
+
+// ... existing code ...
+
+  if (item.keterangan) formData.append('keterangan', item.keterangan);
+  // Optional: tanggal_dp_dibayar dan tanggal_pelunasan_dibayar jika ada
+  if (item.tanggal_dp_dibayar) formData.append('tanggal_dp_dibayar', item.tanggal_dp_dibayar);
+  if (item.tanggal_pelunasan_dibayar) formData.append('tanggal_pelunasan_dibayar', item.tanggal_pelunasan_dibayar);
+  // Optional: bukti_pembayaran jika ada
+  if (item.bukti_pembayaran instanceof File) {
+    formData.append('bukti_pembayaran', item.bukti_pembayaran);
+  }
+  try {
+    await axios.post(`/api/termins/${item.id}/update-status`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    Swal.fire('Berhasil', `Status termin diubah menjadi ${status}`, 'success');
+    await fetchTermins();
+  } catch (err) {
+    // Tampilkan error validasi detail jika ada
+    const validationErrors = err.response?.data?.errors;
+    if (validationErrors) {
+      const errorList = Object.entries(validationErrors)
+        .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+        .join('\n');
+      Swal.fire({
+        icon: 'error',
+        title: 'Validasi Gagal',
+        html: `<pre style="text-align: left">${errorList}</pre>`
+      });
+    } else {
+      Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -1179,7 +1471,6 @@ table.display {
   min-width: 1000px;
 }
 
-/* Fixed columns styles */
 .dataTables_scroll {
   position: relative;
   clear: both;
@@ -1192,7 +1483,6 @@ table.display {
   max-height: none;
 }
 
-/* Fixed column styles */
 .fixed-columns {
   position: sticky;
   background: white;
@@ -1209,18 +1499,15 @@ table.display {
   box-shadow: -2px 0 5px rgba(0,0,0,0.1);
 }
 
-/* Table cell styles */
 table.dataTable tbody td {
   white-space: nowrap;
   padding: 8px;
 }
 
-/* Button styles */
 .btn {
   margin: 0 2px;
 }
 
-/* Status badge styles */
 .badge {
   padding: 0.5em 0.75em;
   font-size: 0.875em;
@@ -1230,6 +1517,7 @@ table.dataTable tbody td {
   font-size: 1rem;
   vertical-align: middle;
 }
+
 .table .btn-group .btn {
   padding: 2px 6px;
   line-height: 1;
@@ -1237,14 +1525,12 @@ table.dataTable tbody td {
 </style>
 
 <style>
-/* Table Container */
 .dataTables_wrapper {
   margin: 1rem 0;
   padding: 0;
   width: 100%;
 }
 
-/* Table Header */
 table.dataTable thead th {
   padding: 10px 8px;
   border-bottom: 2px solid #dee2e6;
@@ -1254,7 +1540,6 @@ table.dataTable thead th {
   background-color: #fff;
 }
 
-/* Table Body */
 table.dataTable tbody td {
   padding: 8px;
   vertical-align: middle;
@@ -1263,7 +1548,6 @@ table.dataTable tbody td {
   background-color: #fff;
 }
 
-/* Fixed Columns */
 .DTFC_RightWrapper {
   right: 0 !important;
 }
@@ -1282,7 +1566,6 @@ table.dataTable tbody td {
   border-left: 1px solid #dee2e6;
 }
 
-/* Button Styles */
 .btn-sm {
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
@@ -1291,7 +1574,6 @@ table.dataTable tbody td {
   min-width: 40px;
 }
 
-/* Status Badge */
 .badge {
   padding: 0.35em 0.65em;
   font-size: 0.75em;
@@ -1299,7 +1581,6 @@ table.dataTable tbody td {
   white-space: nowrap;
 }
 
-/* Responsive Table */
 .dataTables_scroll {
   margin-bottom: 1rem;
 }
@@ -1308,7 +1589,6 @@ table.dataTable tbody td {
   min-height: 200px;
 }
 
-/* Search and Length Menu */
 .dataTables_length,
 .dataTables_filter {
   margin-bottom: 1rem;
@@ -1318,12 +1598,10 @@ table.dataTable tbody td {
   min-width: 80px;
 }
 
-/* Pagination */
 .dataTables_paginate {
   margin-top: 1rem;
 }
 
-/* Ensure consistent alignment */
 .text-end {
   text-align: right !important;
 }
@@ -1336,13 +1614,11 @@ table.dataTable tbody td {
   vertical-align: middle !important;
 }
 
-/* Ensure buttons stay on one line */
 .d-flex.justify-content-center {
   flex-wrap: nowrap;
   gap: 4px;
 }
 
-/* Scrollbar Styles */
 .dataTables_scrollBody::-webkit-scrollbar {
   height: 8px;
   width: 8px;
@@ -1362,7 +1638,6 @@ table.dataTable tbody td {
   background: #555;
 }
 
-/* Shadow for fixed columns */
 .DTFC_RightWrapper::before {
   content: '';
   position: absolute;

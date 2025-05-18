@@ -72,7 +72,9 @@
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      brands.value = response.data;
+      brands.value = Array.isArray(response.data)
+        ? response.data
+        : (response.data.data ? response.data.data : []);
 
       nextTick(() => {
         initDataTable();

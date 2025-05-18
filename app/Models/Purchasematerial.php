@@ -7,15 +7,33 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Merek;
 use App\Models\Unit;
 use App\Models\Kategori;
+use App\Models\ServiceCategory;
+use App\Models\Proyek;
+use App\Models\Invoice;
+use App\Models\Termin;
+use App\Models\Expense;
 use App\Traits\Trackable;
 
 class PurchaseMaterial extends Model
 {
-    use HasFactory;
-    use Trackable;
+    use HasFactory, Trackable;
 
     protected $fillable = [
-        'item', 'merek_id', 'type', 'spesifikasi', 'unit_id', 'category_id', 'service_category_id', 'is_service', 'qty', 'harga', 'total_harga', 'deskripsi', 'proyek_id', 'invoice_id'
+        'item',
+        'merek_id',
+        'type',
+        'spesifikasi',
+        'unit_id',
+        'category_id',
+        'service_category_id',
+        'is_service',
+        'qty',
+        'harga',
+        'total_harga',
+        'deskripsi',
+        'proyek_id',
+        'invoice_id',
+        'expense_id',
     ];
 
     protected $casts = [
@@ -24,100 +42,110 @@ class PurchaseMaterial extends Model
         'harga' => 'decimal:2',
         'total_harga' => 'decimal:2',
         'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+        'updated_at' => 'datetime',
     ];
 
-    protected $with = ['unit', 'merek', 'category', 'serviceCategory'];
+    protected $with = [
+        'unit',
+        'merek',
+        'category',
+        'serviceCategory',
+        'proyek',
+    ];
 
-    /**
-     * Relationship with Merek model.
-     */
+    // Relationships
+
     public function merek()
     {
-        return $this->belongsTo(Merek::class, 'merek_id')->withDefault(function ($merek) {
-            $merek->name = 'Unknown Merek';
-        });
+        return $this->belongsTo(Merek::class)->withDefault([
+            'name' => 'Unknown Merek',
+        ]);
     }
 
-    /**
-     * Relationship with Unit model.
-     */
     public function unit()
     {
-        return $this->belongsTo(Unit::class, 'unit_id')->withDefault(function ($unit) {
-            $unit->unit_name = 'Unknown Unit';
-        });
+        return $this->belongsTo(Unit::class)->withDefault([
+            'unit_name' => 'Unknown Unit',
+        ]);
     }
 
-    /**
-     * Relationship with Kategori model.
-     */
     public function category()
     {
-        return $this->belongsTo(Kategori::class, 'category_id')->withDefault(function ($category) {
-            $category->nama_kategori = 'Unknown Category';
-        });
+        return $this->belongsTo(Kategori::class, 'category_id')->withDefault([
+            'nama_kategori' => 'Unknown Category',
+        ]);
     }
 
-    /**
-     * Relationship with Proyek model.
-     */
+    public function serviceCategory()
+    {
+        return $this->belongsTo(ServiceCategory::class, 'service_category_id')->withDefault([
+            'nama_kategori' => 'Unknown Service Category',
+        ]);
+    }
+
     public function proyek()
     {
-        return $this->belongsTo(Proyek::class, 'proyek_id')->withDefault(function ($proyek) {
-            $proyek->nama_proyek = 'Unknown Project';
-        });
+        return $this->belongsTo(Proyek::class)->withDefault([
+            'nama_proyek' => 'Unknown Project',
+        ]);
     }
 
-    /**
-     * Relationship with Invoice model.
-     */
     public function invoice()
     {
-        return $this->belongsTo(Invoice::class, 'invoice_id')->withDefault(function ($invoice) {
-            $invoice->invoice_number = 'Unknown Invoice';
-        });
+        return $this->belongsTo(Invoice::class)->withDefault();
     }
 
-    /**
-     * Relationship with Termin model.
-     */
     public function termin()
     {
         return $this->belongsTo(Termin::class);
     }
 
-    /**
-     * Relationship with ServiceCategory model.
-     */
-    public function serviceCategory()
+    public function expense()
     {
-        return $this->belongsTo(ServiceCategory::class, 'service_category_id')->withDefault(function ($category) {
-            $category->nama_kategori = 'Unknown Service Category';
-        });
+        return $this->belongsTo(Expense::class);
     }
 
+    // Accessor untuk kategori aktif
     public function getActiveCategory()
     {
         return $this->is_service ? $this->serviceCategory : $this->category;
     }
 
+    // Accessor Laravel untuk category_name
     public function getCategoryNameAttribute()
     {
-        $category = $this->getActiveCategory();
-        return $category ? $category->nama_kategori : null;
+        return $this->getActiveCategory()?->nama_kategori ?? null;
     }
 
-    protected static function boot()
+    // Event model untuk hitung total harga otomatis
+    protected static function booted()
     {
-        parent::boot();
-
         static::creating(function ($purchase) {
             $purchase->total_harga = $purchase->qty * $purchase->harga;
         });
 
         static::updating(function ($purchase) {
             $purchase->total_harga = $purchase->qty * $purchase->harga;
+        });
+
+        static::saved(function ($purchase) {
+            // Update total_amount invoice setelah create/update
+            if ($purchase->invoice) {
+                $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
+                $purchase->invoice->save();
+            }
+            // Trigger expense otomatis dari pembelian jika belum ada
+            if (!\App\Models\Expense::where('source_type', 'purchase')->where('source_id', $purchase->id)->exists()) {
+                \App\Models\Expense::createFromPurchase($purchase);
+            }
+        });
+
+        static::deleted(function ($purchase) {
+            // Update total_amount invoice setelah delete
+            if ($purchase->invoice) {
+                $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
+                $purchase->invoice->save();
+            }
         });
     }
 }

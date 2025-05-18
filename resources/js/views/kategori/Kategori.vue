@@ -48,6 +48,15 @@
                 <CFormInput v-model="deskripsi" id="deskripsi" />
               </CCol>
             </CRow>
+            <CRow class="mb-3">
+              <CCol md="6">
+                <CFormLabel for="unit_id">Unit</CFormLabel>
+                <CFormSelect v-model="unit_id" id="unit_id">
+                  <option value="">Tanpa Unit</option>
+                  <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.unit_name }}</option>
+                </CFormSelect>
+              </CCol>
+            </CRow>
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
         </CModalBody>
@@ -71,6 +80,8 @@ const kategori = ref("");
 const jenis = ref("pemasukan");
 const deskripsi = ref("");
 const categories = ref([]);
+const units = ref([]);
+const unit_id = ref("");
 const error = ref("");
 const loading = ref(false);
 const showModal = ref(false);
@@ -78,6 +89,18 @@ const modalTitle = ref("Tambah Kategori");
 const modalButtonText = ref("Simpan");
 const modalMode = ref("tambah");
 const editingId = ref(null);
+
+const fetchUnits = async () => {
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/units", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    units.value = Array.isArray(response.data) ? response.data : (response.data.data || []);
+  } catch (err) {
+    units.value = [];
+  }
+};
 
 const fetchCategories = async () => {
   loading.value = true;
@@ -92,7 +115,9 @@ const fetchCategories = async () => {
       },
     });
 
-    categories.value = response.data;
+    categories.value = Array.isArray(response.data)
+      ? response.data
+      : (response.data.data ? response.data.data : []);
 
     nextTick(() => {
       initDataTable("pemasukan");
@@ -110,6 +135,11 @@ const fetchCategories = async () => {
   }
 };
 
+const getUnitName = (unitId) => {
+  if (!unitId) return "-";
+  const unit = units.value.find(u => String(u.id) === String(unitId));
+  return unit ? unit.unit_name : "-";
+};
 
 const initDataTable = (type) => {
   const data = categories.value.filter(cat => cat.jenis === type);
@@ -131,6 +161,7 @@ const initDataTable = (type) => {
       { title: "Nama Kategori", data: "nama_kategori" },
       { title: "Jenis", data: "jenis" },
       { title: "Deskripsi", data: "deskripsi" },
+      { title: "Unit", data: "unit_id", render: (data) => getUnitName(data) },
       {
         title: "Aksi",
         data: null,
@@ -164,6 +195,7 @@ const openModal = (mode, category = null) => {
     kategori.value = category.nama_kategori;
     jenis.value = category.jenis;
     deskripsi.value = category.deskripsi;
+    unit_id.value = category.unit_id || "";
     editingId.value = category.id;
     modalTitle.value = "Edit Kategori";
     modalButtonText.value = "Update";
@@ -171,6 +203,7 @@ const openModal = (mode, category = null) => {
     kategori.value = "";
     jenis.value = "pemasukan";
     deskripsi.value = "";
+    unit_id.value = "";
     editingId.value = null;
     modalTitle.value = "Tambah Kategori";
     modalButtonText.value = "Simpan";
@@ -194,7 +227,7 @@ const handleSubmit = async () => {
 
   try {
     const token = sessionStorage.getItem('token')
-    const payload = { nama_kategori: kategori.value, jenis: jenis.value, deskripsi: deskripsi.value };
+    const payload = { nama_kategori: kategori.value, jenis: jenis.value, deskripsi: deskripsi.value, unit_id: unit_id.value || null };
 
     if (modalMode.value === "edit") {
       await axios.put(`/api/kategori/${editingId.value}`, payload, {
@@ -242,7 +275,10 @@ const deleteCategory = async (id) => {
   }
 };
 
-onMounted(fetchCategories);
+onMounted(() => {
+  fetchUnits();
+  fetchCategories();
+});
 </script>
 <style scoped>
 .w-100 {

@@ -310,4 +310,76 @@ class IncomeController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Create income automatically when invoice is paid
+     */
+    public function createFromInvoice($invoice)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Create income record
+            $income = new Income();
+            $income->kategori_id = $invoice->kategori_id;
+            $income->payment_method_id = $invoice->payment_method_id;
+            $income->proyek_id = $invoice->proyek_id;
+            $income->jumlah = $invoice->total_amount;
+            $income->deskripsi = "Pembayaran invoice {$invoice->invoice_number}";
+            $income->tanggal = now();
+            $income->status = 'Diterima';
+            $income->type = 'pelunasan';
+            $income->created_by = auth()->id();
+            $income->updated_by = auth()->id();
+
+            // If invoice has termin, link it
+            if ($invoice->termins->isNotEmpty()) {
+                $income->termin_id = $invoice->termins->first()->id;
+            }
+
+            $income->save();
+
+            DB::commit();
+
+            return $income;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating income from invoice: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Create income automatically when termin is paid
+     */
+    public function createFromTermin($termin)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Create income record
+            $income = new Income();
+            $income->kategori_id = $termin->kategori_id;
+            $income->payment_method_id = $termin->payment_method_id;
+            $income->proyek_id = $termin->proyek_id;
+            $income->jumlah = $termin->jumlah_pembayaran;
+            $income->deskripsi = "Pembayaran termin {$termin->nama_termin}";
+            $income->tanggal = now();
+            $income->status = 'Diterima';
+            $income->type = $termin->type;
+            $income->termin_id = $termin->id;
+            $income->created_by = auth()->id();
+            $income->updated_by = auth()->id();
+
+            $income->save();
+
+            DB::commit();
+
+            return $income;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating income from termin: ' . $e->getMessage());
+            throw $e;
+        }
+    }
 }

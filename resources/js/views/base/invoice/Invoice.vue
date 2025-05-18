@@ -44,6 +44,35 @@
             </CCol>
           </CRow>
 
+          <!-- Filter Checkboxes -->
+          <CRow class="mb-3">
+            <CCol md="12">
+              <div class="d-flex gap-3">
+                <CFormCheck
+                  type="checkbox"
+                  label="Gunakan PPN (11%)"
+                  v-model="filterPpn"
+                  id="filter_ppn"
+                  :disabled="!canUsePpn"
+                />
+                <CFormCheck
+                  type="checkbox"
+                  label="Gunakan PPH Non Final"
+                  v-model="filterPphNonFinal"
+                  id="filter_pph_non_final"
+                  :disabled="!canUsePphNonFinal"
+                />
+                <CFormCheck
+                  type="checkbox"
+                  label="Gunakan PPH Final"
+                  v-model="filterPphFinal"
+                  id="filter_pph_final"
+                  :disabled="!canUsePphFinal"
+                />
+              </div>
+            </CCol>
+          </CRow>
+
           <!-- Data Table for Invoices -->
           <div v-if="selectedProject">
             <div class="mb-3">
@@ -66,20 +95,24 @@
                         <table class="table table-sm w-100">
                           <tbody>
                             <tr>
-                              <td>Total Invoice</td>
+                              <td>Subtotal</td>
                               <td class="text-end">{{ formatCurrency(totalInvoice) }}</td>
                             </tr>
-                            <tr>
-                              <td>Total Dibayar</td>
-                              <td class="text-end">{{ formatCurrency(totalPaid) }}</td>
+                            <tr v-if="filterPpn">
+                              <td>PPN (11%)</td>
+                              <td class="text-end">{{ formatCurrency(filteredPpnAmount) }}</td>
+                            </tr>
+                            <tr v-if="filterPphNonFinal">
+                              <td>PPH Non Final (2.5%)</td>
+                              <td class="text-end">-{{ formatCurrency(filteredPphNonFinalAmount) }}</td>
+                            </tr>
+                            <tr v-if="filterPphFinal">
+                              <td>PPH Final (3%)</td>
+                              <td class="text-end">-{{ formatCurrency(filteredPphFinalAmount) }}</td>
                             </tr>
                             <tr>
-                              <td>Total Belum Dibayar</td>
-                              <td class="text-end">{{ formatCurrency(totalUnpaid) }}</td>
-                            </tr>
-                            <tr class="fw-bold">
-                              <td>Status Keseluruhan</td>
-                              <td class="text-end">{{ overallStatus }}</td>
+                              <td><b>Grand Total</b></td>
+                              <td class="text-end"><b>{{ formatCurrency(filteredGrandTotal) }}</b></td>
                             </tr>
                           </tbody>
                         </table>
@@ -88,6 +121,18 @@
                   </CRow>
                 </div>
               </div>
+            </div>
+
+            <div v-if="anggaranProyek">
+              <div class="alert alert-warning" v-if="totalInvoice > anggaranProyek">
+                <strong>Peringatan!</strong> Total invoice melebihi anggaran proyek (Rp {{ formatCurrency(anggaranProyek) }})
+              </div>
+              <div class="progress mb-2">
+                <div class="progress-bar" :style="{ width: ((totalInvoice / anggaranProyek) * 100) + '%' }">
+                  {{ ((totalInvoice / anggaranProyek) * 100).toFixed(0) }}%
+                </div>
+              </div>
+              <p>Total terpakai: <b>Rp {{ formatCurrency(totalInvoice) }}</b> / <b>Rp {{ formatCurrency(anggaranProyek) }}</b></p>
             </div>
           </div>
           <div v-else class="alert alert-info">
@@ -110,6 +155,7 @@
       </CModalHeader>
       <CModalBody>
         <CForm @submit.prevent="handleSubmit">
+          <!-- Project Selection -->
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="project_id">Proyek</CFormLabel>
@@ -131,6 +177,7 @@
             </CCol>
           </CRow>
 
+          <!-- Invoice Details -->
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="invoice_date">Tanggal Invoice</CFormLabel>
@@ -154,26 +201,6 @@
                 <option value="partially_paid">Dibayar Sebagian</option>
                 <option value="paid">Lunas</option>
               </CFormSelect>
-            </CCol>
-          </CRow>
-
-          <CRow class="mb-3">
-            <CCol md="12">
-              <CFormLabel for="notes">Catatan</CFormLabel>
-              <CFormTextarea
-                id="notes"
-                v-model="form.notes"
-                rows="3"
-                :readonly="modalMode === 'view'"
-              />
-            </CCol>
-          </CRow>
-
-          <CRow class="mb-3">
-            <CCol md="12">
-              <CFormLabel>Jenis Pembayaran</CFormLabel>
-              <CFormCheck type="radio" label="Cash (Tanpa Termin)" v-model="form.is_cash" value="cash" />
-              <CFormCheck type="radio" label="Termin" v-model="form.is_cash" value="termin" />
             </CCol>
           </CRow>
 
@@ -253,39 +280,46 @@
                       @change="handleUnitChange(item)"
                     >
                       <option value="">Pilih Unit</option>
-                      <option v-for="unit in units" :key="unit.id" :value="unit.id">
+                      <option v-for="unit in units" :key="unit.id" :value="String(unit.id)">
                         {{ unit.unit_name }}
                       </option>
                     </CFormSelect>
                   </CCol>
                   <CCol md="4">
-                    <CFormLabel>{{ isServiceType(item) ? 'Kategori Jasa' : 'Kategori' }}</CFormLabel>
+                    <CFormLabel>{{ isServiceType(item) ? 'Kategori Jasa' : 'Kategori Barang' }}</CFormLabel>
+                   <CFormSelect
+  v-if="isServiceType(item)"
+  v-model="item.service_category_id"
+  :disabled="!item.unit_id"
+  @change="handleCategoryChange(item)"
+>
+  <option value="">Pilih Kategori Jasa</option>
+  <option
+    v-for="category in getServiceCategoriesByUnit(item.unit_id, item)"
+    :key="category.id"
+    :value="String(category.id)"
+    :selected="String(category.id) === String(item.service_category_id)"
+  >
+    {{ category.nama_kategori }} ({{ formatCurrency(category.harga || category.price) }})
+  </option>
+</CFormSelect>
                     <CFormSelect
-                      v-if="isServiceType(item)"
-                      v-model="item.service_category_id"
-                      :readonly="modalMode === 'view'"
-                      required
-                      :disabled="!item.unit_id"
-                      @change="handleCategoryChange(item)"
-                    >
-                      <option value="">Pilih Kategori Jasa</option>
-                      <option v-for="category in getServiceCategoriesByUnit(item.unit_id)" :key="category.id" :value="category.id">
-                        {{ category.nama_kategori }}
-                      </option>
-                    </CFormSelect>
-                    <CFormSelect
-                      v-else
-                      v-model="item.category_id"
-                      :readonly="modalMode === 'view'"
-                      required
-                      :disabled="!item.unit_id"
-                    >
-                      <option value="">Pilih Kategori Material</option>
-                      <option v-for="category in categories" :key="category.id" :value="category.id">
-                        {{ category.nama_kategori }}
-                      </option>
-                    </CFormSelect>
-                    <div v-if="isServiceType(item) && getServiceCategoriesByUnit(item.unit_id).length === 0" class="text-danger small mt-1">
+  v-else
+  v-model="item.category_id"
+  :disabled="!item.unit_id"
+  @change="handleCategoryChange(item)"
+>
+  <option value="">Pilih Kategori Barang</option>
+  <option
+    v-for="category in getMaterialCategories(item.unit_id, item)"
+    :key="category.id"
+    :value="String(category.id)"
+    :selected="String(category.id) === String(item.category_id)"
+  >
+    {{ category.nama_kategori }}
+  </option>
+</CFormSelect>
+                    <div v-if="isServiceType(item) && getServiceCategoriesByUnit(item.unit_id, item).length === 0" class="text-danger small mt-1">
                       Tidak ada kategori jasa untuk unit ini. Silakan tambahkan kategori jasa terlebih dahulu.
                     </div>
                   </CCol>
@@ -300,10 +334,15 @@
                     >
                       <option value="">Pilih Merek</option>
                       <option value="new">+ Tambah Merek Baru</option>
-                      <option v-for="merek in mereks" :key="merek.id" :value="merek.id">
+                      <option v-for="merek in mereks" :key="merek.id" :value="String(merek.id)">
                         {{ merek.name }}
+                        <!-- DEBUG: -->
+                        <!-- id:{{String(merek.id)}} selected:{{String(item.merek_id) === String(merek.id)}} -->
                       </option>
                     </CFormSelect>
+                    <div class="small text-muted">
+                      <!-- DEBUG: item.merek_id={{item.merek_id}} | mereks.value=[{{ mereks.map(m => m.id).join(',') }}] -->
+                    </div>
                     <div v-if="item.merek_id === 'new'" class="mt-2">
                       <CFormLabel for="newBrandName">Nama Merek Baru</CFormLabel>
                       <CFormInput id="newBrandName" v-model="newBrandName" required />
@@ -382,61 +421,41 @@
                   <CCol md="6">
                     <div class="mb-2">
                       <strong>Total Pembelian:</strong>
-                      <span class="float-end"> {{ formatCurrency(totalInvoice) }}</span>
+                      <span class="float-end">{{ formatCurrency(totalInvoice) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_ppn">
                       <strong>PPN (11%):</strong>
-                      <span class="float-end"> {{ formatCurrency(ppnAmount) }}</span>
+                      <span class="float-end">{{ formatCurrency(ppnAmount) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_non_final">
                       <strong>PPH Non Final (Barang 1.5%):</strong>
-                      <span class="float-end"> {{ formatCurrency(pphNonFinalBarang) }}</span>
+                      <span class="float-end">{{ formatCurrency(pphNonFinalBarang) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_non_final">
                       <strong>PPH Non Final (Jasa 2%):</strong>
-                      <span class="float-end"> {{ formatCurrency(pphNonFinalJasa) }}</span>
+                      <span class="float-end">{{ formatCurrency(pphNonFinalJasa) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_non_final">
                       <strong>Total PPH Non Final:</strong>
-                      <span class="float-end"> {{ formatCurrency(pphNonFinalTotal) }}</span>
+                      <span class="float-end">{{ formatCurrency(pphNonFinalTotal) }}</span>
                     </div>
                   </CCol>
                   <CCol md="6">
                     <div class="mb-2">
-                      <strong>Laba Bersih ({{ form.profit_margin_percentage }}%):</strong>
-                      <span class="float-end"> {{ formatCurrency(netProfit) }}</span>
+                      <strong>Laba Bersih ({{ profitMarginLabel }}):</strong>
+                      <span class="float-end">{{ formatCurrency(netProfit) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_final">
                       <strong>PPH Final (22%):</strong>
-                      <span class="float-end"> {{ formatCurrency(pphFinal) }}</span>
+                      <span class="float-end">{{ formatCurrency(pphFinal) }}</span>
                     </div>
                     <div class="mb-2">
                       <strong>Total Pajak:</strong>
-                      <span class="float-end"> {{ formatCurrency(totalTax) }}</span>
+                      <span class="float-end">{{ formatCurrency(totalTax) }}</span>
                     </div>
                     <div class="mb-2">
                       <strong>Total dengan Pajak:</strong>
-                      <span class="float-end"> {{ formatCurrency(totalWithTax) }}</span>
-                    </div>
-                    <div class="mb-2">
-                      <strong>Total Pendapatan:</strong>
-                      <span class="float-end"> {{ formatCurrency(totalIncome) }}</span>
-                    </div>
-                    <div class="mb-2">
-                      <strong>Total Pengeluaran:</strong>
-                      <span class="float-end"> {{ formatCurrency(totalExpenses) }}</span>
-                    </div>
-                    <div class="mb-2">
-                      <strong>Laba/Rugi:</strong>
-                      <span class="float-end" :class="{'text-success': profitLoss > 0, 'text-danger': profitLoss < 0}">
-                        {{ formatCurrency(profitLoss) }}
-                      </span>
-                    </div>
-                    <div class="mb-2">
-                      <strong>Persentase Laba/Rugi:</strong>
-                      <span class="float-end" :class="{'text-success': profitLossPercentage > 0, 'text-danger': profitLossPercentage < 0}">
-                        {{ profitLossPercentage.toFixed(2) }}%
-                      </span>
+                      <span class="float-end">{{ formatCurrency(totalWithTax) }}</span>
                     </div>
                   </CCol>
                 </CRow>
@@ -508,6 +527,17 @@ export default {
     const brandItemRef = ref(null)
     const projectTotalIncome = ref(0);
     const editingId = ref(null)
+    const anggaranProyek = ref(0);
+    const filterPpn = ref(false)
+    const filterPphNonFinal = ref(false)
+    const filterPphFinal = ref(false)
+
+    const filteredPpnAmount = computed(() => filterPpn.value ? totalInvoice.value * 0.11 : 0)
+    const filteredPphNonFinalAmount = computed(() => filterPphNonFinal.value ? totalInvoice.value * 0.025 : 0)
+    const filteredPphFinalAmount = computed(() => filterPphFinal.value ? totalInvoice.value * 0.03 : 0)
+    const filteredGrandTotal = computed(() =>
+      totalInvoice.value + filteredPpnAmount.value - filteredPphNonFinalAmount.value - filteredPphFinalAmount.value
+    )
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -518,21 +548,38 @@ export default {
 
     const handleUnitChange = (item) => {
       const oldHarga = item.harga
-      item.category_id = ''
-      item.service_category_id = ''
+      item.unit_id = String(item.unit_id)
       const unit = units.value.find(u => String(u.id) === String(item.unit_id))
-      const isServiceType = unit && ['jasa', 'transaksi', 'set'].includes(unit.unit_name.toLowerCase())
-      if (isServiceType) {
+      const isService = unit && ['jasa', 'transaksi', 'set'].includes(unit.unit_name.toLowerCase())
+
+      if (isService) {
         item.is_service = true
         item.harga = 0
         const defaultMerek = mereks.value.find(m => m.name === '-')
         if (defaultMerek) {
           item.merek_id = defaultMerek.id
         }
+        item.noMaterialCategory = false
+        fetchServiceCategories(item.unit_id, item)
+        // Jangan reset service_category_id jika sudah ada (mode edit)
+        if (typeof item.service_category_id === 'undefined' || item.service_category_id === null) {
+          item.service_category_id = ''
+        }
+        item.category_id = null
       } else {
         item.is_service = false
-        item.merek_id = ''
+        // Jangan reset merek_id jika sudah ada (mode edit)
+        if (typeof item.merek_id === 'undefined' || item.merek_id === null) {
+          item.merek_id = ''
+        }
         item.harga = oldHarga
+        const materialCategories = getMaterialCategories(item.unit_id)
+        item.noMaterialCategory = materialCategories.length === 0
+        // Jangan reset category_id jika sudah ada (mode edit)
+        if (typeof item.category_id === 'undefined' || item.category_id === null) {
+          item.category_id = ''
+        }
+        item.service_category_id = null
       }
     }
 
@@ -543,7 +590,6 @@ export default {
           headers: { Authorization: `Bearer ${token}` }
         })
         const data = Array.isArray(response.data) ? response.data : (response.data.data ? response.data.data : [])
-        // Filter di frontend
         item.serviceCategories = data.filter(cat => String(cat.unit_id) === String(unitId))
         console.log('Fetched service categories:', item.serviceCategories)
       } catch (err) {
@@ -569,21 +615,27 @@ export default {
           })
         ])
 
-        // Handle  units data
         units.value = Array.isArray(unitsRes.data) ? unitsRes.data : (unitsRes.data.data || [])
 
-        // Handle categories data
         const categoriesData = Array.isArray(categoriesRes.data) ? categoriesRes.data : (categoriesRes.data.data || [])
         categories.value = categoriesData.map(cat => ({
           ...cat,
+          id: String(cat.id),
+          unit_id: String(cat.unit_id),
           is_service: false
         }))
 
-        // Handle mereks data
-        mereks.value = Array.isArray(mereksRes.data) ? mereksRes.data : (mereksRes.data.data || [])
+        mereks.value = (Array.isArray(mereksRes.data) ? mereksRes.data : (mereksRes.data.data || [])).map(m => ({
+          ...m,
+          id: String(m.id),
+          name: m.name || '',
+        }))
 
-        // Handle service categories data
-        serviceCategories.value = Array.isArray(serviceCategoriesRes.data) ? serviceCategoriesRes.data : (serviceCategoriesRes.data.data || [])
+        serviceCategories.value = (Array.isArray(serviceCategoriesRes.data) ? serviceCategoriesRes.data : (serviceCategoriesRes.data.data || [])).map(cat => ({
+          ...cat,
+          id: String(cat.id),
+          unit_id: String(cat.unit_id)
+        }))
 
         console.log('Master data loaded:', {
           units: units.value,
@@ -592,11 +644,12 @@ export default {
           serviceCategories: serviceCategories.value
         })
       } catch (error) {
-        console.error('Error loading master data:', error)
+        error.value = 'Gagal memuat data master: ' + (error.response?.data?.message || error.message)
+        categories.value = [];
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: 'Gagal memuat data master: ' + (error.response?.data?.message || error.message)
+          text: error.value
         })
       }
     }
@@ -666,17 +719,23 @@ export default {
     }
 
     const loadInvoices = async () => {
-      if (!selectedProject.value) return
+      if (!selectedProject.value) return;
 
-      loading.value = true
+      loading.value = true;
       try {
-        const token = sessionStorage.getItem('token')
+        const token = sessionStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
         const response = await axios.get('/api/invoices', {
           params: { proyek_id: selectedProject.value },
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           }
-        })
+        });
 
         console.log('Invoices API response:', response.data);
         invoices.value = response.data.data || [];
@@ -726,9 +785,8 @@ export default {
             ],
             order: [[1, 'desc']],
             responsive: true
-          })
+          });
 
-          // Add event listeners for action buttons
           $(invoiceTableRef.value).on('click', '.view-btn', function() {
             const id = $(this).data('id')
             openModal('view', id)
@@ -746,6 +804,11 @@ export default {
         }
       } catch (err) {
         console.error('Error loading invoices:', err)
+        if (err.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -813,13 +876,14 @@ export default {
         await loadMasterData();
         await loadProjects();
         await loadInvoice(id);
+        showModal.value = true;
       } else {
         await loadMasterData();
         await loadProjects();
-        resetForm()
-        form.value.purchase_materials.forEach(item => handleCategoryChange(item))
+        resetForm();
+        form.value.purchase_materials.forEach(item => handleCategoryChange(item));
+        showModal.value = true;
       }
-      showModal.value = true
     }
 
     const closeModal = () => {
@@ -841,7 +905,7 @@ export default {
           type: '',
           qty: 1,
           harga: '',
-          unit_id: '',
+          unit_id: '', // Ensure this is initialized as empty string
           total_harga: 0,
           spesifikasi: '',
           deskripsi: '',
@@ -860,8 +924,14 @@ export default {
       form.value.purchase_materials.forEach(item => handleCategoryChange(item))
     }
 
+
+    // Perbaikan: pastikan qty dan harga selalu valid number, dan total_harga tidak menjadi NaN/0 saat qty/harga dikurangi
     const calculateTotalHarga = (item) => {
-      item.total_harga = Number(item.qty) * Number(item.harga)
+      let qty = Number(item.qty);
+      let harga = typeof item.harga === 'string' ? Number(item.harga.replace(/\./g, '')) : Number(item.harga);
+      if (isNaN(qty) || qty < 0) qty = 0;
+      if (isNaN(harga) || harga < 0) harga = 0;
+      item.total_harga = qty * harga;
     }
 
     const addItem = () => {
@@ -906,7 +976,6 @@ export default {
         return false;
       }
 
-      // Validasi untuk items
       for (const [i, item] of form.value.purchase_materials.entries()) {
         if (!item.item || item.item.trim() === '') {
           Swal.fire({ icon: 'error', title: 'Error', text: `Nama item ke-${i+1} harus diisi!` });
@@ -949,7 +1018,6 @@ export default {
       return true;
     }
 
-    // Update computed properties untuk perhitungan termin
     const totalTerminAmount = computed(() => {
       if (!form.value.termins) return 0;
       return form.value.termins.reduce((sum, termin) => sum + Number(termin.nilai_termin || 0), 0);
@@ -965,7 +1033,6 @@ export default {
       return form.value.termins.reduce((sum, termin) => sum + Number(termin.nilai_pelunasan || 0), 0);
     });
 
-    // Update fungsi calculateTerminValues
     const calculateTerminValues = (termin) => {
       if (termin.nilai_termin && termin.dp_percentage) {
         termin.nilai_dp = (termin.nilai_termin * termin.dp_percentage) / 100;
@@ -973,19 +1040,13 @@ export default {
       }
     };
 
-    // Update fungsi onTerminNilaiInput
     const onTerminNilaiInput = (event, termin) => {
-      // Ambil hanya angka
       let value = event.target.value.replace(/[^\d]/g, '');
-      // Hilangkan 0 di depan
       value = value.replace(/^0+/, '');
-      // Set nilai termin
       termin.nilai_termin = value ? Number(value) : 0;
-      // Hitung ulang nilai DP dan pelunasan
       calculateTerminValues(termin);
     };
 
-    // Update fungsi addTermin
     const addTermin = () => {
       const today = new Date().toISOString().split('T')[0];
       form.value.termins.push({
@@ -1001,7 +1062,6 @@ export default {
       });
     };
 
-    // Update template untuk menampilkan summary termin
     const terminSummary = computed(() => {
       if (form.value.is_cash === 'termin') {
         return {
@@ -1017,11 +1077,36 @@ export default {
       };
     });
 
-    // Update handleSubmit untuk memastikan nilai termin valid
     const handleSubmit = async () => {
       if (!validateForm()) return;
+      if (anggaranProyek.value && totalInvoice.value > anggaranProyek.value) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Anggaran Melebihi Batas!',
+          text: 'Total invoice yang Anda input melebihi anggaran proyek. Silakan cek kembali.'
+        });
+        return;
+      }
+
       try {
         const token = sessionStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/login';
+          return;
+        }
+
+        try {
+          await axios.get('/api/user', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (error) {
+          if (error.response?.status === 401) {
+            sessionStorage.removeItem('token');
+            window.location.href = '/login';
+            return;
+          }
+        }
+
         const payload = {
           ...form.value,
           purchase_materials: form.value.purchase_materials.map(item => ({
@@ -1032,19 +1117,24 @@ export default {
           use_pph_non_final: form.value.use_pph_non_final,
           use_pph_final: form.value.use_pph_final
         };
-        // Hapus field termins jika cash
+
         if (form.value.is_cash) {
           delete payload.termins;
         } else {
-          // Jika termin, jangan kirim termins sama sekali (biar backend yang handle)
           delete payload.termins;
         }
+
         const response = await axios.post('/api/invoices', payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
+
         if (response.data.status === 'error') {
           throw new Error(response.data.message || 'Gagal membuat invoice');
         }
+
         const invoiceId = response.data.id || response.data.data?.id;
         if (form.value.is_cash === false) {
           window.location.href = `/termin?invoice_id=${invoiceId}`;
@@ -1059,6 +1149,11 @@ export default {
         }
       } catch (error) {
         console.error('Error submitting form:', error);
+        if (error.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+          return;
+        }
         const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice';
         Swal.fire({
           icon: 'error',
@@ -1076,17 +1171,41 @@ export default {
             Authorization: `Bearer ${token}`
           }
         })
-        console.log('API response:', response.data);
         const invoice = response.data.data;
-        console.log('Invoice yang akan di-assign:', invoice);
+        console.log('API invoice:', invoice);
+        console.log('API purchase_materials:', invoice.purchase_materials);
         form.value = {
-          ...form.value,
-          proyek_id: invoice.proyek?.id || '',
+          proyek_id: String(invoice.proyek?.id || ''),
           invoice_date: invoice.invoice_date ? invoice.invoice_date.substring(0, 10) : '',
           status: invoice.status || 'unpaid',
+          payment_method_id: String(invoice.payment_method_id || ''),
           notes: invoice.notes || '',
+          use_ppn: !!invoice.use_ppn,
+          use_pph_non_final: !!invoice.use_pph_non_final,
+          use_pph_final: !!invoice.use_pph_final,
           purchase_materials: Array.isArray(invoice.purchase_materials) && invoice.purchase_materials.length > 0
-            ? invoice.purchase_materials
+            ? invoice.purchase_materials.map(item => {
+                const mapped = {
+                  item: item.item || '',
+                  type: item.type || '',
+                  qty: item.qty || 1,
+                  harga: item.harga || '',
+                  unit_id: item.unit?.id ? String(item.unit.id) : '',
+                  total_harga: item.total_harga || 0,
+                  spesifikasi: item.spesifikasi || '',
+                  deskripsi: item.deskripsi || '',
+                  category_id: item.category?.id ? String(item.category.id) : '',
+                  category: item.category || null,
+                  service_category_id: item.service_category?.id ? String(item.service_category.id) : '',
+                  service_category: item.service_category || null,
+                  merek_id: item.merek?.id ? String(item.merek.id) : '',
+                  merek: item.merek || null,
+                  expense_id: item.expense_id || null,
+                  is_service: !!item.is_service,
+                  serviceCategories: item.serviceCategories || []
+                };
+                return mapped;
+            })
             : [{
                 item: '',
                 type: '',
@@ -1097,16 +1216,59 @@ export default {
                 spesifikasi: '',
                 deskripsi: '',
                 category_id: '',
+                category: null,
                 service_category_id: '',
+                service_category: null,
                 merek_id: '',
+                merek: null,
                 expense_id: null,
                 is_service: false,
                 serviceCategories: []
               }]
         }
-        console.log('Invoice loaded:', form.value);
-        console.log('projects.value:', projects.value);
-        console.log('form.value.proyek_id:', form.value.proyek_id);
+        // Debug log untuk merek
+        console.log('MEREKS:', mereks.value, 'ITEM MEREK_ID:', form.value.purchase_materials.map(i => i.merek_id));
+       if (Array.isArray(invoice.purchase_materials)) {
+      invoice.purchase_materials.forEach(item => {
+        if (item.category && !categories.value.some(c => String(c.id) === String(item.category.id))) {
+          categories.value.push({
+            ...item.category,
+            id: String(item.category.id),
+            unit_id: String(item.category.unit_id)
+          });
+        }
+        if (item.service_category && !serviceCategories.value.some(sc => String(sc.id) === String(item.service_category.id))) {
+          serviceCategories.value.push({
+            ...item.service_category,
+            id: String(item.service_category.id),
+            unit_id: String(item.service_category.unit_id)
+          });
+        }
+        // Tambahkan merek ke master jika belum ada
+        if (item.merek && !mereks.value.some(m => String(m.id) === String(item.merek.id))) {
+          mereks.value.push({
+            ...item.merek,
+            id: String(item.merek.id).trim(),
+            name: item.merek.name
+          });
+          // Normalisasi seluruh id di mereks agar selalu string
+          mereks.value = mereks.value.map(m => ({ ...m, id: String(m.id) }))
+          // Force reactivity after push
+          mereks.value = [...mereks.value];
+          // Trigger reactivity
+          nextTick(() => {});
+        }
+      });
+      // Debug log untuk mereks setelah push
+      console.log('AFTER PUSH MEREKS:', mereks.value);
+    }
+        // Trigger handleUnitChange dan handleCategoryChange untuk setiap item agar dropdown sinkron
+        nextTick(() => {
+          form.value.purchase_materials.forEach(item => {
+            handleUnitChange(item);
+            handleCategoryChange(item);
+          })
+        })
       } catch (err) {
         let errorMsg = 'Gagal memuat data invoice';
         if (err.response && err.response.data && err.response.data.message) {
@@ -1170,25 +1332,64 @@ export default {
       }
     }
 
-    // Tambahkan fungsi pengecekan tipe unit per item
     const isServiceType = (item) => {
       const unit = units.value.find(u => String(u.id) === String(item.unit_id))
       return unit && ['jasa', 'transaksi', 'set'].includes(unit.unit_name.toLowerCase())
     }
 
-    // Fungsi untuk filter kategori jasa sesuai unit
-    const getServiceCategoriesByUnit = (unitId) => {
-      if (!unitId) return []
-      return serviceCategories.value.filter(cat => String(cat.unit_id) === String(unitId))
+    const getServiceCategoriesByUnit = (unitId, item = null) => {
+  if (!unitId) return [];
+
+  // Ambil dari data master
+  let filtered = serviceCategories.value.filter(cat => String(cat.unit_id) === String(unitId));
+
+  // Jika sedang edit dan kategori tidak ada di master, tambahkan kategori yang dipilih
+  if (item && item.service_category_id && !filtered.some(cat => String(cat.id) === String(item.service_category_id))) {
+    if (item.service_category) {
+      filtered = [
+        {
+          id: String(item.service_category.id),
+          unit_id: String(item.service_category.unit_id),
+          nama_kategori: item.service_category.nama_kategori,
+          harga: item.service_category.harga || item.service_category.price
+        },
+        ...filtered
+      ];
     }
+  }
+  return filtered;
+};
+
+const getMaterialCategories = (unitId, item = null) => {
+  if (!unitId) return [];
+
+  // Ambil dari data master
+  let filtered = categories.value.filter(cat => String(cat.unit_id) === String(unitId));
+
+  // Jika sedang edit dan kategori tidak ada di master, tambahkan kategori yang dipilih
+  if (item && item.category_id && !filtered.some(cat => String(cat.id) === String(item.category_id))) {
+    if (item.category) {
+      filtered = [
+        {
+          id: String(item.category.id),
+          unit_id: String(item.category.unit_id),
+          nama_kategori: item.category.nama_kategori
+        },
+        ...filtered
+      ];
+    }
+  }
+  return filtered;
+};
 
     const handleCategoryChange = (item) => {
-      if (isServiceType(item)) {
-        const categories = getServiceCategoriesByUnit(item.unit_id)
+      const unit = units.value.find(u => String(u.id) === String(item.unit_id))
+      const isService = unit && ['jasa', 'transaksi', 'set'].includes(unit.unit_name.toLowerCase())
+      if (isService) {
+        const categories = getServiceCategoriesByUnit(item.unit_id, item)
         const selectedCategory = categories.find(cat => String(cat.id) === String(item.service_category_id))
         if (selectedCategory) {
           item.noServiceCategory = false
-          // Set harga otomatis dari kategori jasa jika ada
           if (selectedCategory.harga !== undefined && selectedCategory.harga !== null) {
             item.harga = Number(selectedCategory.harga)
           } else if (selectedCategory.price !== undefined && selectedCategory.price !== null) {
@@ -1199,28 +1400,42 @@ export default {
           item.harga = 0
           item.noServiceCategory = categories.length === 0
         }
+        item.category_id = null
+        item.noMaterialCategory = false
+      } else {
+        item.service_category_id = null
+        if (item.category_id) {
+          item.noMaterialCategory = false
+        } else {
+          const categories = getMaterialCategories(item.unit_id)
+          item.noMaterialCategory = categories.length === 0
+        }
       }
     }
 
     const onHargaInput = (event, item) => {
       if (!isServiceType(item)) {
-        // Ambil hanya angka
         let value = event.target.value.replace(/[^\d]/g, '')
-        // Hilangkan 0 di depan
         value = value.replace(/^0+/, '')
-        // Format ke rupiah dengan titik
         if (value) {
           item.harga = value.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
         } else {
           item.harga = ''
         }
-        // Untuk perhitungan total_harga, konversi ke number
-        const numericValue = item.harga ? Number(item.harga.replace(/\./g, '')) : 0
-        item.total_harga = Number(item.qty) * numericValue
+        calculateTotalHarga(item);
       }
     }
+    // Watcher: qty berubah, update total_harga
+    watch(
+      () => form.value.purchase_materials.map(item => item.qty),
+      (newVals, oldVals) => {
+        form.value.purchase_materials.forEach(item => {
+          calculateTotalHarga(item);
+        })
+      },
+      { deep: true }
+    )
 
-    // Tambahkan watcher otomatis untuk setiap item di purchase_materials
     watch(
       () => form.value.purchase_materials.map(item => [item.category_id, item.unit_id]),
       (newVals, oldVals) => {
@@ -1243,7 +1458,6 @@ export default {
       { deep: true }
     )
 
-    // Tambahkan watcher otomatis untuk setiap perubahan service_category_id pada setiap item
     watch(
       () => form.value.purchase_materials.map(item => item.service_category_id),
       (newVals, oldVals) => {
@@ -1256,7 +1470,6 @@ export default {
       { deep: true }
     )
 
-    // Update computed properties for tax calculations
     const pphNonFinalBarang = computed(() => {
       if (!form.value.use_pph_non_final) return 0;
       const totalBarang = form.value.purchase_materials
@@ -1284,7 +1497,11 @@ export default {
     });
 
     const netProfit = computed(() => {
-      return totalInvoice.value * 0.3; // 30% of total invoice amount
+      const totalHarga = form.value.purchase_materials.reduce((sum, item) => {
+        const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+        return sum + (item.qty * harga);
+      }, 0);
+      return totalHarga * profitMargin.value;
     });
 
     const pphFinal = computed(() => {
@@ -1374,7 +1591,6 @@ export default {
         responsive: false
       });
 
-      // Add event handlers for action buttons
       $(invoiceTableRef.value).on('click', '.view-btn', function() {
         const id = $(this).data('id');
         openModal('view', id);
@@ -1403,6 +1619,10 @@ export default {
     }
 
     const handleMerekChange = (item) => {
+      // Paksa string
+      if (typeof item.merek_id === 'number') {
+        item.merek_id = String(item.merek_id)
+      }
       if (item.merek_id === 'new') {
         openBrandModal(item)
       }
@@ -1453,7 +1673,6 @@ export default {
       newBrandName.value = ''
     }
 
-    // Fetch summary proyek dari endpoint khusus
     const fetchProjectSummary = async () => {
       if (!selectedProject.value) {
         projectTotalIncome.value = 0;
@@ -1470,8 +1689,23 @@ export default {
       }
     };
 
-    watch(selectedProject, () => {
-      fetchProjectSummary();
+    const fetchProjectBudget = async (projectId) => {
+      try {
+        const token = sessionStorage.getItem('token');
+        const res = await axios.get(`/api/proyeks/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        anggaranProyek.value = res.data.anggaran_kontrak || 0;
+      } catch (e) {
+        anggaranProyek.value = 0;
+      }
+    };
+
+    watch(selectedProject, (newVal) => {
+      if (newVal) {
+        fetchProjectBudget(newVal);
+        loadInvoices();
+      }
     });
 
     onMounted(() => {
@@ -1482,21 +1716,18 @@ export default {
       nextTick(initDataTable)
       const handler = () => loadInvoices()
       window.addEventListener('termin-updated', handler)
-      // Bersihkan event listener saat komponen di-unmount
       onUnmounted(() => {
         window.removeEventListener('termin-updated', handler)
       })
       fetchProjectSummary();
     })
 
-    // Watch for changes in selectedProject
     watch(selectedProject, (newValue) => {
       if (newValue) {
         loadInvoices()
       }
     })
 
-    // Tambahkan watcher pada perubahan route untuk auto-refresh invoice
     watch(
       () => route.fullPath,
       (newPath, oldPath) => {
@@ -1506,7 +1737,6 @@ export default {
       }
     )
 
-    // Tambahkan computed properties baru
     const totalIncome = computed(() => {
       if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
         return netProfit.value;
@@ -1530,9 +1760,7 @@ export default {
       return (profitLoss.value / totalExpenses.value) * 100;
     });
 
-    // Add new method for navigation
     const goToTermin = () => {
-      // Simpan data invoice sementara
       const invoiceData = {
         proyek_id: form.value.proyek_id,
         invoice_date: form.value.invoice_date,
@@ -1541,10 +1769,46 @@ export default {
         purchase_materials: form.value.purchase_materials
       };
       sessionStorage.setItem('tempInvoiceData', JSON.stringify(invoiceData));
-      
-      // Navigate to Termin page
+
       window.location.href = '/termin';
     };
+
+    axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          sessionStorage.removeItem('token');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    const canUsePpn = computed(() => {
+      return invoices.value.some(inv => inv.use_ppn)
+    })
+    const canUsePphNonFinal = computed(() => {
+      return invoices.value.some(inv => inv.use_pph_non_final)
+    })
+    const canUsePphFinal = computed(() => {
+      return invoices.value.some(inv => inv.use_pph_final)
+    })
+
+    const profitMargin = computed(() => {
+  let margin = 0.3;
+  if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null) {
+    const parsed = parseFloat(form.value.profit_margin_percentage);
+    if (!isNaN(parsed)) margin = parsed / 100;
+  }
+  return margin;
+});
+
+const profitMarginLabel = computed(() => {
+  if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null) {
+    return `${parseFloat(form.value.profit_margin_percentage)}%`;
+  }
+  return '30%';
+});
 
     return {
       invoiceTableRef,
@@ -1577,6 +1841,7 @@ export default {
       handleUnitChange,
       isServiceType,
       getServiceCategoriesByUnit,
+      getMaterialCategories,
       handleCategoryChange,
       onHargaInput,
       validateForm,
@@ -1612,7 +1877,18 @@ export default {
       totalTerminPelunasan,
       terminSummary,
       calculateTerminValues,
-      goToTermin
+      goToTermin,
+      anggaranProyek,
+      filterPpn,
+      filterPphNonFinal,
+      filterPphFinal,
+      filteredPpnAmount,
+      filteredPphNonFinalAmount,
+      filteredPphFinalAmount,
+      filteredGrandTotal,
+      canUsePpn,
+      canUsePphNonFinal,
+      canUsePphFinal
     }
   }
 }

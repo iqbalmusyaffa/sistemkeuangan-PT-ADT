@@ -107,7 +107,7 @@ class ExpenseController extends Controller
                 'amount' => 'required|numeric|min:0',
                 'description' => 'required|string',
                 'transaction_date' => 'required|date',
-                'status' => 'required|in:pending,approved,rejected',
+                'status' => 'required|in:pending,approved,rejected,Lunas',
                 'payment_method' => 'required|string',
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
@@ -262,7 +262,7 @@ class ExpenseController extends Controller
                 'amount' => 'numeric|min:0',
                 'description' => 'string',
                 'transaction_date' => 'date',
-                'status' => 'in:pending,approved,rejected',
+                'status' => 'in:pending,approved,rejected,Lunas',
                 'payment_method' => 'string',
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
@@ -481,6 +481,40 @@ class ExpenseController extends Controller
                 'success' => false,
                 'message' => 'Failed to get project expense summary'
             ], 500);
+        }
+    }
+
+    /**
+     * Create expense automatically when invoice is not paid
+     */
+    public function createFromInvoice($invoice)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Create expense record
+            $expense = new Expense();
+            $expense->proyek_id = $invoice->proyek_id;
+            $expense->category_id = $invoice->kategori_id;
+            $expense->amount = $invoice->total_amount;
+            $expense->description = "Tagihan invoice {$invoice->invoice_number}";
+            $expense->transaction_date = now();
+            $expense->status = 'pending';
+            $expense->payment_method = $invoice->payment_method_id;
+            $expense->source_type = 'invoice';
+            $expense->source_id = $invoice->id;
+            $expense->invoice_id = $invoice->id;
+            $expense->user_id = auth()->id();
+
+            $expense->save();
+
+            DB::commit();
+
+            return $expense;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error creating expense from invoice: ' . $e->getMessage());
+            throw $e;
         }
     }
 }

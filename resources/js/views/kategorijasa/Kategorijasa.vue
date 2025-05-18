@@ -101,8 +101,12 @@
         axios.get("/api/units", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
-      categories.value = categoryRes.data;
-      units.value = unitRes.data;
+      categories.value = Array.isArray(categoryRes.data)
+        ? categoryRes.data
+        : (categoryRes.data.data ? categoryRes.data.data : []);
+      units.value = Array.isArray(unitRes.data)
+        ? unitRes.data
+        : (unitRes.data.data ? unitRes.data.data : []);
 
       nextTick(() => {
         initDataTable();

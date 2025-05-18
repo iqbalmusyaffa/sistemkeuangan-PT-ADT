@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Unit;
+use App\Http\Resources\UnitResource;
 
 class UnitsController extends Controller
 {
@@ -15,9 +16,9 @@ class UnitsController extends Controller
     {
         if ($request->ajax()) {
             $data = Unit::select(['id', 'unit_name', 'unit_code']);
-            return response()->json($data); // Return JSON response for AJAX request
+            return UnitResource::collection($data);
         }
-        return response()->json(Unit::all()); // Return all units as JSON if not an AJAX request
+        return UnitResource::collection(Unit::all());
     }
 
     /**
@@ -36,7 +37,7 @@ class UnitsController extends Controller
             $unit = Unit::create($validatedData);
 
             // Return the created unit with a 201 status code
-            return response()->json($unit, 201);
+            return new UnitResource($unit);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to create unit. Please try again later.'], 500);
         }
@@ -47,8 +48,8 @@ class UnitsController extends Controller
      */
     public function show($id)
     {
-        $unit = Unit::findOrFail($id); // Find unit by ID or fail
-        return response()->json($unit); // Return the unit as JSON
+        $unit = Unit::findOrFail($id);
+        return new UnitResource($unit);
     }
 
     /**
@@ -69,7 +70,7 @@ class UnitsController extends Controller
         $unit->update($validatedData);
 
         // Return the updated unit
-        return response()->json($unit);
+        return new UnitResource($unit);
     }
 
     /**
@@ -77,8 +78,8 @@ class UnitsController extends Controller
      */
     public function destroy($id)
     {
-        $unit = Unit::findOrFail($id); // Find unit by ID or fail
-        $unit->delete(); // Delete the unit
+        $unit = Unit::findOrFail($id);
+        $unit->delete();
 
         // Return a 204 response (no content) to indicate successful deletion
         return response()->json(null, 204);
