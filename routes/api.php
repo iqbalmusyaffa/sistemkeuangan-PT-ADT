@@ -52,8 +52,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Company routes
     Route::apiResource('companies', CompanyController::class);
     // Income routes
+    Route::get('/incomes/total-dp-paid', [IncomeController::class, 'getTotalDpPaid']);
+    Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
     Route::apiResource('incomes', IncomeController::class);
-
     // Pengeluaran (Expense)
     Route::apiResource('expenses', ExpenseController::class);
     Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);

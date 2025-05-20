@@ -38,6 +38,8 @@ class InvoiceResource extends JsonResource
             'ppn_amount' => $this->ppn_amount,
             'pph_jasa_amount' => $this->pph_jasa_amount,
             'pph_barang_amount' => $this->pph_barang_amount,
+            'total_tax' => $this->total_tax,
+            'grand_total' => $this->grand_total,
 
             // Profit/Loss information
             'profit_margin_percentage' => $this->profit_margin_percentage,
@@ -63,7 +65,16 @@ class InvoiceResource extends JsonResource
             ],
 
             // Project-level financial summary
-            'project_financial_summary' => $this->getProjectFinancialSummary()
+            'project_financial_summary' => $this->getProjectFinancialSummary(),
+
+            'summary' => [
+                'total_termin' => $this->termins->sum('nilai_termin'),
+                'total_dp' => $this->termins->sum('nilai_dp'),
+                'total_pelunasan' => $this->termins->sum('nilai_pelunasan'),
+                'total_pembelian_material' => $this->purchaseMaterials->sum('total_harga'),
+                'total_dp_sudah_dibayar' => \App\Models\Income::where('invoice_id', $this->id)->where('type', 'dp')->where('status', 'Diterima')->sum('jumlah'),
+                'sisa_belum_dibayar' => $this->termins->sum('nilai_termin') - ($this->purchaseMaterials->sum('total_harga') + \App\Models\Income::where('invoice_id', $this->id)->where('type', 'dp')->where('status', 'Diterima')->sum('jumlah')),
+            ],
         ];
     }
 }

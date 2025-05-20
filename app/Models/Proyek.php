@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 // use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\Trackable;
 use App\Traits\BudgetMonitor;
+use Illuminate\Support\Facades\Log;
 
 class Proyek extends Model
 {
@@ -15,13 +16,24 @@ class Proyek extends Model
 
     public function updateStatusFromInvoices()
     {
-        $invoices = $this->invoices;
-        if ($invoices->count() && $invoices->every(fn($inv) => $inv->status === 'paid')) {
-            $this->status_project = 'Selesai';
+        try {
+            $invoices = $this->invoices()->get();
+            
+            if ($invoices->isEmpty()) {
+                $this->status_project = 'Berjalan';
         } else {
-            $this->status_project = 'Berjalan';
+                $allPaid = $invoices->every(fn($inv) => $inv->status === Invoice::STATUS_PAID);
+                $this->status_project = $allPaid ? 'Selesai' : 'Berjalan';
         }
+            
         $this->save();
+        } catch (\Exception $e) {
+            Log::error('Error in updateStatusFromInvoices: ' . $e->getMessage(), [
+                'proyek_id' => $this->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Don't throw the error, just log it
+        }
     }
 
     protected $fillable = [
@@ -68,6 +80,11 @@ class Proyek extends Model
     public function expenses()
     {
         return $this->hasMany(Expense::class, 'proyek_id');
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
     }
 
     // ===========================

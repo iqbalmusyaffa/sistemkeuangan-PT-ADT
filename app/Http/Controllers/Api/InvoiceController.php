@@ -47,185 +47,131 @@ class InvoiceController extends Controller
         return new InvoiceResource($invoice);
     }
 
-    // Membuat invoice baru dengan multiple items
-    public function store(Request $request)
-    {
-        try {
-            \Log::info('Invoice store request:', $request->all());
-            
-            $validator = Validator::make($request->all(), [
-                'proyek_id' => 'required|exists:proyeks,id',
-                'payment_method_id' => 'nullable|exists:payment_methods,id',
-                'invoice_date' => 'required|date',
-                'purchase_materials' => 'required|array|min:1',
-                'purchase_materials.*.item' => 'required|string',
-                'purchase_materials.*.qty' => 'required|numeric|min:1',
-                'purchase_materials.*.harga' => 'required|numeric|min:0',
-                'purchase_materials.*.type' => 'required|string|max:255',
-                'purchase_materials.*.merek_id' => 'nullable|exists:mereks,id',
-                'purchase_materials.*.unit_id' => 'required|exists:units,id',
-                'purchase_materials.*.category_id' => 'nullable|exists:kategoris,id',
-                'purchase_materials.*.service_category_id' => 'nullable|exists:service_categories,id',
-                'purchase_materials.*.deskripsi' => 'nullable|string',
-                'use_ppn' => 'boolean',
-                'use_pph_non_final' => 'boolean',
-                'use_pph_final' => 'boolean',
-                'profit_margin_percentage' => 'nullable|numeric|min:0|max:100',
-                'termins' => 'nullable|array',
-                'termins.*.nama_termin' => 'required_with:termins|string',
-                'termins.*.nilai_termin' => 'required_with:termins|numeric|min:0',
-                'termins.*.dp_percentage' => 'required_with:termins|numeric|min:0|max:100',
-                'termins.*.nilai_dp' => 'required_with:termins|numeric|min:0',
-                'termins.*.nilai_pelunasan' => 'required_with:termins|numeric|min:0',
-                'termins.*.tanggal_dp' => 'nullable|date',
-                'termins.*.tanggal_pelunasan' => 'nullable|date|after_or_equal:termins.*.tanggal_dp',
-            ]);
+   public function store(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'proyek_id' => 'required|exists:proyeks,id',
+            'payment_method_id' => 'required|exists:payment_methods,id',
+            'invoice_date' => 'required|date',
+            'purchase_materials' => 'required|array',
+            'purchase_materials.*.item' => 'required|string',
+            'purchase_materials.*.type' => 'required|string',
+            'purchase_materials.*.qty' => 'required|numeric|min:0',
+            'purchase_materials.*.harga' => 'required|numeric|min:0',
+            'purchase_materials.*.unit_id' => 'required|exists:units,id',
+            'purchase_materials.*.category_id' => 'nullable|exists:kategoris,id',
+            'purchase_materials.*.service_category_id' => 'nullable|exists:service_categories,id',
+            'purchase_materials.*.merek_id' => 'nullable|exists:mereks,id',
+            'use_ppn' => 'boolean',
+            'use_pph_non_final' => 'boolean',
+            'use_pph_final' => 'boolean',
+            'notes' => 'nullable|string',
 
-            if ($validator->fails()) {
-                \Log::error('Invoice validation failed:', $validator->errors()->toArray());
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+            'expenses' => 'nullable|array',
+            'expenses.*.description' => 'required_with:expenses|string',
+            'expenses.*.amount' => 'required_with:expenses|numeric|min:0',
+            'expenses.*.category_id' => 'required_with:expenses|exists:kategoris,id',
+        ]);
+
+        DB::beginTransaction();
+
+        $totalAmount = collect($validated['purchase_materials'])->sum(fn($m) => $m['qty'] * $m['harga']);
+
+        $lastInvoice = Invoice::latest()->first();
+        $invoiceNumber = 'INV-' . date('Ymd') . '-' . str_pad(($lastInvoice ? $lastInvoice->id + 1 : 1), 4, '0', STR_PAD_LEFT);
+
+        $invoice = Invoice::create([
+            'proyek_id' => $validated['proyek_id'],
+            'payment_method_id' => $validated['payment_method_id'],
+            'invoice_number' => $invoiceNumber,
+            'invoice_date' => $validated['invoice_date'],
+            'total_amount' => $totalAmount,
+            'use_ppn' => $validated['use_ppn'] ?? false,
+            'use_pph_non_final' => $validated['use_pph_non_final'] ?? false,
+            'use_pph_final' => $validated['use_pph_final'] ?? false,
+            'notes' => $validated['notes'] ?? null,
+            'status' => 'unpaid',
+            'amount_paid' => 0,
+            'profit_margin_percentage' => 30.00,
+        ]);
+
+        $materials = collect($validated['purchase_materials'])->map(function ($material) use ($invoice) {
+            $unit = \App\Models\Unit::find($material['unit_id']);
+            $isService = $unit && in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
+
+            if ($isService && empty($material['service_category_id'])) {
+                throw new \Exception('Service category is required for service items');
+            }
+            if (!$isService && (empty($material['category_id']) || empty($material['merek_id']))) {
+                throw new \Exception('Category and Brand are required for non-service items');
             }
 
-            DB::beginTransaction();
-            try {
-                // Validasi anggaran proyek
-                $proyek = Proyek::findOrFail($request->proyek_id);
-                $totalInvoice = Invoice::where('proyek_id', $request->proyek_id)->sum('total_amount');
-                $totalBaru = 0;
-                foreach ($request->purchase_materials as $item) {
-                    $totalBaru += $item['qty'] * $item['harga'];
-                }
-                if ($proyek && ($totalInvoice + $totalBaru) > $proyek->anggaran_kontrak) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'Total invoice melebihi anggaran proyek'
-                    ], 422);
-                }
+            return [
+                'invoice_id' => $invoice->id,
+                'proyek_id' => $invoice->proyek_id,
+                'item' => $material['item'],
+                'type' => $material['type'],
+                'qty' => $material['qty'],
+                'harga' => $material['harga'],
+                'unit_id' => $material['unit_id'],
+                'category_id' => $material['category_id'] ?? null,
+                'service_category_id' => $material['service_category_id'] ?? null,
+                'merek_id' => $material['merek_id'] ?? null,
+                'total_harga' => $material['qty'] * $material['harga'],
+                'is_service' => $isService,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        })->toArray();
 
-                // Generate invoice number
-                $date = now()->format('Ymd');
-                $lastInvoice = Invoice::where('invoice_number', 'like', "INV-{$date}-%")->latest()->first();
-                $number = 1;
-
-                if ($lastInvoice) {
-                    $number = (int)substr($lastInvoice->invoice_number, -4) + 1;
-                }
-
-                $invoiceNumber = 'INV-' . $date . '-' . str_pad($number, 4, '0', STR_PAD_LEFT);
-
-                // Create invoice
-                $invoice = Invoice::create([
-                    'proyek_id' => $request->proyek_id,
-                    'payment_method_id' => $request->payment_method_id,
-                    'invoice_number' => $invoiceNumber,
-                    'invoice_date' => $request->invoice_date,
-                    'total_amount' => 0,
-                    'amount_paid' => 0,
-                    'notes' => $request->notes,
-                    'use_ppn' => $request->use_ppn ?? false,
-                    'use_pph_non_final' => $request->use_pph_non_final ?? false,
-                    'use_pph_final' => $request->use_pph_final ?? false,
-                    'profit_margin_percentage' => $request->profit_margin_percentage ?? 30.00,
-                ]);
-
-                // Create purchase materials
-                $totalPurchaseAmount = 0;
-                $totalBarang = 0;
-                $totalJasa = 0;
-                foreach ($request->purchase_materials as $item) {
-                    $totalHarga = $item['qty'] * $item['harga'];
-                    $totalPurchaseAmount += $totalHarga;
-                    if (!empty($item['is_service'])) {
-                        $totalJasa += $totalHarga;
-                    } else {
-                        $totalBarang += $totalHarga;
-                    }
-
-                    PurchaseMaterial::create([
-                        'invoice_id' => $invoice->id,
-                        'proyek_id' => $request->proyek_id,
-                        'item' => $item['item'],
-                        'type' => $item['type'],
-                        'spesifikasi' => $item['spesifikasi'] ?? null,
-                        'unit_id' => $item['unit_id'],
-                        'category_id' => $item['category_id'] ?? null,
-                        'service_category_id' => $item['service_category_id'] ?? null,
-                        'qty' => $item['qty'],
-                        'harga' => $item['harga'],
-                        'total_harga' => $totalHarga,
-                        'deskripsi' => $item['deskripsi'] ?? null,
-                        'merek_id' => $item['merek_id'] ?? null,
-                        'is_service' => isset($item['is_service']) ? $item['is_service'] : false
-                    ]);
-                }
-
-                // Calculate taxes and profit
-                $pphNonFinalTotal = $request->use_pph_non_final ? ($totalPurchaseAmount * 0.02) : 0;
-                $pphFinal = $request->use_pph_final ? ($totalPurchaseAmount * 0.05) : 0;
-                $pphJasa = $request->use_pph_jasa ? ($totalJasa * 0.02) : 0;
-                $pphBarang = $request->use_pph_barang ? ($totalBarang * 0.015) : 0;
-                $ppnAmount = $request->use_ppn ? (($totalBarang + $totalJasa) * 0.11) : 0;
-                $netProfit = ($totalBarang + $totalJasa) * ($invoice->profit_margin_percentage / 100);
-
-                // Update invoice with calculated amounts
-                $invoice->update([
-                    'total_amount' => $totalPurchaseAmount,
-                    'pph_non_final_amount' => $pphNonFinalTotal,
-                    'pph_final_amount' => $pphFinal,
-                    'ppn_amount' => $ppnAmount,
-                    'net_profit' => $netProfit,
-                    'pph_jasa_amount' => $pphJasa,
-                    'pph_barang_amount' => $pphBarang,
-                ]);
-
-                // Handle termins if provided
-                if ($request->has('termins') && is_array($request->termins) && count($request->termins) > 0) {
-                    foreach ($request->termins as $terminData) {
-                        \App\Models\Termin::create([
-                            'proyek_id' => $request->proyek_id,
-                            'invoice_id' => $invoice->id,
-                            'nama_termin' => $terminData['nama_termin'],
-                            'nilai_termin' => $terminData['nilai_termin'],
-                            'dp_percentage' => $terminData['dp_percentage'],
-                            'nilai_dp' => $terminData['nilai_dp'],
-                            'nilai_pelunasan' => $terminData['nilai_pelunasan'],
-                            'tanggal_dp' => $terminData['tanggal_dp'] ?? null,
-                            'tanggal_pelunasan' => $terminData['tanggal_pelunasan'] ?? null,
-                            'status_termin' => 'Belum Dibayar',
-                            'keterangan' => $terminData['keterangan'] ?? ($request->notes ?? '-')
-                        ]);
-                    }
-                }
-
-                DB::commit();
-                \Log::info('Invoice created successfully:', ['invoice_id' => $invoice->id]);
-                return new InvoiceResource($invoice);
-            } catch (\Exception $e) {
-                DB::rollBack();
-                \Log::error('Error creating invoice:', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Failed to create invoice: ' . $e->getMessage()
-                ], 500);
-            }
-        } catch (\Exception $e) {
-            \Log::error('Unexpected error in invoice store:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'status' => 'error',
-                'message' => 'An unexpected error occurred: ' . $e->getMessage()
-            ], 500);
+        foreach (array_chunk($materials, 100) as $chunk) {
+            PurchaseMaterial::insert($chunk);
         }
+
+        if (!empty($validated['expenses'])) {
+            $expenses = collect($validated['expenses'])->map(function ($expense) use ($invoice) {
+                return [
+                    'proyek_id' => $invoice->proyek_id,
+                    'invoice_id' => $invoice->id,
+                    'description' => $expense['description'],
+                    'amount' => $expense['amount'],
+                    'category_id' => $expense['category_id'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            })->toArray();
+
+            foreach (array_chunk($expenses, 100) as $chunk) {
+                Expense::insert($chunk);
+            }
+        }
+
+        $invoice->refresh();
+        // Calculate all financial values
+        $invoice->calculateAllFinancialValues();
+
+        DB::commit();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Invoice created successfully',
+            'data' => new InvoiceResource($invoice)
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error creating invoice:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'An error occurred while creating the invoice: ' . $e->getMessage(),
+        ], 500);
     }
+}
+
 
     // Mengupdate invoice (status dan pembayaran)
     public function update(Request $request, $id)
@@ -263,19 +209,19 @@ class InvoiceController extends Controller
 
         try {
             DB::beginTransaction();
-            
+
             // Delete associated expenses first
             $invoice->expenses()->delete();
-            
+
             // Delete associated termins
             $invoice->termins()->delete();
-            
+
             // Delete associated purchase materials
             $invoice->purchaseMaterials()->delete();
-            
+
             // Finally delete the invoice
             $invoice->delete();
-            
+
             DB::commit();
             return response()->json(['message' => 'Invoice and all associated records deleted successfully.']);
         } catch (\Exception $e) {
@@ -303,7 +249,7 @@ class InvoiceController extends Controller
         try {
             $invoice = Invoice::findOrFail($id);
             $expense = $invoice->recordPayment($request->amount, $request->payment_method_id);
-            
+
             // Calculate project profit/loss after payment
             $invoice->calculateProjectProfitLoss();
 
@@ -328,7 +274,7 @@ class InvoiceController extends Controller
     {
         try {
             $invoices = Invoice::where('proyek_id', $projectId)->get();
-            
+
             if ($invoices->isEmpty()) {
                 return response()->json([
                     'status' => 'error',

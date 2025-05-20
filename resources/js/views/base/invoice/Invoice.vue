@@ -428,12 +428,8 @@
                       <span class="float-end">{{ formatCurrency(ppnAmount) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_non_final">
-                      <strong>PPH Non Final (Barang 1.5%):</strong>
-                      <span class="float-end">{{ formatCurrency(pphNonFinalBarang) }}</span>
-                    </div>
-                    <div class="mb-2" v-if="form.use_pph_non_final">
-                      <strong>PPH Non Final (Jasa 2%):</strong>
-                      <span class="float-end">{{ formatCurrency(pphNonFinalJasa) }}</span>
+                      <strong>PPH Non Final (2.5%):</strong>
+                      <span class="float-end">{{ formatCurrency(pphNonFinalTotal) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_non_final">
                       <strong>Total PPH Non Final:</strong>
@@ -446,7 +442,7 @@
                       <span class="float-end">{{ formatCurrency(netProfit) }}</span>
                     </div>
                     <div class="mb-2" v-if="form.use_pph_final">
-                      <strong>PPH Final (22%):</strong>
+                      <strong>PPH Final (3%):</strong>
                       <span class="float-end">{{ formatCurrency(pphFinal) }}</span>
                     </div>
                     <div class="mb-2">
@@ -1471,32 +1467,21 @@ const getMaterialCategories = (unitId, item = null) => {
     )
 
     const pphNonFinalBarang = computed(() => {
-      if (!form.value.use_pph_non_final) return 0;
-      const totalBarang = form.value.purchase_materials
-        .filter(item => !isServiceType(item))
-        .reduce((sum, item) => {
-          const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
-          return sum + (item.qty * harga);
-        }, 0);
-      return totalBarang * 0.015; // 1.5% for goods
+      // With flat rate, PPH Non Final Barang is no longer calculated separately
+      return 0;
     });
 
     const pphNonFinalJasa = computed(() => {
-      if (!form.value.use_pph_non_final) return 0;
-      const totalJasa = form.value.purchase_materials
-        .filter(item => isServiceType(item))
-        .reduce((sum, item) => {
-          const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
-          return sum + (item.qty * harga);
-        }, 0);
-      return totalJasa * 0.02; // 2% for services
+      // With flat rate, PPH Non Final Jasa is no longer calculated separately
+      return 0;
     });
 
     const pphNonFinalTotal = computed(() => {
-      return pphNonFinalBarang.value + pphNonFinalJasa.value;
+      return form.value.use_pph_non_final ? (totalInvoice.value * 0.025) : 0; // 2.5% of total amount
     });
 
     const netProfit = computed(() => {
+      // Net profit calculation remains based on the total amount and profit margin percentage
       const totalHarga = form.value.purchase_materials.reduce((sum, item) => {
         const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
         return sum + (item.qty * harga);
@@ -1505,7 +1490,7 @@ const getMaterialCategories = (unitId, item = null) => {
     });
 
     const pphFinal = computed(() => {
-      return form.value.use_pph_final ? (netProfit.value * 0.22) : 0; // 22% of net profit
+      return form.value.use_pph_final ? (totalInvoice.value * 0.03) : 0; // 3% of total amount
     });
 
     const ppnAmount = computed(() => {
@@ -1513,10 +1498,16 @@ const getMaterialCategories = (unitId, item = null) => {
     });
 
     const totalTax = computed(() => {
-      return pphNonFinalTotal.value + pphFinal.value + ppnAmount.value;
+      // Summing up the applied taxes
+      let total = 0;
+      if (form.value.use_ppn) total += ppnAmount.value;
+      if (form.value.use_pph_non_final) total -= pphNonFinalTotal.value; // PPH is a reduction
+      if (form.value.use_pph_final) total -= pphFinal.value; // PPH is a reduction
+      return total;
     });
 
     const totalWithTax = computed(() => {
+      // Grand Total = Subtotal + PPN - PPH Non Final - PPH Final
       return totalInvoice.value + totalTax.value;
     });
 
@@ -1804,8 +1795,9 @@ const getMaterialCategories = (unitId, item = null) => {
 });
 
 const profitMarginLabel = computed(() => {
-  if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null) {
-    return `${parseFloat(form.value.profit_margin_percentage)}%`;
+  const margin = form.value?.profit_margin_percentage;
+  if (margin !== undefined && margin !== null) {
+    return `${parseFloat(margin)}%`;
   }
   return '30%';
 });

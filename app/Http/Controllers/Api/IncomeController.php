@@ -382,4 +382,38 @@ class IncomeController extends Controller
             throw $e;
         }
     }
+
+    /**
+     * Get total DP paid for a project and termin
+     */
+    public function getTotalDpPaid(Request $request)
+    {
+        try {
+            $query = Income::where('type', 'dp')
+                ->where('status', 'Diterima');
+
+            if ($request->has('proyek_id')) {
+                $query->where('proyek_id', $request->proyek_id);
+            }
+
+            if ($request->has('invoice_id')) {
+                $query->whereHas('termin', function($q) use ($request) {
+                    $q->where('invoice_id', $request->invoice_id);
+                });
+            }
+
+            $totalDpPaid = $query->sum('jumlah');
+
+            return response()->json([
+                'success' => true,
+                'total_dp_paid' => $totalDpPaid
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in IncomeController@getTotalDpPaid: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mendapatkan total DP yang sudah dibayar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

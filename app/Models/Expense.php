@@ -32,12 +32,12 @@ class Expense extends Model
         'description',
         'transaction_date',
         'status',
-        'payment_method',
+        'payment_method_id',
         'source_type',
         'source_id',
         'prepared_fund',
         'bukti',
-        'invoice_id' // Add invoice_id to the fillable array
+        'invoice_id'
     ];
 
     protected $casts = [

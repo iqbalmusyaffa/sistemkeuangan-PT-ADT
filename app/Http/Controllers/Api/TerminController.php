@@ -61,89 +61,117 @@ class TerminController extends Controller
     public function store(Request $request)
     {
         DB::beginTransaction();
-        $warnings = [];
         try {
-            // Manual validation, collect warnings but allow insert
-            $validated = $request->all();
-            // Required fields
-            $required = [
-                'proyek_id', 'invoice_id', 'nama_termin', 'jenis_termin', 'nilai_termin', 'persentase_dp', 'status_termin'
-            ];
-            foreach ($required as $field) {
-                if (empty($validated[$field]) && $validated[$field] !== 0 && $validated[$field] !== '0') {
-                    $warnings[$field][] = 'Field ' . $field . ' wajib diisi';
-                }
+            Log::info('Creating new termin:', $request->all());
+
+            // Validate required fields first
+            $validated = $request->validate([
+                'proyek_id' => 'required|exists:proyeks,id',
+                'invoice_id' => 'required|exists:invoices,id',
+                'nama_termin' => 'required|string|max:255',
+                'jenis_termin' => 'required|in:DP,Pelunasan,Termin Bertahap',
+                'nilai_termin' => 'required|numeric|min:0',
+                'persentase_dp' => 'required|numeric|min:0|max:100',
+                'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
+                'tanggal_dp' => 'nullable|date',
+                'tanggal_pelunasan' => 'nullable|date|after_or_equal:tanggal_dp',
+                'keterangan' => 'nullable|string',
+                'bukti_pembayaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048'
+            ]);
+
+            // Validate invoice exists and belongs to project
+            $invoice = Invoice::where('id', $validated['invoice_id'])
+                ->where('proyek_id', $validated['proyek_id'])
+                ->first();
+
+            if (!$invoice) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invoice tidak ditemukan atau tidak terkait dengan proyek ini'
+                ], 422);
             }
-            // Numeric
-            if (isset($validated['nilai_termin']) && !is_numeric($validated['nilai_termin'])) {
-                $warnings['nilai_termin'][] = 'Nilai termin harus angka';
-            }
-            if (isset($validated['persentase_dp']) && (!is_numeric($validated['persentase_dp']) || $validated['persentase_dp'] < 0 || $validated['persentase_dp'] > 100)) {
-                $warnings['persentase_dp'][] = 'Persentase DP harus 0-100';
-            }
-            // Enum
-            $jenis = ['DP','Pelunasan','Termin Bertahap'];
-            if (isset($validated['jenis_termin']) && !in_array($validated['jenis_termin'], $jenis)) {
-                $warnings['jenis_termin'][] = 'Jenis termin tidak valid';
-            }
-            $status = ['Belum Dibayar','DP Dibayar','Lunas'];
-            if (isset($validated['status_termin']) && !in_array($validated['status_termin'], $status)) {
-                $warnings['status_termin'][] = 'Status termin tidak valid';
-            }
-            // Date
-            if (!empty($validated['tanggal_dp']) && !strtotime($validated['tanggal_dp'])) {
-                $warnings['tanggal_dp'][] = 'Format tanggal DP tidak valid';
-            }
-            if (!empty($validated['tanggal_pelunasan']) && !strtotime($validated['tanggal_pelunasan'])) {
-                $warnings['tanggal_pelunasan'][] = 'Format tanggal pelunasan tidak valid';
-            }
-            // Relational check (skip if warning)
-            // Hitung nilai DP dan pelunasan
-            $nilai_termin = isset($validated['nilai_termin']) && is_numeric($validated['nilai_termin']) ? $validated['nilai_termin'] : 0;
-            $persentase_dp = isset($validated['persentase_dp']) && is_numeric($validated['persentase_dp']) ? $validated['persentase_dp'] : 0;
+
+            // Calculate DP and pelunasan values
+            $nilai_termin = $validated['nilai_termin'];
+            $persentase_dp = $validated['persentase_dp'];
             $nilai_dp = round($nilai_termin * ($persentase_dp / 100), 2);
             $nilai_pelunasan = round($nilai_termin - $nilai_dp, 2);
 
             $terminData = [
-                'proyek_id' => $validated['proyek_id'] ?? null,
-                'invoice_id' => $validated['invoice_id'] ?? null,
-                'nama_termin' => $validated['nama_termin'] ?? '',
-                'jenis_termin' => $validated['jenis_termin'] ?? '',
-                'termin_ke' => $validated['termin_ke'] ?? null,
+                'proyek_id' => $validated['proyek_id'],
+                'invoice_id' => $validated['invoice_id'],
+                'nama_termin' => $validated['nama_termin'],
+                'jenis_termin' => $validated['jenis_termin'],
+                'termin_ke' => $request->input('termin_ke'),
                 'nilai_termin' => $nilai_termin,
                 'persentase_dp' => $persentase_dp,
                 'nilai_dp' => $nilai_dp,
                 'nilai_pelunasan' => $nilai_pelunasan,
                 'tanggal_dp' => $validated['tanggal_dp'] ?? null,
                 'tanggal_pelunasan' => $validated['tanggal_pelunasan'] ?? null,
-                'status_termin' => $validated['status_termin'] ?? 'Belum Dibayar',
+                'status_termin' => $validated['status_termin'],
                 'keterangan' => $validated['keterangan'] ?? null,
-                'dibayar_oleh' => ($validated['status_termin'] ?? '') !== 'Belum Dibayar' ? (auth()->id() ?? null) : null,
+                'dibayar_oleh' => $validated['status_termin'] !== 'Belum Dibayar' ? auth()->id() : null,
                 'bukti_pembayaran' => null,
                 'tanggal_pelunasan_dibayar' => null
             ];
-            // Filter hanya field yang ada di fillable
+
+            // Filter only fillable fields
             $allowed = (new \App\Models\Termin)->getFillable();
             $terminDataFiltered = array_intersect_key($terminData, array_flip($allowed));
+            
+            // Create termin
             $termin = Termin::create($terminDataFiltered);
+
+            // Handle file upload if present
+            if ($request->hasFile('bukti_pembayaran')) {
+                $file = $request->file('bukti_pembayaran');
+                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
+                $path = 'uploads/bukti_pembayaran/' . $filename;
+                
+                if (!Storage::exists('uploads/bukti_pembayaran')) {
+                    Storage::makeDirectory('uploads/bukti_pembayaran');
+                }
+                
+                if ($file->storeAs('uploads/bukti_pembayaran', $filename)) {
+                    $termin->bukti_pembayaran = $path;
+                    $termin->save();
+                }
+            }
+
+            // Update invoice status
             if ($termin->invoice) {
+                try {
                 $termin->invoice->updateStatusFromTermins();
+                } catch (\Exception $e) {
+                    Log::error('Error updating invoice status:', [
+                        'message' => $e->getMessage(),
+                        'invoice_id' => $termin->invoice_id,
+                        'termin_id' => $termin->id
+                    ]);
+                    // Don't throw the error, just log it
+                }
             }
+
             DB::commit();
-            $response = [
-                'status' => empty($warnings) ? 'success' : 'warning',
-                'message' => empty($warnings) ? 'Termin berhasil dibuat' : 'Termin berhasil dibuat dengan peringatan validasi',
-                'data' => new TerminResource($termin->load(['proyek', 'invoice'])),
-            ];
-            if (!empty($warnings)) {
-                $response['warnings'] = $warnings;
-            }
-            return response()->json($response, empty($warnings) ? 200 : 201);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Termin berhasil dibuat',
+                'data' => new TerminResource($termin->load(['proyek', 'invoice']))
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error creating termin:', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
             ]);
             return response()->json([
                 'status' => 'error',
@@ -162,7 +190,6 @@ class TerminController extends Controller
     // Update termin, dengan validasi dan cek batas anggaran
     public function update(Request $request, Termin $termin)
     {
-
         $validated = $request->validate([
             'proyek_id' => 'required|exists:proyeks,id',
             'invoice_id' => 'required|exists:invoices,id',
@@ -210,16 +237,16 @@ class TerminController extends Controller
         $nilai_dp = $validated['nilai_termin'] * ($validated['persentase_dp'] / 100);
         $nilai_pelunasan = $validated['nilai_termin'] - $nilai_dp;
 
-
         $termin->update(array_merge($validated, [
             'nilai_dp' => $nilai_dp,
             'nilai_pelunasan' => $nilai_pelunasan,
             'dibayar_oleh' => $validated['status_termin'] !== 'Belum Dibayar' ? auth()->id() : null,
-            // Jangan update tanggal_pelunasan_dibayar di sini
         ]));
 
         // Update status invoice setelah update termin
-        $invoice->updateStatusFromTermins();
+        if ($termin->invoice) {
+            $termin->invoice->updateStatusFromTermins();
+        }
 
         return new TerminResource($termin->load(['proyek', 'invoice']));
     }
@@ -335,7 +362,6 @@ class TerminController extends Controller
                 'keterangan' => array_key_exists('keterangan', $validated) ? $validated['keterangan'] : $termin->keterangan,
             ];
             if ($newStatus === 'DP Dibayar') {
-                $updateData['tanggal_dp'] = array_key_exists('tanggal_dp', $validated) ? $validated['tanggal_dp'] : ($termin->tanggal_dp ?: now());
                 $updateData['tanggal_dp_dibayar'] = array_key_exists('tanggal_dp_dibayar', $validated) ? $validated['tanggal_dp_dibayar'] : ($termin->tanggal_dp_dibayar ?: now());
             }
             if ($newStatus === 'Lunas') {
@@ -350,97 +376,23 @@ class TerminController extends Controller
                 $termin->invoice->updateStatusFromTermins();
             }
             if ($oldStatus !== $newStatus) {
-                // Helper untuk ambil kategori pemasukan default
-                $getDefaultKategoriId = function() {
-                    $kategori = \App\Models\Kategori::where('jenis', 'pemasukan')->orderBy('id')->first();
-                    return $kategori ? $kategori->id : null;
-                };
-                // Helper untuk ambil payment method default
-                $getDefaultPaymentMethodId = function() {
-                    $pm = \App\Models\PaymentMethod::where('is_active', true)->orderBy('id')->first();
-                    return $pm ? $pm->id : null;
-                };
+                // Buat/update expense
+                $termin->createExpense();
+
+                // Record income berdasarkan status baru
                 if ($newStatus === 'DP Dibayar') {
-                    $existingIncome = \App\Models\Income::where('termin_id', $termin->id)
-                        ->where('type', 'dp')
-                        ->where('status', 'Diterima')
-                        ->first();
-                    if (!$existingIncome) {
-                        $kategoriId = $termin->invoice && $termin->invoice->kategori_id ? $termin->invoice->kategori_id : $getDefaultKategoriId();
-                        $paymentMethodId = $termin->invoice && $termin->invoice->payment_method_id ? $termin->invoice->payment_method_id : $getDefaultPaymentMethodId();
-                        $tanggal = $termin->tanggal_dp_dibayar ?? $termin->tanggal_dp ?? now();
-                        if (!$kategoriId || !$paymentMethodId) {
-                            DB::rollBack();
-                            return response()->json([
-                                'message' => 'Gagal membuat pemasukan otomatis: kategori pemasukan atau metode pembayaran tidak ditemukan. Mohon cek master data.',
-                                'error' => 'kategori_id/payment_method_id null'
-                            ], 422);
-                        }
-                        \App\Models\Income::create([
-                            'jumlah' => $termin->nilai_dp,
-                            'status' => 'Diterima',
-                            'type' => 'dp',
-                            'termin_id' => $termin->id,
-                            'proyek_id' => $termin->proyek_id,
-                            'deskripsi' => "Pembayaran DP Termin {$termin->nama_termin}",
-                            'created_by' => auth()->id(),
-                            'updated_by' => auth()->id(),
-                            'invoice_id' => $termin->invoice_id,
-                            'kategori_id' => $kategoriId,
-                            'payment_method_id' => $paymentMethodId,
-                            'tanggal' => $tanggal,
-                        ]);
-                    }
-                }
-                if ($newStatus === 'Lunas') {
-                    $existingIncome = \App\Models\Income::where('termin_id', $termin->id)
-                        ->where('type', 'pelunasan')
-                        ->where('status', 'Diterima')
-                        ->first();
-                    if (!$existingIncome) {
-                        $kategoriId = $termin->invoice && $termin->invoice->kategori_id ? $termin->invoice->kategori_id : $getDefaultKategoriId();
-                        $paymentMethodId = $termin->invoice && $termin->invoice->payment_method_id ? $termin->invoice->payment_method_id : $getDefaultPaymentMethodId();
-                        $tanggal = $termin->tanggal_pelunasan_dibayar ?? $termin->tanggal_pelunasan ?? now();
-                        if (!$kategoriId || !$paymentMethodId) {
-                            DB::rollBack();
-                            return response()->json([
-                                'message' => 'Gagal membuat pemasukan otomatis: kategori pemasukan atau metode pembayaran tidak ditemukan. Mohon cek master data.',
-                                'error' => 'kategori_id/payment_method_id null'
-                            ], 422);
-                        }
-                        \App\Models\Income::create([
-                            'jumlah' => $termin->nilai_pelunasan,
-                            'status' => 'Diterima',
-                            'type' => 'pelunasan',
-                            'termin_id' => $termin->id,
-                            'proyek_id' => $termin->proyek_id,
-                            'deskripsi' => "Pelunasan Termin {$termin->nama_termin}",
-                            'created_by' => auth()->id(),
-                            'updated_by' => auth()->id(),
-                            'invoice_id' => $termin->invoice_id,
-                            'kategori_id' => $kategoriId,
-                            'payment_method_id' => $paymentMethodId,
-                            'tanggal' => $tanggal,
-                        ]);
-                    }
-                    $existingExpense = \App\Models\Expense::where('source_type', 'termin')
-                        ->where('source_id', $termin->id)
-                        ->where('status', 'Lunas')
-                        ->first();
-                    if (!$existingExpense) {
-                        \App\Models\Expense::create([
-                            'user_id' => auth()->id(),
-                            'proyek_id' => $termin->proyek_id,
-                            'amount' => $termin->nilai_pelunasan,
-                            'description' => "Pengeluaran pelunasan termin {$termin->nama_termin}",
-                            'transaction_date' => $termin->tanggal_pelunasan ?? now(),
-                            'status' => 'Lunas',
-                            'source_type' => 'termin',
-                            'source_id' => $termin->id,
-                            'prepared_fund' => $termin->nilai_pelunasan,
-                            'invoice_id' => $termin->invoice_id,
-                        ]);
-                    }
+                    $termin->recordIncome(
+                        'dp',
+                        $termin->nilai_dp,
+                        $termin->tanggal_dp_dibayar
+                    );
+                } elseif ($newStatus === 'Lunas') {
+                    // Jika status berubah ke Lunas, record pelunasan
+                    $termin->recordIncome(
+                        'pelunasan',
+                        $termin->nilai_pelunasan,
+                        $termin->tanggal_pelunasan_dibayar
+                    );
                 }
             }
             DB::commit();
@@ -496,5 +448,114 @@ class TerminController extends Controller
             ->get();
 
         return response()->json($invoices);
+    }
+
+    public function exportPdf(Request $request)
+    {
+        try {
+            $query = Termin::with(['proyek', 'invoice']);
+
+            if ($request->has('proyek_id')) {
+                $query->where('proyek_id', $request->proyek_id);
+            }
+
+            if ($request->has('invoice_id')) {
+                $query->where('invoice_id', $request->invoice_id);
+            }
+
+            $termins = $query->get();
+            $project = $termins->first()?->proyek;
+
+            if ($termins->isEmpty()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tidak ada data termin untuk diekspor'
+                ], 404);
+            }
+
+            $pdf = PDF::loadView('exports.termins', [
+                'termins' => $termins,
+                'project' => $project
+            ]);
+
+            return $pdf->download('termin-report.pdf');
+        } catch (\Exception $e) {
+            \Log::error('Error in TerminController@exportPdf: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengekspor PDF: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function exportExcel(Request $request)
+    {
+        try {
+            $query = Termin::with(['proyek', 'invoice']);
+
+            if ($request->has('proyek_id')) {
+                $query->where('proyek_id', $request->proyek_id);
+            }
+
+            if ($request->has('invoice_id')) {
+                $query->where('invoice_id', $request->invoice_id);
+            }
+
+            $termins = $query->get();
+
+            if ($termins->isEmpty()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tidak ada data termin untuk diekspor'
+                ], 404);
+            }
+
+            return Excel::download(new TerminExport($termins), 'termin-report.xlsx');
+        } catch (\Exception $e) {
+            \Log::error('Error in TerminController@exportExcel: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengekspor Excel: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getTerminSummary(Request $request)
+    {
+        $proyekId = $request->proyek_id;
+        $invoiceId = $request->invoice_id;
+
+        $totalTermin = \App\Models\Termin::where('proyek_id', $proyekId)
+            ->where('invoice_id', $invoiceId)
+            ->sum('nilai_termin');
+
+        $totalDP = \App\Models\Termin::where('proyek_id', $proyekId)
+            ->where('invoice_id', $invoiceId)
+            ->sum('nilai_dp');
+
+        $totalPelunasan = \App\Models\Termin::where('proyek_id', $proyekId)
+            ->where('invoice_id', $invoiceId)
+            ->sum('nilai_pelunasan');
+
+        $totalPurchases = \App\Models\PurchaseMaterial::where('proyek_id', $proyekId)
+            ->where('invoice_id', $invoiceId)
+            ->sum('total_harga');
+
+        $totalDpSudahDibayar = \App\Models\Income::where('proyek_id', $proyekId)
+            ->where('invoice_id', $invoiceId)
+            ->where('type', 'dp')
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+
+        $sisaBelumDibayar = $totalTermin - ($totalPurchases + $totalDpSudahDibayar);
+
+        return response()->json([
+            'total_termin' => $totalTermin,
+            'total_dp' => $totalDP,
+            'total_pelunasan' => $totalPelunasan,
+            'total_pembelian_material' => $totalPurchases,
+            'total_dp_sudah_dibayar' => $totalDpSudahDibayar,
+            'sisa_belum_dibayar' => $sisaBelumDibayar,
+        ]);
     }
 }
