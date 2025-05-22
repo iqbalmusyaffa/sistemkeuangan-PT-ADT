@@ -3,7 +3,7 @@
     <CCol>
       <CCard>
         <CCardHeader>
-          <CIcon icon="cil-file" /> Invoice
+          <FontAwesomeIcon :icon="['fas', 'file']" /> Invoice
           <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject">
             Tambah Invoice
           </CButton>
@@ -68,6 +68,28 @@
                   v-model="filterPphFinal"
                   id="filter_pph_final"
                   :disabled="!canUsePphFinal"
+                />
+              </div>
+            </CCol>
+          </CRow>
+
+          <!-- Budget Filter Checkboxes -->
+          <CRow class="mb-3">
+            <CCol md="12">
+              <div class="d-flex gap-3">
+                <CFormCheck
+                  type="checkbox"
+                  label="Proyek di atas 100 juta"
+                  v-model="filterAbove100M"
+                  @change="resetOtherFilters('above')"
+                  :disabled="!invoices.length"
+                />
+                <CFormCheck
+                  type="checkbox"
+                  label="Proyek di bawah 100 juta"
+                  v-model="filterBelow100M"
+                  @change="resetOtherFilters('below')"
+                  :disabled="!invoices.length"
                 />
               </div>
             </CCol>
@@ -484,9 +506,15 @@
       </CModalFooter>
     </CModal>
   </CRow>
+
+  <!-- Tampilkan pesan jika hasil filter kosong -->
+  <div v-if="filteredInvoices.length === 0" class="alert alert-info">
+    Tidak ada invoice sesuai filter.
+  </div>
 </template>
 
-<script>
+<script setup>
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { ref, onMounted, watch, computed, nextTick, onUnmounted, h, render } from "vue";
 import axios from "axios";
 import $ from "jquery";
@@ -496,44 +524,137 @@ import 'datatables.net-dt/css/dataTables.dataTables.min.css';
 import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css';
 import 'datatables.net';
 import 'datatables.net-responsive';
+
 import { useRoute } from 'vue-router'
-import { CIcon } from '@coreui/icons-vue';
-import * as icons from '@coreui/icons';
 
-export default {
-  name: 'Invoice',
-  setup() {
-    const invoiceTableRef = ref(null)
-    const selectedProject = ref('')
-    const projects = ref([])
-    const showModal = ref(false)
-    const loading = ref(false)
-    const error = ref(null)
-    const units = ref([])
-    const categories = ref([])
-    const mereks = ref([])
-    const serviceCategories = ref([])
-    const selectedUnitType = ref(null)
-    const invoices = ref([])
-    const modalMode = ref('add') // 'add', 'edit', 'view'
-    const route = useRoute()
-    const paymentMethods = ref([])
-    const showBrandModal = ref(false)
-    const newBrandName = ref('')
-    const brandItemRef = ref(null)
-    const projectTotalIncome = ref(0);
-    const editingId = ref(null)
-    const anggaranProyek = ref(0);
-    const filterPpn = ref(false)
-    const filterPphNonFinal = ref(false)
-    const filterPphFinal = ref(false)
+const name = 'Invoice';
 
-    const filteredPpnAmount = computed(() => filterPpn.value ? totalInvoice.value * 0.11 : 0)
-    const filteredPphNonFinalAmount = computed(() => filterPphNonFinal.value ? totalInvoice.value * 0.025 : 0)
-    const filteredPphFinalAmount = computed(() => filterPphFinal.value ? totalInvoice.value * 0.03 : 0)
-    const filteredGrandTotal = computed(() =>
-      totalInvoice.value + filteredPpnAmount.value - filteredPphNonFinalAmount.value - filteredPphFinalAmount.value
-    )
+const invoiceTableRef = ref(null)
+const selectedProject = ref('')
+const projects = ref([])
+const showModal = ref(false)
+const loading = ref(false)
+const error = ref(null)
+const units = ref([])
+const categories = ref([])
+const mereks = ref([])
+const serviceCategories = ref([])
+const selectedUnitType = ref(null)
+const invoices = ref([])
+const modalMode = ref('add') // 'add', 'edit', 'view'
+const route = useRoute()
+const paymentMethods = ref([])
+const showBrandModal = ref(false)
+const newBrandName = ref('')
+const brandItemRef = ref(null)
+const projectTotalIncome = ref(0);
+const editingId = ref(null)
+const anggaranProyek = ref(0);
+const filterPpn = ref(false)
+const filterPphNonFinal = ref(false)
+const filterPphFinal = ref(false)
+
+const filterAbove100M = ref(false)
+const filterBelow100M = ref(false)
+
+
+// Filtered invoices by nominal
+const filteredInvoices = computed(() => {
+  let filtered = invoices.value;
+  if (filterAbove100M.value) {
+    filtered = filtered.filter(inv => parseFloat(inv.total_amount || 0) > 100_000_000);
+  } else if (filterBelow100M.value) {
+    filtered = filtered.filter(inv => parseFloat(inv.total_amount || 0) <= 100_000_000);
+  }
+  return filtered;
+});
+
+// Fungsi untuk reset filter budget (agar hanya satu aktif)
+function resetOtherFilters(type) {
+  if (type === 'above') filterBelow100M.value = false;
+  if (type === 'below') filterAbove100M.value = false;
+}
+
+// Gunakan filteredInvoices untuk summary agar konsisten dengan filter
+// Duplicated totalInvoice removed. Sudah dideklarasikan di atas.
+
+// Duplicated subtotalBarang removed. Sudah dideklarasikan di atas.
+
+const subtotalJasa = computed(() => {
+  if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+    return form.value.purchase_materials.filter(item => isServiceType(item)).reduce((sum, item) => {
+      const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+      return sum + (item.qty * harga);
+    }, 0);
+  }
+  return filteredInvoices.value.reduce((sum, inv) => sum + parseFloat(inv.total_jasa || 0), 0);
+});
+
+// Tampilkan pesan jika hasil filter kosong
+// (Tambahkan di template, contoh:)
+// <div v-if="filteredInvoices.length === 0" class="alert alert-info">Tidak ada invoice sesuai filter.</div>
+
+// Watch for filter changes and update DataTable
+watch([filteredInvoices], () => {
+  if (dataTable && invoiceTableRef.value) {
+    dataTable.clear();
+    dataTable.rows.add(filteredInvoices.value);
+    dataTable.draw();
+  }
+});
+
+
+// Project total income should use filteredInvoices
+// (Hapus deklarasi duplikat, gunakan yang sudah ada di atas jika sudah dideklarasikan)
+
+
+
+// Subtotal barang dan jasa
+
+const subtotalBarang = computed(() => {
+  if (showModal.value && (modalMode.value === 'tambah' || modalMode.value === 'edit')) {
+    return form.value.purchase_materials.filter(item => !isServiceType(item)).reduce((sum, item) => {
+      const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
+      return sum + (item.qty * harga);
+    }, 0);
+  }
+  // summary mode: sum dari semua invoice (filtered)
+  return filteredInvoices.value.reduce((sum, inv) => sum + parseFloat(inv.total_barang || 0), 0);
+});
+
+// Duplicated subtotalJasa removed. Sudah dideklarasikan di atas.
+
+// PPN 11% dari subtotal
+const filteredPpnAmount = computed(() => filterPpn.value ? totalInvoice.value * 0.11 : 0);
+
+// PPH Non Final: barang 1.5%, jasa 2%
+const filteredPphNonFinalAmount = computed(() => {
+  if (!filterPphNonFinal.value) return 0;
+  return (subtotalBarang.value * 0.015) + (subtotalJasa.value * 0.02);
+});
+
+// Laba bersih (net profit) sesuai margin
+// const filteredNetProfit = computed(() => {
+//   let margin = 0.3;
+//   if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null && form.value.profit_margin_percentage !== '') {
+//     const parsed = parseFloat(form.value.profit_margin_percentage);
+//     if (!isNaN(parsed)) margin = parsed / 100;
+//   }
+//   return totalInvoice.value * margin;
+// });
+
+// PPH Final: 22% dari laba bersih
+const filteredPphFinalAmount = computed(() => {
+  if (!filterPphFinal.value) return 0;
+  // Use netProfit instead of filteredNetProfit to avoid reference error
+  return netProfit.value * 0.22;
+});
+
+// Grand total: subtotal + ppn - pph_non_final - pph_final
+const filteredGrandTotal = computed(() =>
+  totalInvoice.value + filteredPpnAmount.value - filteredPphNonFinalAmount.value - filteredPphFinalAmount.value
+);
+
 
     const isServiceUnit = computed(() => {
       if (!form.value.unit_id) return false
@@ -1107,12 +1228,15 @@ export default {
           ...form.value,
           purchase_materials: form.value.purchase_materials.map(item => ({
             ...item,
-            harga: typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga
+            qty: Number(item.qty) || 0,
+            harga: typeof item.harga === 'string' ? Number(item.harga.replace(/\./g, '')) : Number(item.harga) || 0
           })),
           use_ppn: form.value.use_ppn,
           use_pph_non_final: form.value.use_pph_non_final,
           use_pph_final: form.value.use_pph_final
         };
+        // Debug: log payload before sending
+        console.log('Invoice payload:', JSON.stringify(payload, null, 2));
 
         if (form.value.is_cash) {
           delete payload.termins;
@@ -1180,28 +1304,37 @@ export default {
           use_pph_non_final: !!invoice.use_pph_non_final,
           use_pph_final: !!invoice.use_pph_final,
           purchase_materials: Array.isArray(invoice.purchase_materials) && invoice.purchase_materials.length > 0
-            ? invoice.purchase_materials.map(item => {
-                const mapped = {
-                  item: item.item || '',
-                  type: item.type || '',
-                  qty: item.qty || 1,
-                  harga: item.harga || '',
-                  unit_id: item.unit?.id ? String(item.unit.id) : '',
-                  total_harga: item.total_harga || 0,
-                  spesifikasi: item.spesifikasi || '',
-                  deskripsi: item.deskripsi || '',
-                  category_id: item.category?.id ? String(item.category.id) : '',
-                  category: item.category || null,
-                  service_category_id: item.service_category?.id ? String(item.service_category.id) : '',
-                  service_category: item.service_category || null,
-                  merek_id: item.merek?.id ? String(item.merek.id) : '',
-                  merek: item.merek || null,
-                  expense_id: item.expense_id || null,
-                  is_service: !!item.is_service,
-                  serviceCategories: item.serviceCategories || []
-                };
-                return mapped;
-            })
+            ? invoice.purchase_materials.map(item => ({
+                item: item.item || '',
+                type: item.type || '',
+                qty: item.qty || 1,
+                harga: item.harga || '',
+                unit_id: item.unit && item.unit.id ? String(item.unit.id) : '',
+                total_harga: item.total_harga || 0,
+                spesifikasi: item.spesifikasi || '',
+                deskripsi: item.deskripsi || '',
+                category_id: item.category && item.category.id ? String(item.category.id) : '',
+                category: item.category ? {
+                  id: String(item.category.id),
+                  unit_id: String(item.category.unit_id),
+                  nama_kategori: item.category.nama_kategori
+                } : null,
+                service_category_id: item.service_category && item.service_category.id ? String(item.service_category.id) : '',
+                service_category: item.service_category ? {
+                  id: String(item.service_category.id),
+                  unit_id: String(item.service_category.unit_id),
+                  nama_kategori: item.service_category.nama_kategori,
+                  harga: item.service_category.harga || item.service_category.price
+                } : null,
+                merek_id: item.merek && item.merek.id ? String(item.merek.id) : '',
+                merek: item.merek ? {
+                  id: String(item.merek.id),
+                  name: item.merek.name
+                } : null,
+                expense_id: item.expense_id || null,
+                is_service: !!item.is_service,
+                serviceCategories: item.serviceCategories || []
+              }))
             : [{
                 item: '',
                 type: '',
@@ -1476,40 +1609,14 @@ const getMaterialCategories = (unitId, item = null) => {
       return 0;
     });
 
-    const pphNonFinalTotal = computed(() => {
-      return form.value.use_pph_non_final ? (totalInvoice.value * 0.025) : 0; // 2.5% of total amount
-    });
 
-    const netProfit = computed(() => {
-      // Net profit calculation remains based on the total amount and profit margin percentage
-      const totalHarga = form.value.purchase_materials.reduce((sum, item) => {
-        const harga = typeof item.harga === 'string' ? parseFloat(item.harga.replace(/\./g, '')) : item.harga;
-        return sum + (item.qty * harga);
-      }, 0);
-      return totalHarga * profitMargin.value;
-    });
-
-    const pphFinal = computed(() => {
-      return form.value.use_pph_final ? (totalInvoice.value * 0.03) : 0; // 3% of total amount
-    });
-
-    const ppnAmount = computed(() => {
-      return form.value.use_ppn ? (totalInvoice.value * 0.11) : 0; // 11% PPN
-    });
-
-    const totalTax = computed(() => {
-      // Summing up the applied taxes
-      let total = 0;
-      if (form.value.use_ppn) total += ppnAmount.value;
-      if (form.value.use_pph_non_final) total -= pphNonFinalTotal.value; // PPH is a reduction
-      if (form.value.use_pph_final) total -= pphFinal.value; // PPH is a reduction
-      return total;
-    });
-
-    const totalWithTax = computed(() => {
-      // Grand Total = Subtotal + PPN - PPH Non Final - PPH Final
-      return totalInvoice.value + totalTax.value;
-    });
+    // === Pajak & Grand Total: SAMA DENGAN BACKEND ===
+    // Semua dihitung dari subtotal (totalInvoice)
+    const ppnAmount = computed(() => form.value.use_ppn ? (totalInvoice.value * 0.11) : 0);
+const pphNonFinalTotal = computed(() => form.value.use_pph_non_final ? (totalInvoice.value * 0.025) : 0);
+const pphFinal = computed(() => form.value.use_pph_final ? (totalInvoice.value * 0.03) : 0);
+const grandTotal = computed(() => totalInvoice.value + ppnAmount.value - pphNonFinalTotal.value - pphFinal.value);
+const totalWithTax = grandTotal;
 
     const fetchPaymentMethods = async () => {
       try {
@@ -1538,12 +1645,7 @@ const getMaterialCategories = (unitId, item = null) => {
         const icon = h(CIcon, { icon: icons.cilPencil, size: 'sm' });
         render(icon, el);
       });
-      document.querySelectorAll('.cicon-trash').forEach(el => {
-        const icon = h(CIcon, { icon: icons.cilTrash, size: 'sm' });
-        render(icon, el);
-      });
-    };
-
+};
     const initDataTable = () => {
       if ($.fn.DataTable.isDataTable(invoiceTableRef.value)) {
         $(invoiceTableRef.value).DataTable().clear().destroy();
@@ -1785,105 +1887,30 @@ const getMaterialCategories = (unitId, item = null) => {
       return invoices.value.some(inv => inv.use_pph_final)
     })
 
-    const profitMargin = computed(() => {
-  let margin = 0.3;
-  if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null) {
-    const parsed = parseFloat(form.value.profit_margin_percentage);
-    if (!isNaN(parsed)) margin = parsed / 100;
-  }
-  return margin;
-});
-
+// Dinamis: label margin sesuai form
 const profitMarginLabel = computed(() => {
   const margin = form.value?.profit_margin_percentage;
-  if (margin !== undefined && margin !== null) {
+  if (margin !== undefined && margin !== null && margin !== '') {
     return `${parseFloat(margin)}%`;
   }
   return '30%';
 });
 
-    return {
-      invoiceTableRef,
-      selectedProject,
-      projects,
-      units,
-      categories,
-      mereks,
-      serviceCategories,
-      showModal,
-      loading,
-      error,
-      form,
-      modalTitle,
-      totalInvoice,
-      totalPaid,
-      totalUnpaid,
-      overallStatus,
-      openModal,
-      closeModal,
-      addItem,
-      removeItem,
-      handleSubmit,
-      filterByProject,
-      changeProject,
-      deleteInvoice,
-      formatCurrency,
-      calculateTotalHarga,
-      isServiceUnit,
-      handleUnitChange,
-      isServiceType,
-      getServiceCategoriesByUnit,
-      getMaterialCategories,
-      handleCategoryChange,
-      onHargaInput,
-      validateForm,
-      pphNonFinalBarang,
-      pphNonFinalJasa,
-      pphNonFinalTotal,
-      netProfit,
-      pphFinal,
-      totalTax,
-      ppnAmount,
-      totalWithTax,
-      paymentMethods,
-      fetchPaymentMethods,
-      showBrandModal,
-      newBrandName,
-      openBrandModal,
-      closeBrandModal,
-      handleMerekChange,
-      saveNewBrand,
-      saveNewBrandInline,
-      cancelNewBrand,
-      totalIncome,
-      totalExpenses,
-      profitLoss,
-      profitLossPercentage,
-      projectTotalIncome,
-      modalMode,
-      editingId,
-      addTermin,
-      onTerminNilaiInput,
-      totalTerminAmount,
-      totalTerminDP,
-      totalTerminPelunasan,
-      terminSummary,
-      calculateTerminValues,
-      goToTermin,
-      anggaranProyek,
-      filterPpn,
-      filterPphNonFinal,
-      filterPphFinal,
-      filteredPpnAmount,
-      filteredPphNonFinalAmount,
-      filteredPphFinalAmount,
-      filteredGrandTotal,
-      canUsePpn,
-      canUsePphNonFinal,
-      canUsePphFinal
-    }
+
+// Dinamis: perhitungan laba bersih pakai margin dari form
+const netProfit = computed(() => {
+  let margin = 0.3;
+  if (
+    form.value &&
+    form.value.profit_margin_percentage !== undefined &&
+    form.value.profit_margin_percentage !== null &&
+    form.value.profit_margin_percentage !== ''
+  ) {
+    const parsed = parseFloat(form.value.profit_margin_percentage);
+    if (!isNaN(parsed)) margin = parsed / 100;
   }
-}
+  return totalInvoice.value * margin;
+});
 </script>
 
 <style scoped>

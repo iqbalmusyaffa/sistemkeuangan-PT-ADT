@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('email')->nullable();
             $table->string('lokasi')->nullable();
             $table->decimal('anggaran_kontrak', 18, 2);
+            $table->decimal('budget_adjusted', 15, 2)->nullable();
             $table->date('tanggal_mulai')->nullable();
             $table->date('tanggal_selesai')->nullable();
             $table->enum('status_project', ['Berjalan', 'Selesai', 'Batal'])->default('Berjalan');

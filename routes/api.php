@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
     Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
     Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
+    Route::get('termins-datatables', [App\Http\Controllers\Api\TerminController::class, 'datatables']);
 
     // Additional proyek-related routes
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);

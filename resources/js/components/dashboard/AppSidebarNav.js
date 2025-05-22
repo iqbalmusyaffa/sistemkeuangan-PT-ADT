@@ -1,7 +1,8 @@
 import { defineComponent, h, onMounted, ref, resolveComponent } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+import { faExternalLinkAlt } from '@fortawesome/free-solid-svg-icons'
 
-import { cilExternalLink } from '@coreui/icons'
 import { CBadge, CSidebarNav, CNavItem, CNavGroup, CNavTitle } from '@coreui/vue'
 import nav from '@/_nav.js'
 
@@ -46,6 +47,7 @@ const AppSidebarNav = defineComponent({
     CNavItem,
     CNavGroup,
     CNavTitle,
+    FontAwesomeIcon,
   },
   setup() {
     const route = useRoute()
@@ -91,9 +93,9 @@ const AppSidebarNav = defineComponent({
           },
           {
             togglerContent: () => [
-              h(resolveComponent('CIcon'), {
-                customClassName: 'nav-icon',
-                name: item.icon,
+              h(FontAwesomeIcon, {
+                class: 'nav-icon',
+                icon: item.icon,
               }),
               item.name,
             ],
@@ -113,17 +115,18 @@ const AppSidebarNav = defineComponent({
           {
             default: () => [
               item.icon
-                ? h(resolveComponent('CIcon'), {
-                    customClassName: 'nav-icon',
-                    name: item.icon,
+                ? h(FontAwesomeIcon, {
+                    class: 'nav-icon',
+                    icon: item.icon,
                   })
                 : h('span', { class: 'nav-icon' }, h('span', { class: 'nav-icon-bullet' })),
               item.name,
-              item.external && h(resolveComponent('CIcon'), {
-                class: 'ms-2',
-                name: 'cil-external-link',
-                size: 'sm'
-              }),
+              item.external &&
+                h(FontAwesomeIcon, {
+                  class: 'ms-2',
+                  icon: 'fa-external-link-alt',
+                  size: 'sm',
+                }),
               item.badge &&
                 h(
                   CBadge,
@@ -161,9 +164,9 @@ const AppSidebarNav = defineComponent({
                   {
                     default: () => [
                       item.icon
-                        ? h(resolveComponent('CIcon'), {
-                            customClassName: 'nav-icon',
-                            name: item.icon,
+                        ? h(FontAwesomeIcon, {
+                            class: 'nav-icon',
+                            icon: item.icon,
                           })
                         : h('span', { class: 'nav-icon' }, h('span', { class: 'nav-icon-bullet' })),
                       item.name,

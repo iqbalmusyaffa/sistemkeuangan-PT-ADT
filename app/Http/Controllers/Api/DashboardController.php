@@ -54,9 +54,10 @@ class DashboardController extends Controller
             'piutang_count' => $piutangCount,
             'kasbon_count' => $kasbonCount,
             'invoice_count' => $invoiceCount,
-            'users_per_bulan' => $users,
-            'income_per_bulan' => $income,
-            'expense_per_bulan' => $expense,
+            // Ganti key agar konsisten dengan frontend dan chartSummary
+            'users' => $users,
+            'income' => $income,
+            'expense' => $expense,
         ]);
     }
 
@@ -98,4 +99,4 @@ class DashboardController extends Controller
             'expense' => $expense,
         ]);
     }
-} 
+}

@@ -227,4 +227,16 @@ class Expense extends Model
             'invoice_id' => $termin->invoice_id // Connect the expense to the invoice
         ]);
     }
+
+    public function getSourceInstanceAttribute()
+    {
+        if (!$this->source_type || !$this->source_id) return null;
+        if ($this->source_type === 'termin') {
+            return Termin::find($this->source_id);
+        }
+        if ($this->source_type === 'purchase') {
+            return Purchasematerial::find($this->source_id);
+        }
+        return null;
+    }
 }

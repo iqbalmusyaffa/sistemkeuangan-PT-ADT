@@ -12,6 +12,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { CWidgetStatsA } from '@coreui/vue'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 
 const progressGroupExample1 = [
   { title: 'Monday', value1: 34, value2: 78 },
@@ -23,19 +24,20 @@ const progressGroupExample1 = [
   { title: 'Sunday', value1: 9, value2: 69 },
 ]
 const progressGroupExample2 = [
-  { title: 'Male', icon: 'cil-user', value: 53 },
-  { title: 'Female', icon: 'cil-user-female', value: 43 },
+  { title: 'Male', icon: ['fas', 'male'], value: 53 },
+  { title: 'Female', icon: ['fas', 'female'], value: 43 },
 ]
+
 const progressGroupExample3 = [
   {
     title: 'Organic Search',
-    icon: 'cib-google',
+    icon: ['fab', 'google'],
     percent: 56,
     value: '191,235',
   },
-  { title: 'Facebook', icon: 'cib-facebook', percent: 15, value: '51,223' },
-  { title: 'Twitter', icon: 'cib-twitter', percent: 11, value: '37,564' },
-  { title: 'LinkedIn', icon: 'cib-linkedin', percent: 8, value: '27,319' },
+  { title: 'Facebook', icon: ['fab', 'facebook'], percent: 15, value: '51,223' },
+  { title: 'Twitter', icon: ['fab', 'twitter'], percent: 11, value: '37,564' },
+  { title: 'LinkedIn', icon: ['fab', 'linkedin'], percent: 8, value: '27,319' },
 ]
 const tableExample = [
   {
@@ -45,13 +47,13 @@ const tableExample = [
       new: true,
       registered: 'Jan 1, 2023',
     },
-    country: { name: 'USA', flag: 'cif-us' },
+    country: { name: 'USA', flag: ['fas', 'flag'] },
     usage: {
       value: 50,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'success',
     },
-    payment: { name: 'Mastercard', icon: 'cib-cc-mastercard' },
+    payment: { name: 'Mastercard', icon: ['fab', 'cc-mastercard'] },
     activity: '10 sec ago',
   },
   {
@@ -61,37 +63,37 @@ const tableExample = [
       new: false,
       registered: 'Jan 1, 2023',
     },
-    country: { name: 'Brazil', flag: 'cif-br' },
+    country: { name: 'Brazil', flag: ['fas', 'flag'] },
     usage: {
       value: 22,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'info',
     },
-    payment: { name: 'Visa', icon: 'cib-cc-visa' },
+    payment: { name: 'Visa', icon: ['fab', 'cc-visa'] },
     activity: '5 minutes ago',
   },
   {
     avatar: { src: avatar3, status: 'warning' },
     user: { name: 'Quintin Ed', new: true, registered: 'Jan 1, 2023' },
-    country: { name: 'India', flag: 'cif-in' },
+    country: { name: 'India', flag: ['fas', 'flag'] },
     usage: {
       value: 74,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'warning',
     },
-    payment: { name: 'Stripe', icon: 'cib-cc-stripe' },
+    payment: { name: 'Stripe', icon: ['fab', 'cc-stripe'] },
     activity: '1 hour ago',
   },
   {
     avatar: { src: avatar4, status: 'secondary' },
     user: { name: 'Enéas Kwadwo', new: true, registered: 'Jan 1, 2023' },
-    country: { name: 'France', flag: 'cif-fr' },
+    country: { name: 'France', flag: ['fas', 'flag-france'] },
     usage: {
       value: 98,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'danger',
     },
-    payment: { name: 'PayPal', icon: 'cib-cc-paypal' },
+    payment: { name: 'PayPal', icon: ['fab', 'cc-paypal'] },
     activity: 'Last month',
   },
   {
@@ -101,13 +103,13 @@ const tableExample = [
       new: true,
       registered: 'Jan 1, 2023',
     },
-    country: { name: 'Spain', flag: 'cif-es' },
+    country: { name: 'Spain', flag: ['fas', 'flag-spain'] },
     usage: {
       value: 22,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'primary',
     },
-    payment: { name: 'Google Wallet', icon: 'cib-cc-apple-pay' },
+    payment: { name: 'Google Wallet', icon: ['fab', 'google-wallet'] },
     activity: 'Last week',
   },
   {
@@ -117,13 +119,13 @@ const tableExample = [
       new: true,
       registered: 'Jan 1, 2023',
     },
-    country: { name: 'Poland', flag: 'cif-pl' },
+    country: { name: 'Poland', flag: ['fas', 'flag-poland'] },
     usage: {
       value: 43,
       period: 'Jun 11, 2023 - Jul 10, 2023',
       color: 'success',
     },
-    payment: { name: 'Amex', icon: 'cib-cc-amex' },
+    payment: { name: 'Amex', icon: ['fab', 'cc-amex'] },
     activity: 'Last week',
   },
 ]
@@ -190,7 +192,7 @@ onMounted(async () => {
               </CCol>
               <CCol :sm="7" class="d-none d-md-block">
                 <CButton color="primary" class="float-end">
-                  <CIcon icon="cil-cloud-download" />
+                  <FontAwesomeIcon :icon="['fas', 'cloud-download-alt']" />
                 </CButton>
                 <CButtonGroup
                   class="float-end me-3"
@@ -249,7 +251,7 @@ onMounted(async () => {
       <CCol :md="12">
         <CCard class="mb-4">
           <CCardHeader>
-            <CIcon icon="cil-history" /> Activity Log
+            <FontAwesomeIcon :icon="['fas', 'history']" /> Activity Log
           </CCardHeader>
           <CCardBody>
             <div class="table-responsive">
@@ -345,7 +347,7 @@ onMounted(async () => {
                 <hr class="mt-0" />
                 <div v-for="item in progressGroupExample2" :key="item.title" class="progress-group">
                   <div class="progress-group-header">
-                    <CIcon :icon="item.icon" class="me-2" size="lg" />
+                    <FontAwesomeIcon :icon="item.icon" class="me-2" size="lg" />
                     <span class="title">{{ item.title }}</span>
                     <span class="ms-auto fw-semibold">{{ item.value }}%</span>
                   </div>
@@ -358,7 +360,7 @@ onMounted(async () => {
 
                 <div v-for="item in progressGroupExample3" :key="item.title" class="progress-group">
                   <div class="progress-group-header">
-                    <CIcon :icon="item.icon" class="me-2" size="lg" />
+                    <FontAwesomeIcon :icon="item.icon" class="me-2" size="lg" />
                     <span class="title">{{ item.title }}</span>
                     <span class="ms-auto fw-semibold">
                       {{ item.value }}
@@ -376,7 +378,7 @@ onMounted(async () => {
               <CTableHead class="text-nowrap">
                 <CTableRow>
                   <CTableHeaderCell class="bg-body-secondary text-center">
-                    <CIcon name="cil-people" />
+                    <FontAwesomeIcon :icon="['fas', 'users']" />
                   </CTableHeaderCell>
                   <CTableHeaderCell class="bg-body-secondary"> User </CTableHeaderCell>
                   <CTableHeaderCell class="bg-body-secondary text-center">
@@ -402,7 +404,7 @@ onMounted(async () => {
                     </div>
                   </CTableDataCell>
                   <CTableDataCell class="text-center">
-                    <CIcon size="xl" :name="item.country.flag" :title="item.country.name" />
+                    <FontAwesomeIcon :icon="item.country.flag" size="xl" :title="item.country.name" />
                   </CTableDataCell>
                   <CTableDataCell>
                     <div class="d-flex justify-content-between align-items-baseline">
@@ -414,7 +416,7 @@ onMounted(async () => {
                     <CProgress thin :color="item.usage.color" :value="item.usage.value" />
                   </CTableDataCell>
                   <CTableDataCell class="text-center">
-                    <CIcon size="xl" :name="item.payment.icon" />
+                    <FontAwesomeIcon :icon="item.payment.icon" size="xl" />
                   </CTableDataCell>
                   <CTableDataCell>
                     <div class="small text-body-secondary">Last login</div>

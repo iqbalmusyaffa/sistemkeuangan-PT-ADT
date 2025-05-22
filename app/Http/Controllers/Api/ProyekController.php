@@ -13,12 +13,22 @@ class ProyekController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $proyeks = Proyek::with('expenses')->get()->map(function ($proyek) {
-                $proyek->total_expenses = $proyek->expenses()->sum('amount');
-                return $proyek;
+            $query = Proyek::query();
+
+            if ($request->filter === 'above_100m') {
+                $query->above100Million();
+            } elseif ($request->filter === 'below_100m') {
+                $query->below100Million();
+            }
+
+            $proyeks = $query->withSum('expenses', 'amount')->get();
+
+            // Tambahkan atribut total_expenses untuk frontend
+            $proyeks->each(function ($proyek) {
+                $proyek->total_expenses = $proyek->expenses_sum_amount;
             });
 
             return response()->json([
@@ -33,6 +43,7 @@ class ProyekController extends Controller
             ], 500);
         }
     }
+
 
     /**
      * Store a newly created resource in storage.
@@ -188,26 +199,58 @@ class ProyekController extends Controller
      * Project summary endpoint
      */
    public function summary($id)
-    {
-        try {
-            $totalIncome = \App\Models\Income::where('proyek_id', $id)
-                ->where('status', 'Diterima')
-                ->sum('jumlah');
-            $totalExpenses = \App\Models\Expense::where('proyek_id', $id)
-                ->where('status', 'Lunas')
-                ->sum('amount');
+{
+    try {
+        $proyek = Proyek::findOrFail($id);
 
-            return response()->json([
-                'total_income' => $totalIncome,
-                'total_expenses' => $totalExpenses,
-                'profit_loss' => $totalIncome - $totalExpenses,
-            ], 200);
-        } catch (Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mengambil summary proyek.',
-                'details' => $e->getMessage(),
-            ], 500);
-        }
+        $totalIncome = \App\Models\Income::where('proyek_id', $id)
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+
+        $totalExpenses = \App\Models\Expense::where('proyek_id', $id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
+
+        return response()->json([
+            'total_income' => $totalIncome,
+            'total_expenses' => $totalExpenses,
+            'anggaran_kontrak' => $proyek->anggaran_kontrak,
+            'sisa_anggaran' => $proyek->anggaran_kontrak - $totalExpenses,
+            'persentase_penggunaan' => $proyek->anggaran_kontrak > 0
+                ? round(($totalExpenses / $proyek->anggaran_kontrak) * 100, 2)
+                : 0,
+            'profit_loss' => $totalIncome - $totalExpenses,
+        ], 200);
+    } catch (ModelNotFoundException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Proyek tidak ditemukan.',
+            'details' => $e->getMessage(),
+        ], 404);
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal mengambil summary proyek.',
+            'details' => $e->getMessage(),
+        ], 500);
     }
+}
+
+/**
+ * Reduce project budget
+ */
+public function reduceBudget(Request $request, $id)
+{
+    $validated = $request->validate([
+        'amount' => 'required|numeric|min:0',
+    ]);
+
+    $proyek = Proyek::findOrFail($id);
+
+    if ($proyek->reduceBudget($validated['amount'])) {
+        return response()->json(['message' => 'Budget reduced successfully'], 200);
+    }
+
+    return response()->json(['message' => 'Insufficient budget'], 400);
+}
 }

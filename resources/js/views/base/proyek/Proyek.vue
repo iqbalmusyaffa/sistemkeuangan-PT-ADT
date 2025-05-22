@@ -145,6 +145,8 @@
   const router = useRouter();
   const displayAnggaranKontrak = ref('');
   const showBudgetWarning = ref(false);
+  const filterAbove100M = ref(false);
+  const filterBelow100M = ref(false);
 
   function formatRupiah(value) {
     if (!value) return '';
@@ -154,15 +156,15 @@
     return Number(String(value).replace(/\./g, ''));
   }
 
-  watch(() => form.value.anggaran_kontrak, (val) => {
-    displayAnggaranKontrak.value = formatRupiah(val);
-  });
+watch(() => form.value.anggaran_kontrak, (val) => {
+  displayAnggaranKontrak.value = formatRupiah(val);
+});
 
-  function onAnggaranInput(e) {
-    const raw = e.target.value.replace(/[^0-9]/g, '');
-    form.value.anggaran_kontrak = Number(raw);
-    displayAnggaranKontrak.value = formatRupiah(raw);
-  }
+function onAnggaranInput(e) {
+  const raw = e.target.value.replace(/[^0-9]/g, '');
+  form.value.anggaran_kontrak = Number(raw);
+  // hapus update displayAnggaranKontrak di sini
+}
 
   const fetchProyeks = async () => {
     loading.value = true;
@@ -248,7 +250,7 @@
             const formattedAmount = `Rp ${new Intl.NumberFormat('id-ID').format(data)}`;
             const totalExpenses = row.total_expenses || 0;
             const percentage = (totalExpenses / data) * 100;
-            
+
             if (percentage >= 80) {
               return `<div class="text-warning">
                 <CIcon icon="cil-warning" /> ${formattedAmount}
@@ -360,6 +362,7 @@
   const closeModal = () => {
     showModal.value = false;
     showBudgetWarning.value = false;
+    resetForm();
     form.value = {
       nama_customer: "",
       nama_proyek: "",
@@ -383,6 +386,22 @@
       const proyek = proyeks.value.find((p) => p.id == editingId.value);
       totalPengeluaran = proyek?.total_expenses || 0;
     }
+    const resetForm = () => {
+    form.value = {
+        nama_customer: "",
+        nama_proyek: "",
+        nama_perusahaan: "",
+        alamat: "",
+        no_telp: "",
+        email: "",
+        lokasi: "",
+        tanggal_mulai: "",
+        tanggal_selesai: "",
+        anggaran_kontrak: 0,
+        status_project: "Berjalan",
+        deskripsi: ""
+    };
+    };
 
     // Tampilkan peringatan jika anggaran lebih kecil dari pengeluaran
     if (form.value.anggaran_kontrak < totalPengeluaran) {
@@ -446,6 +465,32 @@
         title: "Error",
         text: err.response?.data?.message || "Terjadi kesalahan saat menghapus data"
       });
+    }
+  };
+
+  const resetOtherFilters = (type) => {
+    if (type === 'above') {
+      filterBelow100M.value = false;
+    } else if (type === 'below') {
+      filterAbove100M.value = false;
+    }
+    fetchProyeks();
+  };
+
+  const filterProyek = async (filter) => {
+    loading.value = true;
+    try {
+      const response = await axios.get('/api/proyeks', { params: { filter } });
+      proyeks.value = response.data.data;
+    } catch (err) {
+      console.error('Error filtering projects:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Gagal memuat data proyek',
+      });
+    } finally {
+      loading.value = false;
     }
   };
 

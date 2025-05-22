@@ -66,7 +66,8 @@ class Termin extends Model
         'remaining_total',
         'is_dp',
         'is_pelunasan',
-        'is_termin_bertahap'
+        'is_termin_bertahap',
+        'approved_by_name' // Tambahkan atribut approved_by_name
     ];
     public $isUpdatingStatus = false;
 
@@ -106,7 +107,7 @@ class Termin extends Model
         return $this->belongsTo(User::class, 'dibayar_oleh');
     }
 
-    public function approvedByUser()
+    public function approvedBy()
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
@@ -169,6 +170,11 @@ class Termin extends Model
     public function getIsTerminBertahapAttribute(): bool
     {
         return $this->jenis_termin === 'Termin Bertahap';
+    }
+
+    public function getApprovedByNameAttribute()
+    {
+        return $this->approved_by ? optional($this->approvedBy)->name : null;
     }
 
     // UPDATE STATUS BERDASARKAN PEMBAYARAN
@@ -417,12 +423,12 @@ class Termin extends Model
                 return $pm ? $pm->id : null;
             };
 
-            $kategoriId = $this->invoice && $this->invoice->kategori_id 
-                ? $this->invoice->kategori_id 
+            $kategoriId = $this->invoice && $this->invoice->kategori_id
+                ? $this->invoice->kategori_id
                 : $getDefaultKategoriId();
 
-            $paymentMethodId = $this->invoice && $this->invoice->payment_method_id 
-                ? $this->invoice->payment_method_id 
+            $paymentMethodId = $this->invoice && $this->invoice->payment_method_id
+                ? $this->invoice->payment_method_id
                 : $getDefaultPaymentMethodId();
 
             if (!$kategoriId || !$paymentMethodId) {

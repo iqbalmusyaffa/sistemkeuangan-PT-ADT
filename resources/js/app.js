@@ -9,20 +9,19 @@ import App from './App.vue';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min';
 import '@coreui/coreui/dist/css/coreui.min.css';
-import '@coreui/icons/css/all.min.css';
 
-// Import CoreUI Vue and Icon components
+// Import CoreUI Vue
 import CoreuiVue from '@coreui/vue';
-import CIcon from '@coreui/icons-vue';
 
-// Import icons set
-import { iconsSet as icons } from '@/assets/icons';
+// Import Font Awesome
+import { library } from '@fortawesome/fontawesome-svg-core';
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
+import { fas } from '@fortawesome/free-solid-svg-icons';
+import { fab } from '@fortawesome/free-brands-svg-icons';
+import '@fortawesome/fontawesome-free/css/all.min.css';
 
-// Import custom components
-// import DocsComponents from '@/components/dashboard/DocsComponents.vue';
-// import DocsExample from '@/components/dashboard/DocsExample.vue';
-// import DocsIcons from '@/components/dashboard/DocsIcons.vue';
-// import DocsReference from '@/components/dashboard/DocsReference.vue';
+// Add all solid and brand icons to the library
+library.add(fas, fab);
 
 // Import router configuration
 import router from './routes/route';
@@ -37,15 +36,8 @@ app.use(pinia);
 // Use CoreUI Vue
 app.use(CoreuiVue);
 
-// Provide icons globally
-app.provide('icons', icons);
-
-// Register global components
-app.component('CIcon', CIcon);
-// app.component('DocsComponents', DocsComponents);
-// app.component('DocsExample', DocsExample);
-// app.component('DocsIcons', DocsIcons);
-// app.component('DocsReference', DocsReference);
+// Register FontAwesomeIcon as a global component
+app.component('FontAwesomeIcon', FontAwesomeIcon);
 
 // Use router for navigation
 app.use(router);

@@ -148,11 +148,12 @@ class ExpenseController extends Controller
                     }
                 }
             } else {
-                // Validasi anggaran proyek
+                // Validasi anggaran proyek (gunakan budget_adjusted jika ada)
                 $proyek = \App\Models\Proyek::find($validated['proyek_id']);
                 if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
                     $totalExpenses = $proyek->expenses()->sum('amount');
-                    $sisaAnggaran = $proyek->anggaran_kontrak - $totalExpenses;
+                    $sisaAnggaran = $currentBudget - $totalExpenses;
                     if ($validated['amount'] > $sisaAnggaran) {
                         return response()->json([
                             'status' => 'error',
@@ -271,6 +272,7 @@ class ExpenseController extends Controller
 
             DB::beginTransaction();
 
+
             // Validasi khusus jika source_type diisi
             if (!empty($validated['source_type']) && !empty($validated['source_id'])) {
                 if ($validated['source_type'] === 'termin') {
@@ -303,11 +305,12 @@ class ExpenseController extends Controller
                     }
                 }
             } else if (!empty($validated['proyek_id'])) {
-                // Validasi anggaran proyek
+                // Validasi anggaran proyek (gunakan budget_adjusted jika ada)
                 $proyek = \App\Models\Proyek::find($validated['proyek_id']);
                 if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
                     $totalExpenses = $proyek->expenses()->sum('amount');
-                    $sisaAnggaran = $proyek->anggaran_kontrak - $totalExpenses;
+                    $sisaAnggaran = $currentBudget - $totalExpenses;
                     if ($validated['amount'] > $sisaAnggaran) {
                         return response()->json([
                             'status' => 'error',
@@ -316,6 +319,9 @@ class ExpenseController extends Controller
                     }
                 }
             }
+
+            // Update data expense
+            $expense->update($validated);
 
             // Load necessary relations
             $expense->load(['proyek', 'category', 'serviceCategory']);
@@ -424,6 +430,17 @@ class ExpenseController extends Controller
         try {
             DB::beginTransaction();
 
+
+            // Validasi budget proyek sebelum create expense
+            $proyek = $purchase->proyek;
+            if ($proyek) {
+                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                $totalExpenses = $proyek->expenses()->sum('amount');
+                if (($totalExpenses + $purchase->total_harga) > $currentBudget) {
+                    throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
+                }
+            }
+
             $expense = Expense::createFromPurchase($purchase);
 
             DB::commit();
@@ -446,6 +463,17 @@ class ExpenseController extends Controller
     {
         try {
             DB::beginTransaction();
+
+
+            // Validasi budget proyek sebelum create expense
+            $proyek = $termin->proyek;
+            if ($proyek) {
+                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                $totalExpenses = $proyek->expenses()->sum('amount');
+                if (($totalExpenses + $termin->nilai_termin) > $currentBudget) {
+                    throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
+                }
+            }
 
             $expense = Expense::createFromTermin($termin);
 
@@ -493,6 +521,17 @@ class ExpenseController extends Controller
             DB::beginTransaction();
 
             // Create expense record
+
+            // Validasi budget proyek sebelum create expense
+            $proyek = $invoice->proyek;
+            if ($proyek) {
+                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                $totalExpenses = $proyek->expenses()->sum('amount');
+                if (($totalExpenses + $invoice->total_amount) > $currentBudget) {
+                    throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
+                }
+            }
+
             $expense = new Expense();
             $expense->proyek_id = $invoice->proyek_id;
             $expense->category_id = $invoice->kategori_id;

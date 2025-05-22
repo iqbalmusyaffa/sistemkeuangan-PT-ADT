@@ -50,6 +50,8 @@ class InvoiceController extends Controller
    public function store(Request $request)
 {
     try {
+        \Log::info('Incoming request data for creating invoice:', $request->all());
+
         $validated = $request->validate([
             'proyek_id' => 'required|exists:proyeks,id',
             'payment_method_id' => 'required|exists:payment_methods,id',
@@ -74,9 +76,20 @@ class InvoiceController extends Controller
             'expenses.*.category_id' => 'required_with:expenses|exists:kategoris,id',
         ]);
 
-        DB::beginTransaction();
+        // Log validated data for debugging
+        \Log::info('Validated invoice data:', $validated);
 
-        $totalAmount = collect($validated['purchase_materials'])->sum(fn($m) => $m['qty'] * $m['harga']);
+        // Extra validation: log and throw if any qty/harga is 0 or not numeric
+        foreach ($validated['purchase_materials'] as $idx => $mat) {
+            if (!is_numeric($mat['qty']) || !is_numeric($mat['harga']) || $mat['qty'] <= 0 || $mat['harga'] <= 0) {
+                \Log::warning('Invalid qty/harga in purchase_materials', ['index' => $idx, 'item' => $mat]);
+                throw new \Exception('Qty dan harga pada item ke-' . ($idx+1) . ' harus lebih dari 0 dan valid.');
+            }
+        }
+
+        DB::beginTransaction();
+        $materials = collect($validated['purchase_materials'])->map(...);
+        $totalAmount = collect($materials)->sum('total_harga');
 
         $lastInvoice = Invoice::latest()->first();
         $invoiceNumber = 'INV-' . date('Ymd') . '-' . str_pad(($lastInvoice ? $lastInvoice->id + 1 : 1), 4, '0', STR_PAD_LEFT);
@@ -95,6 +108,31 @@ class InvoiceController extends Controller
             'amount_paid' => 0,
             'profit_margin_percentage' => 30.00,
         ]);
+        // Kurangi anggaran proyek jika ada dan bukan untuk pembelian material
+        $isMaterialPurchase = collect($validated['purchase_materials'])->every(function ($material) {
+            return $material['type'] === 'material';
+        });
+
+        if (!$isMaterialPurchase) {
+            $proyek = Proyek::find($validated['proyek_id']);
+            if ($proyek) {
+                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                $remainingBudget = $currentBudget - $totalAmount;
+
+                if ($remainingBudget < 0) {
+                    throw new \Exception('Anggaran proyek tidak mencukupi untuk membuat invoice ini.');
+                }
+
+                // pengurangan budget dilakukan setelah validasi
+                if ($proyek->budget_adjusted !== null) {
+                    $proyek->budget_adjusted = $remainingBudget;
+                } else {
+                    $proyek->anggaran_kontrak = $remainingBudget;
+                }
+
+                $proyek->save();
+            }
+        }
 
         $materials = collect($validated['purchase_materials'])->map(function ($material) use ($invoice) {
             $unit = \App\Models\Unit::find($material['unit_id']);
@@ -106,28 +144,33 @@ class InvoiceController extends Controller
             if (!$isService && (empty($material['category_id']) || empty($material['merek_id']))) {
                 throw new \Exception('Category and Brand are required for non-service items');
             }
-
+            $totalHarga = $material['qty'] * $material['harga'];
             return [
-                'invoice_id' => $invoice->id,
-                'proyek_id' => $invoice->proyek_id,
-                'item' => $material['item'],
-                'type' => $material['type'],
-                'qty' => $material['qty'],
-                'harga' => $material['harga'],
-                'unit_id' => $material['unit_id'],
-                'category_id' => $material['category_id'] ?? null,
-                'service_category_id' => $material['service_category_id'] ?? null,
-                'merek_id' => $material['merek_id'] ?? null,
-                'total_harga' => $material['qty'] * $material['harga'],
-                'is_service' => $isService,
-                'created_at' => now(),
-                'updated_at' => now(),
+            'invoice_id' => $invoice->id,
+            'proyek_id' => $invoice->proyek_id,
+            'item' => $material['item'],
+            'type' => $material['type'],
+            'qty' => $material['qty'],
+            'harga' => $material['harga'],
+            'unit_id' => $material['unit_id'],
+            'category_id' => $material['category_id'] ?? null,
+            'service_category_id' => $material['service_category_id'] ?? null,
+            'merek_id' => $material['merek_id'] ?? null,
+            'total_harga' => $totalHarga,
+            'is_service' => $isService,
+            'created_at' => now(),
+            'updated_at' => now(),
             ];
         })->toArray();
-
+        // Hitung totalAmount dari data yang sudah bersih:
+        $totalAmount = collect($materials)->sum('total_harga');
         foreach (array_chunk($materials, 100) as $chunk) {
             PurchaseMaterial::insert($chunk);
         }
+
+        // Setelah insert, update total_amount invoice dari database agar benar
+        $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
+        $invoice->save();
 
         if (!empty($validated['expenses'])) {
             $expenses = collect($validated['expenses'])->map(function ($expense) use ($invoice) {
@@ -152,6 +195,8 @@ class InvoiceController extends Controller
         $invoice->calculateAllFinancialValues();
 
         DB::commit();
+
+        \Log::info('Invoice created successfully:', ['invoice_id' => $invoice->id]);
 
         return response()->json([
             'status' => 'success',

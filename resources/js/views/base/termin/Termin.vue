@@ -56,16 +56,16 @@
             <CCol md="3">
               <CCard class="bg-primary text-white">
                 <CCardBody>
-                  <h6>Total Termin</h6>
-                  <h3>{{ formatCurrency(summary.value.total_termin) }}</h3>
-                </CCardBody>
+  <h6>Total Termin</h6>
+  <h3>{{ formatCurrency(summary.total_termin) }}</h3>
+</CCardBody>
               </CCard>
             </CCol>
             <CCol md="3">
               <CCard class="bg-success text-white">
                 <CCardBody>
                   <h6>Total DP</h6>
-                  <h3>{{ formatCurrency(summary.value.total_dp) }}</h3>
+                  <h3>{{ formatCurrency(summary.total_dp) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -73,7 +73,7 @@
               <CCard class="bg-info text-white">
                 <CCardBody>
                   <h6>Total Pelunasan</h6>
-                  <h3>{{ formatCurrency(summary.value.total_pelunasan) }}</h3>
+                  <h3>{{ formatCurrency(summary.total_pelunasan) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -81,7 +81,7 @@
               <CCard class="bg-warning text-white">
                 <CCardBody>
                   <h6>Sisa Belum Dibayar</h6>
-                  <h3>{{ formatCurrency(summary.value.sisa_belum_dibayar) }}</h3>
+                  <h3>{{ formatCurrency(summary.sisa_belum_dibayar) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -168,45 +168,72 @@
           </div>
         </CCardBody>
       </CCard>
-      <CCard v-if="selectedProject && selectedInvoice" class="mt-3">
-        <CCardHeader>
-          <strong>Ringkasan Termin</strong>
-        </CCardHeader>
-        <CCardBody>
-          <CRow>
-            <CCol md="6">
-              <CTable>
-                <CTableBody>
-                  <CTableRow>
-                    <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalInvoiceAmount) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total Nilai Termin</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalTermin) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total DP</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalDP) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total Pelunasan</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalPelunasan) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total Dibayar</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalPaid) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow class="fw-bold">
-                    <CTableDataCell>Sisa Belum Dibayar</CTableDataCell>
-                    <CTableDataCell class="text-end">{{ formatCurrency(totalRemaining) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableBody>
-              </CTable>
-            </CCol>
-          </CRow>
-        </CCardBody>
-      </CCard>
+<CCard v-if="selectedProject && selectedInvoice" class="mt-3">
+  <CCardHeader>
+    <strong>Ringkasan Termin</strong>
+  </CCardHeader>
+  <CCardBody>
+    <CRow>
+      <CCol md="6">
+        <CTable>
+          <CTableBody>
+            <CTableRow v-if="taxLabel">
+              <CTableDataCell>{{ taxLabel }}</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(taxValue) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow v-if="selectedInvoiceObj && selectedInvoiceObj.pph_final_amount">
+  <CTableDataCell>PPH Final</CTableDataCell>
+  <CTableDataCell class="text-end">{{ formatCurrency(selectedInvoiceObj.pph_final_amount) }}</CTableDataCell>
+</CTableRow>
+            <CTableRow v-if="ppnLabel">
+              <CTableDataCell>{{ ppnLabel }}</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(ppnValue) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow v-if="!taxLabel && !ppnLabel">
+              <CTableDataCell>Tanpa Pajak</CTableDataCell>
+              <CTableDataCell class="text-end">0</CTableDataCell>
+            </CTableRow>
+
+          </CTableBody>
+        </CTable>
+      </CCol>
+      <CCol md="6">
+        <CTable>
+          <CTableBody>
+            <CTableRow>
+              <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalInvoiceAmount) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Nilai Termin</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalTermin) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total DP</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalDP) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Pelunasan</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalPelunasan) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Dibayar</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalPaid) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow class="fw-bold">
+              <CTableDataCell>Sisa Belum Dibayar</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalRemaining) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow class="fw-bold">
+              <CTableDataCell>Nilai Akhir Setelah Pajak</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(finalAmount) }}</CTableDataCell>
+            </CTableRow>
+          </CTableBody>
+        </CTable>
+      </CCol>
+    </CRow>
+  </CCardBody>
+</CCard>
     </CCol>
 
     <!-- Modal Form -->
@@ -294,10 +321,8 @@
               <div class="input-group">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
-                  type="text"
-                  :value="formatCurrency(form.remaining_dp !== undefined ? form.remaining_dp : 0)"
-                  id="remaining_dp"
                   readonly
+                  :value="formatCurrency(sisaDP)"
                 />
               </div>
             </CCol>
@@ -332,7 +357,7 @@
               <span class="input-group-text">Rp</span>
               <CFormInput
                 type="text"
-                :value="formatCurrency(form.remaining_total !== undefined ? form.remaining_total : 0)"
+                :value="formatCurrency(sisaTerminBelumDibayar)"
                 id="remaining_total"
                 readonly
               />
@@ -547,14 +572,17 @@ const manualNilaiDP = ref(false);
 
 const totalDpSudahDibayar = ref(0);
 
-const summary = ref({
+
+// Default summary object to avoid undefined error
+const defaultSummary = {
   total_termin: 0,
   total_dp: 0,
   total_pelunasan: 0,
   total_pembelian_material: 0,
   total_dp_sudah_dibayar: 0,
   sisa_belum_dibayar: 0
-});
+};
+const summary = ref({ ...defaultSummary });
 
 // Computed Properties
 const groupedProjects = computed(() => {
@@ -589,26 +617,26 @@ const totalKeseluruhan = computed(() => {
 });
 
 const selectedInvoiceObj = computed(() => {
-  return invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  return invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
 });
 
 const totalInvoiceAmount = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.total_amount) : 0;
 });
 
 const totalInvoicePaid = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.amount_paid) : 0;
 });
 
 const totalInvoiceUnpaid = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.total_amount) - Number(inv.amount_paid) : 0;
 });
 
 const modalInvoiceObj = computed(() => {
-  return invoices.value.find(inv => String(inv.id) === String(form.value.invoice_id));
+  return invoices.value.find(inv => `${inv.id}` === `${form.value.invoice_id}`);
 });
 
 const modalTotalInvoiceAmount = computed(() => {
@@ -628,6 +656,62 @@ const totalPaid = computed(() => {
 
 const totalRemaining = computed(() => {
   return totalTermin.value - (totalPurchases.value + totalDpSudahDibayar.value);
+});
+
+const taxLabel = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return null;
+  if (inv.use_pph_non_final) return 'PPH Non Final';
+  if (inv.use_pph_final) return 'PPH Final';
+  return null;
+});
+const taxValue = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return 0;
+  if (inv.use_pph_non_final) return inv.pph_non_final_amount || 0;
+  if (inv.use_pph_final) return inv.pph_final_amount || 0;
+  return 0;
+});
+const ppnLabel = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (inv && inv.use_ppn) return 'PPN (11%)';
+  return null;
+});
+const ppnValue = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (inv && inv.use_ppn) return inv.ppn_amount || 0;
+  return 0;
+});
+const finalAmount = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return 0;
+  // Nilai akhir = total_amount + ppn - pph
+  let total = Number(inv.total_amount) || 0;
+  if (inv.use_ppn) total += Number(inv.ppn_amount) || 0;
+  if (inv.use_pph_non_final) total -= Number(inv.pph_non_final_amount) || 0;
+  if (inv.use_pph_final) total -= Number(inv.pph_final_amount) || 0;
+  return total;
+});
+
+// Tambahkan computed properties untuk menghitung nilai DP, pelunasan, dan sisa pembayaran secara dinamis
+const nilaiDP = computed(() => {
+  return (form.value.persentase_dp / 100) * form.value.nilai_termin;
+});
+
+const nilaiPelunasan = computed(() => {
+  return form.value.nilai_termin - nilaiDP.value;
+});
+
+const sisaDP = computed(() => {
+  return form.value.status_termin === 'Belum Dibayar' ? nilaiDP.value : 0;
+});
+
+const sisaPelunasan = computed(() => {
+  return form.value.status_termin === 'Belum Dibayar' ? nilaiPelunasan.value : 0;
+});
+
+const sisaTerminBelumDibayar = computed(() => {
+  return sisaDP.value + sisaPelunasan.value;
 });
 
 // Helper Methods
@@ -820,7 +904,7 @@ const fetchPurchases = async (proyekId, invoiceId) => {
       allPurchases = response.data.data;
     }
 
-    purchases.value = allPurchases.filter(p => String(p.invoice_id) === String(invoiceId));
+    purchases.value = allPurchases.filter(p => `${p.invoice_id}` === `${invoiceId}`);
 
     const invoiceTotal = Number(invoiceResponse.data.total_amount) || 0;
     form.value.nilai_termin = invoiceTotal;
@@ -838,6 +922,25 @@ const fetchPurchases = async (proyekId, invoiceId) => {
       text: error.value
     });
   }
+};
+
+// Fungsi utilitas untuk menghitung total DP, pelunasan, dan termin yang dibayar
+const hitungTerminDibayar = (list, excludeId = null) => {
+  const filtered = excludeId ? list.filter(t => t.id !== excludeId) : list;
+  let dp = 0, pelunasan = 0, total = 0;
+  filtered.forEach(t => {
+    const nilaiDP = Number(t.nilai_dp) || 0;
+    const nilaiPelunasan = Number(t.nilai_pelunasan) || 0;
+    if (t.status_termin === 'DP Dibayar') {
+      dp += nilaiDP;
+      total += nilaiDP;
+    } else if (t.status_termin === 'Lunas') {
+      dp += nilaiDP;
+      pelunasan += nilaiPelunasan;
+      total += nilaiDP + nilaiPelunasan;
+    }
+  });
+  return { dp, pelunasan, total };
 };
 
 // Event Handlers
@@ -860,7 +963,7 @@ const openModal = async (mode, termin = null) => {
   if (mode === "edit" && termin) {
     // Hitung sisa DP, pelunasan, total (kecuali termin yang sedang diedit)
     const invoiceId = termin.invoice_id || selectedInvoice.value;
-    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId) && t.id !== termin.id);
+    const filteredTermins = termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}` && t.id !== termin.id);
     const totalDPdibayar = filteredTermins.reduce((sum, t) => {
       if (t.status_termin === 'DP Dibayar') {
         return sum + (Number(t.nilai_dp) || 0);
@@ -878,13 +981,29 @@ const openModal = async (mode, termin = null) => {
       }
       return sum;
     }, 0);
-    const invoice = invoices.value.find(inv => String(inv.id) === String(invoiceId));
-    const invoiceTotal = invoice && invoice.total_amount ? Number(invoice.total_amount) : 0;
+    const invoice = invoices.value.find(inv => `${inv.id}` === `${invoiceId}`);
+    // Logic: jika ada pajak (ppn/pph), ambil dari finalAmount, jika tidak ada pajak ambil dari total_amount
+    let nilaiAkhirSetelahPajak = 0;
+    if (invoice) {
+      const usePpn = invoice.use_ppn;
+      const usePphNonFinal = invoice.use_pph_non_final;
+      const usePphFinal = invoice.use_pph_final;
+      if (usePpn || usePphNonFinal || usePphFinal) {
+        // Hitung manual sesuai logic finalAmount
+        let total = Number(invoice.total_amount) || 0;
+        if (usePpn) total += Number(invoice?.ppn_amount ?? 0);
+        if (usePphNonFinal) total -= Number(invoice.pph_non_final_amount) || 0;
+        if (usePphFinal) total -= Number(invoice.pph_final_amount) || 0;
+        nilaiAkhirSetelahPajak = total;
+      } else {
+        nilaiAkhirSetelahPajak = Number(invoice.total_amount) || 0;
+      }
+    }
     form.value = {
       proyek_id: termin.proyek_id || selectedProject.value,
-      invoice_id: String(invoiceId || ""),
+      invoice_id: `${invoiceId || ""}`,
       nama_termin: termin.nama_termin,
-      nilai_termin: termin.nilai_termin,
+      nilai_termin: nilaiAkhirSetelahPajak,
       persentase_dp: termin.persentase_dp,
       nilai_dp: termin.nilai_dp,
       nilai_pelunasan: termin.nilai_pelunasan,
@@ -894,48 +1013,47 @@ const openModal = async (mode, termin = null) => {
       tanggal_pelunasan_dibayar: termin.tanggal_pelunasan_dibayar ? new Date(termin.tanggal_pelunasan_dibayar).toISOString().split('T')[0] : "",
       status_termin: termin.status_termin,
       keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(termin.nilai_termin),
+      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
       displayNilaiDP: formatCurrency(termin.nilai_dp),
       displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan),
       bukti_pembayaran: null,
       bukti_pembayaran_url: termin.bukti_pembayaran_url || null,
-      remaining_dp: Math.max((Number(termin.nilai_dp) || 0) - totalDPdibayar, 0),
-      remaining_pelunasan: Math.max((Number(termin.nilai_pelunasan) || 0) - totalPelunasanDibayar, 0),
-      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+      remaining_dp: Math.max(totalDPdibayar - (Number(termin.nilai_dp) || 0), 0),
+      remaining_pelunasan: Math.max(totalPelunasanDibayar - (Number(termin.nilai_pelunasan) || 0), 0),
+      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
     };
     editingId.value = termin.id;
     modalTitle.value = "Edit Termin";
     modalButtonText.value = "Update";
   } else {
-    const selectedInvoiceObj = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
-    const nilai_termin = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    const selectedInvoiceObj = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
     const today = new Date().toISOString().split('T')[0];
     // Hitung sisa DP, pelunasan, total dari termin yang sudah dibayar pada invoice ini
     const invoiceId = selectedInvoice.value;
-    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId));
-    const totalDPdibayar = filteredTermins.reduce((sum, t) => {
-      if (t.status_termin === 'DP Dibayar') {
-        return sum + (Number(t.nilai_dp) || 0);
-      } else if (t.status_termin === 'Lunas') {
-        return sum + (Number(t.nilai_dp) || 0);
+    const { dp: totalDPdibayar, pelunasan: totalPelunasanDibayar, total: totalTerminDibayar } =
+      hitungTerminDibayar(termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}`));
+
+    // Logic: jika ada pajak (ppn/pph), ambil dari finalAmount, jika tidak ada pajak ambil dari total_amount
+    let nilaiAkhirSetelahPajak = 0;
+    if (selectedInvoiceObj) {
+      const usePpn = selectedInvoiceObj.use_ppn;
+      const usePphNonFinal = selectedInvoiceObj.use_pph_non_final;
+      const usePphFinal = selectedInvoiceObj.use_pph_final;
+      if (usePpn || usePphNonFinal || usePphFinal) {
+        let total = Number(selectedInvoiceObj.total_amount) || 0;
+        if (usePpn) total += Number(selectedInvoiceObj.ppn_amount) || 0;
+        if (usePphNonFinal) total -= Number(selectedInvoiceObj.pph_non_final_amount) || 0;
+        if (usePphFinal) total -= Number(selectedInvoiceObj.pph_final_amount) || 0;
+        nilaiAkhirSetelahPajak = total;
+      } else {
+        nilaiAkhirSetelahPajak = Number(selectedInvoiceObj.total_amount) || 0;
       }
-      return sum;
-    }, 0);
-    const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (t.status_termin === 'Lunas' ? Number(t.nilai_pelunasan) || 0 : 0), 0);
-    const totalTerminDibayar = filteredTermins.reduce((sum, t) => {
-      if (t.status_termin === 'DP Dibayar') {
-        return sum + (Number(t.nilai_dp) || 0);
-      } else if (t.status_termin === 'Lunas') {
-        return sum + (Number(t.nilai_dp) || 0) + (Number(t.nilai_pelunasan) || 0);
-      }
-      return sum;
-    }, 0);
-    const invoiceTotal = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    }
     form.value = {
       proyek_id: selectedProject.value,
-      invoice_id: String(selectedInvoice.value || ""),
+      invoice_id: `${selectedInvoice.value || ""}`,
       nama_termin: "",
-      nilai_termin: nilai_termin,
+      nilai_termin: nilaiAkhirSetelahPajak,
       persentase_dp: 0,
       nilai_dp: 0,
       nilai_pelunasan: 0,
@@ -945,14 +1063,14 @@ const openModal = async (mode, termin = null) => {
       tanggal_pelunasan_dibayar: "",
       status_termin: "Belum Dibayar",
       keterangan: "",
-      displayNilaiTermin: formatCurrency(nilai_termin),
+      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
       displayNilaiDP: formatCurrency(0),
       displayNilaiPelunasan: formatCurrency(0),
       bukti_pembayaran: null,
       bukti_pembayaran_url: null,
       remaining_dp: 0,
       remaining_pelunasan: 0,
-      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
     };
     editingId.value = null;
     modalTitle.value = "Tambah Termin";
@@ -1247,7 +1365,7 @@ watch(termins, async (newVal) => {
     ordering: true,
     pageLength: 10,
     language: {
-      url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json'
+    //   url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json'
     }
   });
 });
@@ -1490,7 +1608,10 @@ const fetchSummary = async () => {
       },
       headers: { Authorization: `Bearer ${token}` }
     });
-    summary.value = response.data;
+      summary.value = {
+        ...defaultSummary,
+        ...(response.data || {})
+      };
   } catch (err) {
     summary.value = {
       total_termin: 0,

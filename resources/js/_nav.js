@@ -3,7 +3,7 @@ export default [
     component: 'CNavItem',
     name: 'Dashboard',
     to: '/dashboard',
-    icon: 'cil-speedometer', // Lebih representatif untuk dashboard
+    icon: 'fa-tachometer-alt', // Valid Font Awesome icon
     badge: {
       color: 'primary',
     },
@@ -18,20 +18,20 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Manajemen Pengguna',
-    icon: 'cil-people',
+    icon: 'fa-users', // Valid Font Awesome icon
     roles: ['superadmin'],
     items: [
       {
         component: 'CNavItem',
         name: 'Data User',
         to: '/user',
-        icon: 'cil-user',
+        icon: 'fa-user', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Log Aktivitas',
         to: '/activitylog',
-        icon: 'cil-history',
+        icon: 'fa-history', // Valid Font Awesome icon
       },
     ],
   },
@@ -45,14 +45,14 @@ export default [
     component: 'CNavItem',
     name: 'Kategori',
     to: '/kategori',
-    icon: 'cil-list-rich',
+    icon: 'fa-list', // Valid Font Awesome icon
     roles: ['superadmin'],
   },
   {
     component: 'CNavItem',
     name: 'Kategori Jasa',
     to: '/kategorijasa',
-    icon: 'cil-layers',
+    icon: 'fa-layer-group', // Valid Font Awesome icon
     roles: ['superadmin'],
   },
 
@@ -63,19 +63,19 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Data Umum',
-    icon: 'cil-library',
+    icon: 'fa-book', // Valid Font Awesome icon
     items: [
       {
         component: 'CNavItem',
         name: 'Merek',
         to: '/base/merek',
-        icon: 'cil-tags',
+        icon: 'fa-tags', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Unit',
         to: '/base/unit',
-        icon: 'cil-puzzle',
+        icon: 'fa-puzzle-piece', // Valid Font Awesome icon
       },
     ],
   },
@@ -83,13 +83,13 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Proyek',
-    icon: 'cil-factory',
+    icon: 'fa-industry', // Valid Font Awesome icon
     items: [
       {
         component: 'CNavItem',
         name: 'Proyek',
         to: '/base/proyek/proyek',
-        icon: 'cil-briefcase',
+        icon: 'fa-briefcase', // Valid Font Awesome icon
       },
     ],
   },
@@ -97,13 +97,13 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Pembelian',
-    icon: 'cil-cart',
+    icon: 'fa-shopping-cart', // Valid Font Awesome icon
     items: [
       {
         component: 'CNavItem',
         name: 'Pembelian Material',
         to: '/base/purchase/pembelian',
-        icon: 'cil-basket',
+        icon: 'fa-shopping-basket', // Valid Font Awesome icon
       },
     ],
   },
@@ -111,49 +111,43 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Transaksi Keuangan',
-    icon: 'cil-cash',
+    icon: 'fa-money-bill-wave', // Valid Font Awesome icon
     items: [
       {
         component: 'CNavItem',
         name: 'Pencatatan Pemasukan',
         to: '/base/pemasukan',
-        icon: 'cil-arrow-circle-top',
+        icon: 'fa-arrow-up', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Pencatatan Pengeluaran',
         to: '/base/pengeluaran',
-        icon: 'cil-arrow-circle-bottom',
+        icon: 'fa-arrow-down', // Valid Font Awesome icon
       },
-    //   {
-    //     component: 'CNavItem',
-    //     name: 'Pencatatan Piutang',
-    //     to: '/base/piutang',
-    //     icon: 'cil-money',
-    //   },
       {
         component: 'CNavItem',
         name: 'Kasbon',
         to: '/base/kasbon',
-        icon: 'cil-wallet',
+        icon: 'fa-wallet', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Termin',
         to: '/base/termin/termin',
-        icon: 'cil-calendar',
+        icon: 'fa-calendar-alt', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Pencatatan Invoice',
         to: '/base/invoice',
-        icon: 'cil-file',
+        icon: 'fa-file-alt', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Metode Pembayaran',
         to: '/base/paymentmethod',
-        icon: 'cil-credit-card',
+        icon: 'fa-credit-card', // Valid Font Awesome icon
       },
     ],
   },
@@ -165,20 +159,20 @@ export default [
   {
     component: 'CNavGroup',
     name: 'Akun',
-    icon: 'cil-user',
+    icon: 'fa-user', // Valid Font Awesome icon
     items: [
       {
         component: 'CNavItem',
         name: 'Profile',
         to: '/profile',
-        icon: 'cil-user',
+        icon: 'fa-user', // Valid Font Awesome icon
       },
       {
         component: 'CNavItem',
         name: 'Settings',
         to: '/settings',
-        icon: 'cil-settings',
+        icon: 'fa-cogs', // Valid Font Awesome icon
       },
     ],
   },
-]
+];

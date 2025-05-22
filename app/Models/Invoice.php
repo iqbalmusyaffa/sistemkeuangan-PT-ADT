@@ -108,6 +108,13 @@ class Invoice extends Model
         // update status attribute in memory
         $this->attributes['status'] = $this->determineStatus();
     }
+    public function updateAmountPaid($value)
+    {
+        $this->amount_paid = $value;
+        $this->status = $this->determineStatus();
+        $this->save();
+    }
+
 
     public function updateStatusFromTermins(): void
     {
@@ -230,6 +237,7 @@ class Invoice extends Model
         $invoiceIncome = $this->total_income;
         $otherIncomes = Income::where('proyek_id', $this->proyek_id)
             ->whereNull('invoice_id')
+            ->where('status', 'Diterima')
             ->sum('jumlah');
 
         return $invoiceIncome + $otherIncomes;
@@ -237,7 +245,9 @@ class Invoice extends Model
 
     public function getTotalProjectExpensesAttribute(): float
     {
-        return Expense::where('proyek_id', $this->proyek_id)->sum('amount');
+        return Expense::where('proyek_id', $this->proyek_id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
     }
 
     public function getProjectProfitLossAttribute(): float
@@ -255,7 +265,7 @@ class Invoice extends Model
     public function calculateProfitLoss(): void
     {
         $this->total_income = $this->net_profit ?? 0;
-        $this->total_expenses = $this->expenses()->sum('amount');
+        $this->total_expenses = $this->expenses()->where('status', 'Lunas')->sum('amount');
         $this->profit_loss = $this->total_income - $this->total_expenses;
         $this->profit_loss_percentage = $this->total_expenses > 0
             ? ($this->profit_loss / $this->total_expenses) * 100
@@ -265,18 +275,25 @@ class Invoice extends Model
 
     public function calculateTaxes(): void
     {
-        // Calculate PPH Non Final (2.5% of total_amount)
-        $this->pph_non_final_amount = $this->use_pph_non_final ? ($this->total_amount * 0.025) : 0;
+        // Subtotal barang & jasa
+        $subtotalBarang = $this->purchaseMaterials()->where('is_service', false)->sum('total_harga');
+        $subtotalJasa = $this->purchaseMaterials()->where('is_service', true)->sum('total_harga');
 
-        // Calculate PPH Final (3% of total_amount)
-        $this->pph_final_amount = $this->use_pph_final ? ($this->total_amount * 0.03) : 0;
+        // PPH Non Final: barang 1.5%, jasa 2%
+        $this->pph_non_final_amount = $this->use_pph_non_final
+            ? ($subtotalBarang * 0.015) + ($subtotalJasa * 0.02)
+            : 0;
 
-        // Calculate PPN (11% of total_amount)
+        // PPH Final: 22% dari laba bersih
+        $this->pph_final_amount = $this->use_pph_final
+            ? (($this->net_profit ?? 0) * 0.22)
+            : 0;
+
+        // PPN (11% dari total_amount)
         $this->ppn_amount = $this->use_ppn ? ($this->total_amount * 0.11) : 0;
 
-        // Note: pph_barang_amount and pph_jasa_amount are no longer used for the total PPH Non Final calculation with flat rates.
-        $this->pph_barang_amount = 0;
-        $this->pph_jasa_amount = 0;
+        $this->pph_barang_amount = $subtotalBarang * 0.015;
+        $this->pph_jasa_amount = $subtotalJasa * 0.02;
 
         $this->save();
     }
@@ -349,5 +366,24 @@ class Invoice extends Model
             'total_expense_amount' => $totalExpenseAmount,
             'remaining_payment' => $totalTerminAmount - $totalPaidTermin - $totalDPPaid,
         ];
+    }
+
+    // Kurangi anggaran proyek berdasarkan nilai termin
+    public function reduceProjectBudget(float $terminValue): bool
+    {
+        $proyek = $this->proyek;
+
+        if ($proyek->budget_adjusted !== null) {
+            if ($proyek->budget_adjusted < $terminValue) {
+                throw new \Exception('Anggaran proyek tidak mencukupi untuk nilai termin ini.');
+            }
+            $proyek->budget_adjusted -= $terminValue;
+        } else {
+            if ($proyek->anggaran_kontrak < $terminValue) {
+                throw new \Exception('Anggaran proyek tidak mencukupi untuk nilai termin ini.');
+            }
+            $proyek->anggaran_kontrak -= $terminValue;
+        }
+        return $proyek->save();
     }
 }

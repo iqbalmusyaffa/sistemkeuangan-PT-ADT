@@ -79,15 +79,54 @@ class TerminController extends Controller
                 'bukti_pembayaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048'
             ]);
 
-            // Validate invoice exists and belongs to project
+            // Tambahkan validasi untuk memastikan termin_ke tidak duplikat
+            $existingTermin = Termin::where('proyek_id', $validated['proyek_id'])
+                ->where('invoice_id', $validated['invoice_id'])
+                ->where('termin_ke', $request->input('termin_ke'))
+                ->first();
+
+            if ($existingTermin) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Termin ke-' . $request->input('termin_ke') . ' sudah ada untuk proyek dan invoice ini.'
+                ], 422);
+            }
+
+            // Validasi bahwa tanggal_dp dan tanggal_pelunasan tidak bertentangan dengan termin lain
+            $conflictingTermin = Termin::where('proyek_id', $validated['proyek_id'])
+                ->where(function ($query) use ($validated) {
+                    $query->whereBetween('tanggal_dp', [$validated['tanggal_dp'], $validated['tanggal_pelunasan']])
+                          ->orWhereBetween('tanggal_pelunasan', [$validated['tanggal_dp'], $validated['tanggal_pelunasan']]);
+                })
+                ->first();
+
+            if ($conflictingTermin) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tanggal DP atau pelunasan bertentangan dengan termin lain.'
+                ], 422);
+            }
+
+            // Gunakan relasi Eloquent untuk memvalidasi invoice terkait proyek
             $invoice = Invoice::where('id', $validated['invoice_id'])
-                ->where('proyek_id', $validated['proyek_id'])
+                ->whereHas('proyek', function ($query) use ($validated) {
+                    $query->where('id', $validated['proyek_id']);
+                })
                 ->first();
 
             if (!$invoice) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Invoice tidak ditemukan atau tidak terkait dengan proyek ini'
+                    'message' => 'Invoice tidak ditemukan atau tidak terkait dengan proyek ini.'
+                ], 422);
+            }
+
+            // Validasi bahwa anggaran proyek mencukupi untuk nilai termin (pakai current_budget)
+            $proyek = Proyek::findOrFail($validated['proyek_id']);
+            if ($proyek->current_budget < $validated['nilai_termin']) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anggaran proyek tidak mencukupi untuk nilai termin ini.'
                 ], 422);
             }
 
@@ -119,7 +158,7 @@ class TerminController extends Controller
             // Filter only fillable fields
             $allowed = (new \App\Models\Termin)->getFillable();
             $terminDataFiltered = array_intersect_key($terminData, array_flip($allowed));
-            
+
             // Create termin
             $termin = Termin::create($terminDataFiltered);
 
@@ -128,15 +167,25 @@ class TerminController extends Controller
                 $file = $request->file('bukti_pembayaran');
                 $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
                 $path = 'uploads/bukti_pembayaran/' . $filename;
-                
+
                 if (!Storage::exists('uploads/bukti_pembayaran')) {
                     Storage::makeDirectory('uploads/bukti_pembayaran');
                 }
-                
+
                 if ($file->storeAs('uploads/bukti_pembayaran', $filename)) {
                     $termin->bukti_pembayaran = $path;
                     $termin->save();
                 }
+            }
+
+            // Kurangi anggaran proyek melalui invoice
+            try {
+                $invoice->reduceProjectBudget($validated['nilai_termin']);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage()
+                ], 422);
             }
 
             // Update invoice status
@@ -149,7 +198,34 @@ class TerminController extends Controller
                         'invoice_id' => $termin->invoice_id,
                         'termin_id' => $termin->id
                     ]);
-                    // Don't throw the error, just log it
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Gagal memperbarui status invoice. Silakan coba lagi.'
+                    ], 500);
+                }
+            }
+
+            // Otomatis buat expense & income jika status_termin bukan 'Belum Dibayar'
+            if ($termin->status_termin === 'DP Dibayar' || $termin->status_termin === 'Lunas') {
+                // Buat expense termin
+                $termin->createExpense();
+
+                // Buat income DP jika DP Dibayar
+                if ($termin->status_termin === 'DP Dibayar') {
+                    $termin->recordIncome('dp', $termin->nilai_dp, $termin->tanggal_dp ?? now());
+                }
+                // Buat income pelunasan jika Lunas
+                if ($termin->status_termin === 'Lunas') {
+                    // Buat income DP jika ada tanggal_dp_dibayar dan nilai_dp > 0 dan income DP belum pernah dibuat
+                    if ($termin->nilai_dp > 0 && $termin->tanggal_dp) {
+                        // Cek income DP sudah ada atau belum
+                        $dpIncomeExists = $termin->incomes()->where('type', 'dp')->exists();
+                        if (!$dpIncomeExists) {
+                            $termin->recordIncome('dp', $termin->nilai_dp, $termin->tanggal_dp);
+                        }
+                    }
+                    // Income pelunasan
+                    $termin->recordIncome('pelunasan', $termin->nilai_pelunasan, $termin->tanggal_pelunasan ?? now());
                 }
             }
 
@@ -190,6 +266,7 @@ class TerminController extends Controller
     // Update termin, dengan validasi dan cek batas anggaran
     public function update(Request $request, Termin $termin)
     {
+
         $validated = $request->validate([
             'proyek_id' => 'required|exists:proyeks,id',
             'invoice_id' => 'required|exists:invoices,id',
@@ -205,6 +282,15 @@ class TerminController extends Controller
             'bukti_pembayaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
             'dibayar_oleh' => 'nullable|exists:users,id'
         ]);
+
+        // Validasi anggaran proyek (pakai current_budget)
+        $proyek = \App\Models\Proyek::findOrFail($validated['proyek_id']);
+        if ($proyek->current_budget < $validated['nilai_termin']) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Anggaran proyek tidak mencukupi untuk nilai termin ini.'
+            ], 422);
+        }
 
         // Handle file bukti pembayaran saat update
         if ($request->hasFile('bukti_pembayaran')) {
@@ -557,5 +643,18 @@ class TerminController extends Controller
             'total_dp_sudah_dibayar' => $totalDpSudahDibayar,
             'sisa_belum_dibayar' => $sisaBelumDibayar,
         ]);
+    }
+
+    // Tambahkan di dalam class TerminController
+    public function datatables(Request $request)
+    {
+        $query = Termin::with(['proyek', 'invoice']);
+        if ($request->has('proyek_id')) {
+            $query->where('proyek_id', $request->proyek_id);
+        }
+        if ($request->has('invoice_id')) {
+            $query->where('invoice_id', $request->invoice_id);
+        }
+        return \Yajra\DataTables\Facades\DataTables::of($query)->toJson();
     }
 }
