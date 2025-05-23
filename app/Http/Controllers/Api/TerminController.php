@@ -24,29 +24,43 @@ class TerminController extends Controller
     public function index(Request $request)
     {
         try {
-        $query = Termin::with(['proyek', 'invoice'])->orderBy('created_at', 'desc');
+            $columns = [
+                'nama_termin', 'jenis_termin', 'termin_ke', 'nilai_termin', 'persentase_dp',
+                'nilai_dp', 'nilai_pelunasan', 'tanggal_dp', 'tanggal_pelunasan',
+                'status_termin', 'status_approval', 'approved_by_name', 'approved_at',
+                'tanggal_dp_dibayar', 'tanggal_pelunasan_dibayar', 'keterangan', 'created_at', 'updated_at'
+            ];
 
-        if ($request->has('invoice_id')) {
-            $query->where('invoice_id', $request->invoice_id);
-        }
+            $query = Termin::query();
 
-        if ($request->has('proyek_id')) {
-            $query->where('proyek_id', $request->proyek_id);
-        }
-
-        $termins = $query->get();
-
-            if ($termins->isEmpty()) {
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'Tidak ada data termin',
-                    'data' => []
-                ]);
+            // Search filter
+            if ($request->has('search') && $request->search['value']) {
+                $search = $request->search['value'];
+                $query->where(function ($q) use ($search, $columns) {
+                    foreach ($columns as $column) {
+                        $q->orWhere($column, 'like', "%$search%");
+                    }
+                });
             }
 
+            // Sorting
+            if ($request->has('order')) {
+                $orderColumn = $columns[$request->order[0]['column']];
+                $orderDir = $request->order[0]['dir'];
+                $query->orderBy($orderColumn, $orderDir);
+            }
+
+            // Pagination
+            $start = $request->start ?? 0;
+            $length = $request->length ?? 10;
+            $totalRecords = $query->count();
+            $data = $query->offset($start)->limit($length)->get();
+
             return response()->json([
-                'status' => 'success',
-                'data' => TerminResource::collection($termins)
+                'draw' => $request->draw,
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $totalRecords,
+                'data' => $data
             ]);
         } catch (\Exception $e) {
             \Log::error('Error in TerminController@index: ' . $e->getMessage());

@@ -98,10 +98,10 @@
           <!-- Data Table for Invoices -->
           <div v-if="selectedProject">
             <div class="mb-3">
-              <div class="alert alert-info">
+              <!-- <div class="alert alert-info">
                 <strong>Total Pemasukan Proyek:</strong>
                 <span class="float-end">{{ formatCurrency(projectTotalIncome) }}</span>
-              </div>
+              </div> -->
             </div>
             <div style="overflow-x:auto; width:100%">
               <table ref="invoiceTableRef" class="display nowrap w-100"></table>
@@ -126,10 +126,12 @@
                             </tr>
                             <tr v-if="filterPphNonFinal">
                               <td>PPH Non Final (2.5%)</td>
-                              <td class="text-end">-{{ formatCurrency(filteredPphNonFinalAmount) }}</td>
+                              <td class="text-end">
+                                -{{ formatCurrency(filteredPphNonFinalTotal) }}
+                              </td>
                             </tr>
                             <tr v-if="filterPphFinal">
-                              <td>PPH Final (3%)</td>
+                              <td>PPH Final (22%)</td>
                               <td class="text-end">-{{ formatCurrency(filteredPphFinalAmount) }}</td>
                             </tr>
                             <tr>
@@ -508,9 +510,9 @@
   </CRow>
 
   <!-- Tampilkan pesan jika hasil filter kosong -->
-  <div v-if="filteredInvoices.length === 0" class="alert alert-info">
+  <!-- <div v-if="filteredInvoices.length === 0" class="alert alert-info">
     Tidak ada invoice sesuai filter.
-  </div>
+  </div> -->
 </template>
 
 <script setup>
@@ -624,36 +626,55 @@ const subtotalBarang = computed(() => {
 
 // Duplicated subtotalJasa removed. Sudah dideklarasikan di atas.
 
-// PPN 11% dari subtotal
-const filteredPpnAmount = computed(() => filterPpn.value ? totalInvoice.value * 0.11 : 0);
 
-// PPH Non Final: barang 1.5%, jasa 2%
+// === USE BACKEND FIELDS FOR SUMMARY ===
+// Sum of backend-calculated fields for filtered invoices
+const filteredPpnAmount = computed(() => {
+  return filteredInvoices.value.reduce((sum, inv) => sum + (Number(inv.ppn_amount) || 0), 0);
+});
+
 const filteredPphNonFinalAmount = computed(() => {
-  if (!filterPphNonFinal.value) return 0;
-  return (subtotalBarang.value * 0.015) + (subtotalJasa.value * 0.02);
+  return filteredInvoices.value.reduce((sum, inv) => sum + (Number(inv.pph_non_final_amount) || 0), 0);
 });
 
-// Laba bersih (net profit) sesuai margin
-// const filteredNetProfit = computed(() => {
-//   let margin = 0.3;
-//   if (form.value && form.value.profit_margin_percentage !== undefined && form.value.profit_margin_percentage !== null && form.value.profit_margin_percentage !== '') {
-//     const parsed = parseFloat(form.value.profit_margin_percentage);
-//     if (!isNaN(parsed)) margin = parsed / 100;
-//   }
-//   return totalInvoice.value * margin;
-// });
-
-// PPH Final: 22% dari laba bersih
 const filteredPphFinalAmount = computed(() => {
-  if (!filterPphFinal.value) return 0;
-  // Use netProfit instead of filteredNetProfit to avoid reference error
-  return netProfit.value * 0.22;
+  return filteredInvoices.value.reduce((sum, inv) => sum + (Number(inv.pph_final_amount) || 0), 0);
 });
 
-// Grand total: subtotal + ppn - pph_non_final - pph_final
-const filteredGrandTotal = computed(() =>
-  totalInvoice.value + filteredPpnAmount.value - filteredPphNonFinalAmount.value - filteredPphFinalAmount.value
-);
+const filteredGrandTotal = computed(() => {
+  console.log("Filter PPN Aktif:", filterPpn.value);
+  console.log("Filter PPH Non Final Aktif:", filterPphNonFinal.value);
+  console.log("Filter PPH Final Aktif:", filterPphFinal.value);
+
+  // Hitung subtotal terlebih dahulu
+  const subtotal = filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
+  console.log("Subtotal:", subtotal);
+
+  // Jika tidak ada filter yang dicentang, tampilkan subtotal
+  if (!filterPpn.value && !filterPphNonFinal.value && !filterPphFinal.value) {
+    console.log("Grand Total (tanpa filter):", subtotal);
+    return subtotal;
+  }
+
+  // Hitung nilai pajak berdasarkan filter yang dicentang
+  const ppnAmount = filterPpn.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.ppn_amount || 0), 0) : 0;
+  const pphNonFinalAmount = filterPphNonFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_non_final_amount || 0), 0) : 0;
+  const pphFinalAmount = filterPphFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_final_amount || 0), 0) : 0;
+
+  console.log("PPN Amount:", ppnAmount);
+  console.log("PPH Non Final Amount:", pphNonFinalAmount);
+  console.log("PPH Final Amount:", pphFinalAmount);
+
+  // Hitung Grand Total dengan penyesuaian pajak
+  const grandTotal = subtotal + ppnAmount - pphNonFinalAmount - pphFinalAmount;
+  console.log("Grand Total (dengan filter):", grandTotal);
+  return grandTotal;
+});
+
+// Watchers to ensure reactivity
+watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
+  console.log("Filters or invoices changed. Recalculating Grand Total...");
+});
 
 
     const isServiceUnit = computed(() => {
@@ -1244,6 +1265,14 @@ const filteredGrandTotal = computed(() =>
           delete payload.termins;
         }
 
+        // Ensure expense_id is set correctly in purchase_materials
+        form.value.purchase_materials.forEach(item => {
+          if (!item.expense_id) {
+            // Set a default expense_id or fetch it dynamically if needed
+            item.expense_id = null; // Replace this with actual logic to fetch expense_id
+          }
+        });
+
         const response = await axios.post('/api/invoices', payload, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1813,6 +1842,8 @@ const totalWithTax = grandTotal;
         window.removeEventListener('termin-updated', handler)
       })
       fetchProjectSummary();
+      console.log('Initial purchase_materials:', form.value.purchase_materials);
+      console.log('Initial invoices:', invoices.value);
     })
 
     watch(selectedProject, (newValue) => {
@@ -1910,6 +1941,37 @@ const netProfit = computed(() => {
     if (!isNaN(parsed)) margin = parsed / 100;
   }
   return totalInvoice.value * margin;
+});
+
+// Debugging: log subtotalBarang, subtotalJasa, filteredInvoices
+console.log('subtotalBarang:', subtotalBarang.value);
+console.log('subtotalJasa:', subtotalJasa.value);
+console.log('filteredInvoices:', filteredInvoices.value);
+
+watch([subtotalBarang, subtotalJasa, filterPphNonFinal], () => {
+  console.log('Updated subtotalBarang:', subtotalBarang.value);
+  console.log('Updated subtotalJasa:', subtotalJasa.value);
+  console.log('filterPphNonFinal:', filterPphNonFinal.value);
+});
+
+// Total PPH Non Final dari result API untuk summary (bukan dari form)
+const filteredPphNonFinalTotal = computed(() => {
+  return filteredInvoices.value.reduce((sum, inv) => sum + (Number(inv.pph_non_final_amount) || 0), 0);
+});
+
+// Watcher untuk log perubahan filter pajak dan filteredInvoices
+watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], ([newFilterPpn, newFilterPphNonFinal, newFilterPphFinal, newFilteredInvoices]) => {
+  console.log("Filter PPN:", newFilterPpn);
+  console.log("Filter PPH Non Final:", newFilterPphNonFinal);
+  console.log("Filter PPH Final:", newFilterPphFinal);
+  console.log("Filtered Invoices:", newFilteredInvoices);
+});
+
+// Ensure reactivity for the "Grand Total" calculation
+watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
+  console.log("Recalculating Grand Total due to changes in filters or invoices...");
+  // Trigger reactivity by accessing the computed property
+  console.log("Updated Grand Total:", filteredGrandTotal.value);
 });
 </script>
 

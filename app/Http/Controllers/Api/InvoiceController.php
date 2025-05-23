@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Invoice;
 use App\Models\PurchaseMaterial;
+use App\Models\Expense;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\InvoiceResource;
@@ -79,11 +80,23 @@ class InvoiceController extends Controller
         // Log validated data for debugging
         \Log::info('Validated invoice data:', $validated);
 
+        // Log data purchase_materials untuk debugging
+        \Log::info('Data purchase_materials diterima:', $validated['purchase_materials']);
+
         // Extra validation: log and throw if any qty/harga is 0 or not numeric
         foreach ($validated['purchase_materials'] as $idx => $mat) {
             if (!is_numeric($mat['qty']) || !is_numeric($mat['harga']) || $mat['qty'] <= 0 || $mat['harga'] <= 0) {
                 \Log::warning('Invalid qty/harga in purchase_materials', ['index' => $idx, 'item' => $mat]);
                 throw new \Exception('Qty dan harga pada item ke-' . ($idx+1) . ' harus lebih dari 0 dan valid.');
+            }
+        }
+
+        // Tambahkan log untuk memeriksa apakah expense_id diterima
+        foreach ($validated['purchase_materials'] as $idx => $material) {
+            if (isset($material['expense_id'])) {
+                \Log::info('expense_id ditemukan pada item ke-' . ($idx + 1), ['expense_id' => $material['expense_id']]);
+            } else {
+                \Log::warning('expense_id tidak ditemukan pada item ke-' . ($idx + 1));
             }
         }
 
@@ -172,7 +185,10 @@ class InvoiceController extends Controller
         $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
         $invoice->save();
 
+        // Tambahkan log untuk memeriksa apakah expenses berhasil disimpan
         if (!empty($validated['expenses'])) {
+            \Log::info('Memulai proses penyimpanan expenses untuk invoice ID: ' . $invoice->id);
+
             $expenses = collect($validated['expenses'])->map(function ($expense) use ($invoice) {
                 return [
                     'proyek_id' => $invoice->proyek_id,
@@ -187,6 +203,47 @@ class InvoiceController extends Controller
 
             foreach (array_chunk($expenses, 100) as $chunk) {
                 Expense::insert($chunk);
+            }
+
+            \Log::info('Expenses berhasil disimpan untuk invoice ID: ' . $invoice->id, $expenses);
+        } else {
+            \Log::info('Tidak ada expenses yang perlu disimpan untuk invoice ID: ' . $invoice->id);
+        }
+
+        // Tambahkan log untuk memeriksa data purchase_materials sebelum diproses
+        \Log::info('Memulai proses pencatatan purchase_materials:', $validated['purchase_materials']);
+
+        // Proses purchase_materials untuk mencatat expense jika belum ada
+        foreach ($validated['purchase_materials'] as $material) {
+            if (empty($material['expense_id'])) {
+                \Log::info('Membuat expense baru untuk purchase_material:', [
+                    'item' => $material['item'],
+                    'qty' => $material['qty'],
+                    'harga' => $material['harga'],
+                ]);
+
+                try {
+                    $expense = Expense::create([
+                        'proyek_id' => $invoice->proyek_id,
+                        'invoice_id' => $invoice->id,
+                        'description' => 'Pembelian material: ' . $material['item'],
+                        'amount' => $material['qty'] * $material['harga'],
+                        'category_id' => $material['category_id'] ?? null,
+                        'transaction_date' => now(), // Explicitly set transaction_date
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    \Log::info('Expense baru berhasil dibuat:', ['expense_id' => $expense->id]);
+                } catch (\Exception $e) {
+                    \Log::error('Gagal membuat expense baru:', [
+                        'error' => $e->getMessage(),
+                        'item' => $material['item'],
+                    ]);
+                    throw $e;
+                }
+            } else {
+                \Log::info('Expense sudah ada untuk purchase_material:', ['expense_id' => $material['expense_id']]);
             }
         }
 

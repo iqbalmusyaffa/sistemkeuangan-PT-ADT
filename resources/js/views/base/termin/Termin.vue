@@ -114,56 +114,7 @@
                   <th>Aksi</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr v-for="item in termins" :key="item.id">
-                  <td>{{ item.nama_termin }}</td>
-                  <td>{{ item.jenis_termin }}</td>
-                  <td>{{ item.termin_ke }}</td>
-                  <td>{{ formatCurrency(item.nilai_termin) }}</td>
-                  <td>{{ item.persentase_dp }}%</td>
-                  <td>{{ formatCurrency(item.nilai_dp) }}</td>
-                  <td>{{ formatCurrency(item.nilai_pelunasan) }}</td>
-                  <td>{{ item.tanggal_dp }}</td>
-                  <td>{{ item.tanggal_pelunasan }}</td>
-                  <td>
-                    <CBadge :color="getStatusColor(item.status_termin)">
-                      {{ item.status_termin }}
-                    </CBadge>
-                  </td>
-                  <td>
-                    <CBadge :color="getApprovalColor(item.status_approval)">
-                      {{ item.status_approval }}
-                    </CBadge>
-                  </td>
-                  <td>{{ item.approved_by_name }}</td>
-                  <td>{{ item.approved_at }}</td>
-                  <td>{{ item.tanggal_dp_dibayar }}</td>
-                  <td>{{ item.tanggal_pelunasan_dibayar }}</td>
-                  <td>{{ item.keterangan }}</td>
-                  <td>
-                    <a v-if="item.bukti_pembayaran_url" :href="item.bukti_pembayaran_url" target="_blank" class="btn btn-sm btn-info">
-                      <CIcon icon="cil-file" /> Lihat
-                    </a>
-                  </td>
-                  <td>{{ formatDate(item.created_at) }}</td>
-                  <td>{{ formatDate(item.updated_at) }}</td>
-                  <td>
-                    <div class="btn-group">
-                      <button class="btn btn-sm btn-info" @click="openStatusModal(item)">
-                        <CIcon icon="cil-sync" /> Update Status
-                      </button>
-                      <template v-if="isApprover && item.status_approval === 'Pending' && ['DP Dibayar','Lunas'].includes(item.status_termin)">
-                        <button class="btn btn-sm btn-success" @click="approveTermin(item)">
-                          <CIcon icon="cil-check-circle" /> Approve
-                        </button>
-                        <button class="btn btn-sm btn-danger" @click="rejectTermin(item)">
-                          <CIcon icon="cil-x-circle" /> Reject
-                        </button>
-                      </template>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
+              <tbody></tbody>
             </table>
           </div>
         </CCardBody>
@@ -503,6 +454,7 @@
 </template>
 
 <script setup>
+
 import { ref, onMounted, nextTick, watch, computed, onUnmounted } from "vue";
 import axios from "axios";
 import $ from "jquery";
@@ -510,6 +462,103 @@ import Swal from "sweetalert2";
 import "datatables.net-dt/css/dataTables.dataTables.min.css";
 import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
 import "datatables.net-responsive-dt";
+import 'datatables.net';
+
+// --- All refs and variables must be declared at the top ---
+const selectedProject = ref("");
+const selectedInvoice = ref("");
+let dataTableInstance = null;
+
+// --- DataTable initialization function ---
+function initDataTable() {
+  // Destroy previous instance if exists
+  if (dataTableInstance) {
+    dataTableInstance.clear().destroy();
+    dataTableInstance = null;
+  }
+  // Only initialize if both filters are selected
+  if (!selectedProject.value || !selectedInvoice.value) return;
+  // Wait for DOM
+  nextTick(() => {
+    if (!document.getElementById('terminTable')) return;
+    dataTableInstance = $('#terminTable').DataTable({
+      processing: true,
+      serverSide: true,
+      responsive: true,
+      destroy: true,
+      ajax: {
+        url: '/api/termins',
+        type: 'GET',
+        data: function (d) {
+          d.proyek_id = selectedProject.value;
+          d.invoice_id = selectedInvoice.value;
+        },
+        beforeSend: function (xhr) {
+          const token = sessionStorage.getItem('token');
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+      },
+      columns: [
+        { data: 'nama_termin', title: 'Nama Termin' },
+        { data: 'jenis_termin', title: 'Jenis Termin' },
+        { data: 'termin_ke', title: 'Termin Ke' },
+        { data: 'nilai_termin', title: 'Nilai Termin', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'persentase_dp', title: 'Persentase DP', render: d => d ? d + '%' : '-' },
+        { data: 'nilai_dp', title: 'Nilai DP', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'nilai_pelunasan', title: 'Nilai Pelunasan', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'tanggal_dp', title: 'Tanggal DP', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'tanggal_pelunasan', title: 'Deadline Pembayaran', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'status_termin', title: 'Status', render: d => d || '-' },
+        { data: 'status_approval', title: 'Status Approval', render: d => d || '-' },
+        { data: 'approved_by_name', title: 'Disetujui Oleh', render: d => d || '-' },
+        { data: 'approved_at', title: 'Waktu Disetujui', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        { data: 'tanggal_dp_dibayar', title: 'Tgl DP Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'tanggal_pelunasan_dibayar', title: 'Tgl Pelunasan Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'keterangan', title: 'Keterangan', render: d => d || '-' },
+        { data: 'bukti_pembayaran_url', title: 'Bukti Pembayaran', render: d => d ? `<a href="${d}" target="_blank">Lihat</a>` : '-' },
+        { data: 'created_at', title: 'Dibuat', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        { data: 'updated_at', title: 'Diupdate', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        {
+          data: null,
+          title: 'Aksi',
+          orderable: false,
+          render: function (data, type, row) {
+            return `<button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+                    <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>`;
+          }
+        }
+      ],
+      language: {
+        processing: "Memproses...",
+        search: "Cari:",
+        lengthMenu: "Tampilkan _MENU_ data",
+        info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+        infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
+        infoFiltered: "(difilter dari _MAX_ total data)",
+        zeroRecords: "Tidak ditemukan data yang sesuai",
+        paginate: {
+          first: "Pertama",
+          last: "Terakhir",
+          next: "Selanjutnya",
+          previous: "Sebelumnya"
+        }
+      },
+      scrollX: true
+    });
+    // Button event listeners (edit/delete)
+    $('#terminTable').off('click', '.edit-btn').on('click', '.edit-btn', function () {
+      const id = $(this).data('id');
+      // Find the row data and open modal
+      const rowData = dataTableInstance.row($(this).parents('tr')).data();
+      if (rowData) openModal('edit', rowData);
+    });
+    $('#terminTable').off('click', '.delete-btn').on('click', '.delete-btn', function () {
+      const id = $(this).data('id');
+      // Implement delete logic or emit event
+      Swal.fire('Fitur hapus belum diimplementasikan');
+    });
+  });
+}
 
 // State declarations
 const form = ref({
@@ -548,6 +597,7 @@ const statusForm = ref({
   approved_at: ''
 });
 
+
 const projects = ref([]);
 const projectOptions = ref([]);
 const invoices = ref([]);
@@ -563,8 +613,6 @@ const modalButtonText = ref("Simpan");
 const modalMode = ref("tambah");
 const editingId = ref(null);
 const updatingStatusId = ref(null);
-const selectedProject = ref("");
-const selectedInvoice = ref("");
 
 // Manual mode state
 const manualNilaiTermin = ref(false);
@@ -1350,32 +1398,16 @@ watch(selectedInvoice, async (newValue) => {
   }
 });
 
-// Setelah fetchTermins selesai, inisialisasi DataTable
-let dataTableInstance = null;
-watch(termins, async (newVal) => {
-  await nextTick();
-  if (dataTableInstance) {
-    dataTableInstance.clear().destroy();
-    dataTableInstance = null;
-  }
-  dataTableInstance = $('#terminTable').DataTable({
-    destroy: true,
-    responsive: true,
-    autoWidth: false,
-    ordering: true,
-    pageLength: 10,
-    language: {
-    //   url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json'
-    }
-  });
-});
+
 
 onMounted(async () => {
   await fetchProjects();
-  // DataTable akan diinisialisasi otomatis oleh watcher
+  await fetchTermins();
+  initDataTable();
 });
 
 onUnmounted(() => {
+  if (table) table.destroy();
   if (dataTableInstance) {
     dataTableInstance.clear().destroy();
     dataTableInstance = null;
@@ -1492,29 +1524,34 @@ const handleBuktiPembayaranForm = (event) => {
 const exportToPDF = async () => {
   try {
     const token = sessionStorage.getItem('token');
-    const response = await axios.get('/api/termins/export/pdf', {
-      params: {
-        proyek_id: selectedProject.value,
-        invoice_id: selectedInvoice.value
-      },
+    if (!selectedProject.value) {
+      Swal.fire('Pilih proyek terlebih dahulu!');
+      return;
+    }
+    let url = `/api/termins/export-pdf/${selectedProject.value}`;
+    // Jika backend sudah support invoice_id, tambahkan query param
+    if (selectedInvoice.value) {
+      url += `?invoice_id=${selectedInvoice.value}`;
+    }
+    const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token}`
       },
       responseType: 'blob'
     });
-
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const blob = new Blob([response.data], { type: 'application/pdf' });
     const link = document.createElement('a');
-    link.href = url;
+    link.href = window.URL.createObjectURL(blob);
     link.setAttribute('download', 'termin-report.pdf');
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.URL.revokeObjectURL(link.href);
   } catch (err) {
     Swal.fire({
       icon: 'error',
       title: 'Error',
-      text: 'Gagal mengekspor ke PDF'
+      text: err.response?.data?.message || 'Gagal mengekspor ke PDF'
     });
   }
 };
@@ -1522,29 +1559,33 @@ const exportToPDF = async () => {
 const exportToExcel = async () => {
   try {
     const token = sessionStorage.getItem('token');
-    const response = await axios.get('/api/termins/export/excel', {
-      params: {
-        proyek_id: selectedProject.value,
-        invoice_id: selectedInvoice.value
-      },
+    if (!selectedProject.value) {
+      Swal.fire('Pilih proyek terlebih dahulu!');
+      return;
+    }
+    let url = `/api/termins/export-excel/${selectedProject.value}`;
+    if (selectedInvoice.value) {
+      url += `?invoice_id=${selectedInvoice.value}`;
+    }
+    const response = await axios.get(url, {
       headers: {
         Authorization: `Bearer ${token}`
       },
       responseType: 'blob'
     });
-
-    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const link = document.createElement('a');
-    link.href = url;
+    link.href = window.URL.createObjectURL(blob);
     link.setAttribute('download', 'termin-report.xlsx');
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.URL.revokeObjectURL(link.href);
   } catch (err) {
     Swal.fire({
       icon: 'error',
       title: 'Error',
-      text: 'Gagal mengekspor ke Excel'
+      text: err.response?.data?.message || 'Gagal mengekspor ke Excel'
     });
   }
 };
@@ -1581,9 +1622,13 @@ const fetchTotalDpSudahDibayar = async () => {
   }
 };
 
-watch([selectedProject, selectedInvoice], async ([newProject, newInvoice]) => {
-  if (newProject && newInvoice) {
-    await fetchTotalDpSudahDibayar();
+watch([selectedProject, selectedInvoice], ([newProject, newInvoice]) => {
+  if (dataTableInstance) {
+    dataTableInstance.ajax.reload();
+  } else {
+    nextTick(() => {
+      initDataTable();
+    });
   }
 });
 
@@ -1850,7 +1895,7 @@ table.dataTable tbody td {
   bottom: 0;
   width: 6px;
   pointer-events: none;
-  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.1));
+  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0.1));
 }
 </style>
 
