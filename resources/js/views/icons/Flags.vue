@@ -1,5 +1,5 @@
 <script setup>
-import { flagSet } from '@coreui/icons'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 
 const toKebabCase = (str) => str.replace(/([a-z])([A-Z0-9])/g, '$1-$2').toLowerCase()
 const icons = flagSet
@@ -8,12 +8,12 @@ const icons = flagSet
 <template>
   <DocsIcons />
   <CCard>
-    <CCardHeader>CoreUI Icons - Flag</CCardHeader>
+    <CCardHeader>Font Awesome Icons - Flag</CCardHeader>
     <CCardBody>
       <CRow class="text-center">
         <template v-for="(icon, iconName) in icons" :key="iconName">
           <CCol class="mb-5" :xs="3" :sm="2">
-            <CIcon :content="icon" size="xxl" />
+            <FontAwesomeIcon :icon="['fas', 'flag']" size="2x" />
             <div>{{ toKebabCase(iconName) }}</div>
           </CCol>
         </template>

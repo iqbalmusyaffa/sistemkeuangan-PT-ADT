@@ -31,6 +31,29 @@
           </tr>
         </tbody>
       </table>
+      <h5 class="mt-3">Tax Breakdown</h5>
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Tax Type</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PPN (11%)</td>
+            <td>{{ invoice.ppn_amount }}</td>
+          </tr>
+          <tr>
+            <td>PPH Non-Final</td>
+            <td>{{ invoice.pph_non_final_amount }}</td>
+          </tr>
+          <tr>
+            <td>PPH Final</td>
+            <td>{{ invoice.pph_final_amount }}</td>
+          </tr>
+        </tbody>
+      </table>
     </CModalBody>
     <CModalFooter>
       <CButton color="secondary" @click="onClose">Tutup</CButton>
@@ -44,4 +67,4 @@ defineProps({
   invoice: Object,
   onClose: Function
 });
-</script> 
+</script>

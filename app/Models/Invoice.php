@@ -4,14 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\{Proyek, PurchaseMaterial, Termin, Expense, Income, PaymentMethod};
 
 class Invoice extends Model
 {
     use HasFactory;
 
-    // Tambahkan constant status
     const STATUS_UNPAID = 'unpaid';
     const STATUS_PARTIALLY_PAID = 'partially_paid';
     const STATUS_PAID = 'paid';
@@ -39,7 +38,8 @@ class Invoice extends Model
         'notes',
         'status',
         'pph_jasa_amount',
-        'pph_barang_amount'
+        'pph_barang_amount',
+        'grand_total',
     ];
 
     protected $casts = [
@@ -60,7 +60,8 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'status' => 'string',
         'pph_jasa_amount' => 'decimal:2',
-        'pph_barang_amount' => 'decimal:2'
+        'pph_barang_amount' => 'decimal:2',
+        'grand_total' => 'decimal:2',
     ];
 
     // Relationships
@@ -86,356 +87,303 @@ class Invoice extends Model
 
     public function paymentMethod()
     {
-        return $this->belongsTo(\App\Models\PaymentMethod::class);
+        return $this->belongsTo(PaymentMethod::class);
     }
 
-    // Status Management
-    public function determineStatus()
+    // Status management
+    public function determineStatus(): string
     {
-        if ($this->amount_paid == 0) {
-            return 'unpaid';
+        if ($this->amount_paid <= 0) {
+            return self::STATUS_UNPAID;
         } elseif ($this->amount_paid < $this->total_amount) {
-            return 'partially_paid';
-        } elseif ($this->amount_paid >= $this->total_amount) {
-            return 'paid';
-        } else {
-            return 'unpaid';
+            return self::STATUS_PARTIALLY_PAID;
         }
+        return self::STATUS_PAID;
     }
 
+    // Setter amount_paid tanpa auto save, update status saja
     public function setAmountPaidAttribute($value)
     {
         $this->attributes['amount_paid'] = $value;
+        // update status attribute in memory
         $this->attributes['status'] = $this->determineStatus();
     }
-
-    public function updateStatusFromTermins()
+    public function updateAmountPaid($value)
     {
-        $termins = $this->termins;
-        if ($termins->count() === 0) {
-            $this->status = 'unpaid';
-        } elseif ($termins->every(fn($t) => $t->status_termin === 'Lunas')) {
-            $this->status = 'paid';
-        } elseif ($termins->every(fn($t) => $t->status_termin === 'Belum Dibayar')) {
-            $this->status = 'unpaid';
-        } elseif ($termins->every(fn($t) => $t->status_termin === 'DP Dibayar')) {
-            $this->status = 'partially_paid';
-        } else {
-            $this->status = 'partially_paid';
-        }
+        $this->amount_paid = $value;
+        $this->status = $this->determineStatus();
         $this->save();
-        // Update status proyek juga
-        if ($this->proyek) {
-            $this->proyek->updateStatusFromInvoices();
+    }
+
+
+    public function updateStatusFromTermins(): void
+    {
+        try {
+            $termins = $this->termins()->get();
+
+            if ($termins->isEmpty()) {
+                $this->status = self::STATUS_UNPAID;
+            } else {
+                $allLunas = $termins->every(fn($t) => $t->status_termin === 'Lunas');
+                $allBelumDibayar = $termins->every(fn($t) => $t->status_termin === 'Belum Dibayar');
+                $allDpDibayar = $termins->every(fn($t) => $t->status_termin === 'DP Dibayar');
+
+                if ($allLunas) {
+                    $this->status = self::STATUS_PAID;
+                } elseif ($allBelumDibayar) {
+                    $this->status = self::STATUS_UNPAID;
+                } else {
+                    // Termins mixed or partially paid cases
+                    $this->status = self::STATUS_PARTIALLY_PAID;
+                }
+            }
+
+            $this->save();
+
+            if ($this->proyek) {
+                $this->proyek->updateStatusFromInvoices();
+            }
+        } catch (\Exception $e) {
+            Log::error('Error in updateStatusFromTermins: ' . $e->getMessage(), [
+                'invoice_id' => $this->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
         }
     }
 
-    // Query Scopes
+    // Scopes
     public function scopeUnpaid($query)
     {
-        return $query->where('status', 'unpaid');
+        return $query->where('status', self::STATUS_UNPAID);
     }
 
     public function scopePartiallyPaid($query)
     {
-        return $query->where('status', 'partially_paid');
+        return $query->where('status', self::STATUS_PARTIALLY_PAID);
     }
 
     public function scopePaid($query)
     {
-        return $query->where('status', 'paid');
+        return $query->where('status', self::STATUS_PAID);
     }
 
     public function scopeCancelled($query)
     {
-        return $query->where('status', 'cancelled');
+        return $query->where('status', self::STATUS_CANCELLED);
     }
 
     // Accessors
-    public function getTotalTaxAttribute()
+    public function getTotalTaxAttribute(): float
     {
-        return $this->pph_non_final_amount + $this->pph_final_amount + $this->ppn_amount;
+        return ($this->pph_non_final_amount ?? 0) + ($this->pph_final_amount ?? 0) + ($this->ppn_amount ?? 0);
     }
 
-    public function getTotalWithTaxAttribute()
+    public function getTotalWithTaxAttribute(): float
     {
-        return $this->total_amount + $this->total_tax;
+        return ($this->total_amount ?? 0) + $this->total_tax;
     }
 
-    public function getTotalBarangAttribute()
+    public function getTotalBarangAttribute(): float
     {
         return $this->purchaseMaterials()
             ->where('is_service', false)
             ->sum('total_harga');
     }
 
-    public function getTotalJasaAttribute()
+    public function getTotalJasaAttribute(): float
     {
         return $this->purchaseMaterials()
             ->where('is_service', true)
             ->sum('total_harga');
     }
 
-    // Realtime: Total income (laba bersih invoice + income lain yang diterima)
-    public function getTotalIncomeAttribute()
+    public function getTotalIncomeAttribute(): float
     {
-        $netProfit = $this->net_profit;
-        $otherIncomes = \App\Models\Income::where('proyek_id', $this->proyek_id)
+        $netProfit = $this->net_profit ?? 0;
+        $otherIncomes = Income::where('proyek_id', $this->proyek_id)
             ->whereNull('invoice_id')
             ->where('status', 'Diterima')
             ->sum('jumlah');
+
         return $netProfit + $otherIncomes;
     }
 
-    // Realtime: Total pengeluaran (semua expense yang statusnya Lunas)
-    public function getTotalExpensesAttribute()
+    public function getTotalExpensesAttribute(): float
     {
-        return \App\Models\Expense::where('proyek_id', $this->proyek_id)
+        return Expense::where('proyek_id', $this->proyek_id)
             ->where('status', 'Lunas')
             ->sum('amount');
     }
 
-    // Realtime: Laba/rugi
-    public function getProfitLossAttribute()
+    public function getProfitLossAttribute(): float
     {
         return $this->total_income - $this->total_expenses;
     }
 
-    // Realtime: Persentase laba/rugi
-    public function getProfitLossPercentageAttribute()
+    public function getProfitLossPercentageAttribute(): float
     {
-        if ($this->total_expenses == 0) return 0;
+        if (($this->total_expenses ?? 0) == 0) return 0;
         return ($this->profit_loss / $this->total_expenses) * 100;
     }
 
-    // Get all incomes related to this project
     public function getProjectIncomesAttribute()
     {
         return Income::where('proyek_id', $this->proyek_id)->get();
     }
 
-    // Get total income from all sources for this project
-    public function getTotalProjectIncomeAttribute()
+    public function getTotalProjectIncomeAttribute(): float
     {
         $invoiceIncome = $this->total_income;
         $otherIncomes = Income::where('proyek_id', $this->proyek_id)
             ->whereNull('invoice_id')
+            ->where('status', 'Diterima')
             ->sum('jumlah');
+
         return $invoiceIncome + $otherIncomes;
     }
 
-    // Get total expenses for this project
-    public function getTotalProjectExpensesAttribute()
+    public function getTotalProjectExpensesAttribute(): float
     {
-        return Expense::where('proyek_id', $this->proyek_id)->sum('amount');
+        return Expense::where('proyek_id', $this->proyek_id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
     }
 
-    // Calculate overall project profit/loss
-    public function getProjectProfitLossAttribute()
+    public function getProjectProfitLossAttribute(): float
     {
         return $this->total_project_income - $this->total_project_expenses;
     }
 
-    // Calculate overall project profit/loss percentage
-    public function getProjectProfitLossPercentageAttribute()
+    public function getProjectProfitLossPercentageAttribute(): float
     {
-        if ($this->total_project_expenses == 0) return 0;
+        if (($this->total_project_expenses ?? 0) == 0) return 0;
         return ($this->project_profit_loss / $this->total_project_expenses) * 100;
     }
 
-    // Calculate and update profit/loss
-    public function calculateProfitLoss()
+    // Manual calculations
+    public function calculateProfitLoss(): void
     {
-        // Calculate total income (net profit from invoice)
-        $this->total_income = $this->net_profit;
-
-        // Calculate total expenses
-        $this->total_expenses = $this->expenses()->sum('amount');
-
-        // Calculate profit/loss
+        $this->total_income = $this->net_profit ?? 0;
+        $this->total_expenses = $this->expenses()->where('status', 'Lunas')->sum('amount');
         $this->profit_loss = $this->total_income - $this->total_expenses;
-
-        // Calculate profit/loss percentage
         $this->profit_loss_percentage = $this->total_expenses > 0
             ? ($this->profit_loss / $this->total_expenses) * 100
             : 0;
+        $this->save();
+    }
+
+    public function calculateTaxes(): void
+    {
+        // Subtotal barang & jasa
+        $subtotalBarang = $this->purchaseMaterials()->where('is_service', false)->sum('total_harga');
+        $subtotalJasa = $this->purchaseMaterials()->where('is_service', true)->sum('total_harga');
+
+        // PPH Non Final: barang 1.5%, jasa 2%
+        $this->pph_non_final_amount = $this->use_pph_non_final
+            ? ($subtotalBarang * 0.015) + ($subtotalJasa * 0.02)
+            : 0;
+
+        // PPH Final: 22% dari laba bersih
+        $this->pph_final_amount = $this->use_pph_final
+            ? (($this->net_profit ?? 0) * 0.22)
+            : 0;
+
+        // PPN (11% dari total_amount)
+        $this->ppn_amount = $this->use_ppn ? ($this->total_amount * 0.11) : 0;
+
+        $this->pph_barang_amount = $subtotalBarang * 0.015;
+        $this->pph_jasa_amount = $subtotalJasa * 0.02;
 
         $this->save();
     }
 
-    // Calculate net profit based on profit margin
-    public function calculateNetProfit()
+    public function calculateNetProfit(): void
     {
-        $this->net_profit = $this->total_amount * ($this->profit_margin_percentage / 100);
+        // Net profit is based on total_amount multiplied by profit margin percentage
+        $this->net_profit = ($this->total_amount ?? 0) * (($this->profit_margin_percentage ?? 30) / 100);
         $this->save();
     }
 
-    // Calculate project financial summary
-    public function getProjectFinancialSummary()
+    public function calculateGrandTotal(): float
     {
-        $totalIncome = $this->total_income;
-        $totalExpenses = $this->total_expenses;
-        $profitLoss = $this->profit_loss;
-        $profitLossPercentage = $this->profit_loss_percentage;
+        Log::info('Calculating Grand Total for Invoice ID: ' . $this->id);
+        Log::info('  Initial total_amount: ' . $this->total_amount);
+        Log::info('  use_ppn: ' . ($this->use_ppn ? 'true' : 'false'));
+        Log::info('  use_pph_non_final: ' . ($this->use_pph_non_final ? 'true' : 'false'));
+        Log::info('  use_pph_final: ' . ($this->use_pph_final ? 'true' : 'false'));
+        Log::info('  ppn_amount: ' . $this->ppn_amount);
+        Log::info('  pph_non_final_amount: ' . $this->pph_non_final_amount);
+        Log::info('  pph_final_amount: ' . $this->pph_final_amount);
 
-        // Get all termins for this project
+        $total = $this->total_amount ?? 0;
+
+        // Add PPN if enabled
+        if ($this->use_ppn) {
+            $total += $this->ppn_amount;
+        }
+
+        // Subtract PPH Non Final (goods and services)
+        $total -= $this->pph_non_final_amount;
+
+        // Subtract PPH Final if enabled
+        if ($this->use_pph_final) {
+            $total -= $this->pph_final_amount;
+        }
+
+        $this->grand_total = $total;
+        Log::info('  Calculated grand_total: ' . $this->grand_total);
+        $this->save();
+
+        return $this->grand_total;
+    }
+
+    // Add this method to calculate all financial values
+    public function calculateAllFinancialValues(): void
+    {
+        $this->calculateNetProfit();
+        $this->calculateTaxes();
+        $this->calculateGrandTotal();
+        $this->calculateProfitLoss();
+    }
+
+    public function getProjectFinancialSummary(): array
+    {
         $termins = $this->termins;
         $totalTerminAmount = $termins->sum('nilai_termin');
         $totalPaidTermin = $termins->where('status_termin', 'Lunas')->sum('nilai_termin');
         $totalDPPaid = $termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
-
-        // Get all expenses for this project
-        $expenses = $this->expenses;
-        $totalExpenseAmount = $expenses->sum('amount');
+        $totalExpenseAmount = $this->expenses->sum('amount');
 
         return [
-            'total_income' => $totalIncome,
-            'total_expenses' => $totalExpenses,
-            'profit_loss' => $profitLoss,
-            'profit_loss_percentage' => $profitLossPercentage,
+            'total_income' => $this->total_income,
+            'total_expenses' => $this->total_expenses,
+            'profit_loss' => $this->profit_loss,
+            'profit_loss_percentage' => $this->profit_loss_percentage,
             'total_termin_amount' => $totalTerminAmount,
             'total_paid_termin' => $totalPaidTermin,
             'total_dp_paid' => $totalDPPaid,
             'total_expense_amount' => $totalExpenseAmount,
-            'remaining_payment' => $totalTerminAmount - $totalPaidTermin - $totalDPPaid
+            'remaining_payment' => $totalTerminAmount - $totalPaidTermin - $totalDPPaid,
         ];
     }
 
-    // Update payment status and create expense record
-    public function recordPayment($amount, $paymentMethodId = null)
+    // Kurangi anggaran proyek berdasarkan nilai termin
+    public function reduceProjectBudget(float $terminValue): bool
     {
-        DB::beginTransaction();
-        try {
-            // Update invoice payment
-            $this->amount_paid += $amount;
-            $this->status = $this->determineStatus();
-            if ($paymentMethodId) {
-                $this->payment_method_id = $paymentMethodId;
+        $proyek = $this->proyek;
+
+        if ($proyek->budget_adjusted !== null) {
+            if ($proyek->budget_adjusted < $terminValue) {
+                throw new \Exception('Anggaran proyek tidak mencukupi untuk nilai termin ini.');
             }
-            $this->save();
-
-            // Create expense record for the payment
-            $expense = Expense::create([
-                'user_id' => auth()->id(),
-                'proyek_id' => $this->proyek_id,
-                'invoice_id' => $this->id,
-                'amount' => $amount,
-                'description' => "Pembayaran Invoice {$this->invoice_number}",
-                'transaction_date' => now(),
-                'status' => 'approved',
-                'payment_method' => $paymentMethodId ? PaymentMethod::find($paymentMethodId)->name : 'Cash',
-                'source_type' => 'invoice',
-                'source_id' => $this->id
-            ]);
-
-            DB::commit();
-            return $expense;
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+            $proyek->budget_adjusted -= $terminValue;
+        } else {
+            if ($proyek->anggaran_kontrak < $terminValue) {
+                throw new \Exception('Anggaran proyek tidak mencukupi untuk nilai termin ini.');
+            }
+            $proyek->anggaran_kontrak -= $terminValue;
         }
-    }
-
-    // Calculate profit/loss for the project
-    public function calculateProjectProfitLoss()
-    {
-        $totalIncome = $this->total_income;
-        $totalExpenses = $this->total_expenses;
-        $profitLoss = $totalIncome - $totalExpenses;
-        $profitLossPercentage = $totalExpenses > 0 ? ($profitLoss / $totalExpenses) * 100 : 0;
-
-        $this->profit_loss = $profitLoss;
-        $this->profit_loss_percentage = $profitLossPercentage;
-        $this->save();
-
-        return [
-            'profit_loss' => $profitLoss,
-            'profit_loss_percentage' => $profitLossPercentage
-        ];
-    }
-
-    // Get payment status summary
-    public function getPaymentStatusSummary()
-    {
-        $termins = $this->termins;
-        $totalTerminAmount = $termins->sum('nilai_termin');
-        $totalPaidTermin = $termins->where('status_termin', 'Lunas')->sum('nilai_termin');
-        $totalDPPaid = $termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
-        $remainingPayment = $totalTerminAmount - $totalPaidTermin - $totalDPPaid;
-
-        return [
-            'total_amount' => $totalTerminAmount,
-            'total_paid' => $totalPaidTermin + $totalDPPaid,
-            'remaining_payment' => $remainingPayment,
-            'payment_status' => $this->status,
-            'termins' => $termins->map(function($termin) {
-                return [
-                    'nama_termin' => $termin->nama_termin,
-                    'nilai_termin' => $termin->nilai_termin,
-                    'status' => $termin->status_termin,
-                    'tanggal_dp' => $termin->tanggal_dp,
-                    'tanggal_pelunasan' => $termin->tanggal_pelunasan
-                ];
-            })
-        ];
-    }
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::saved(function ($invoice) {
-            // Cek perubahan status
-            if ($invoice->wasChanged('status')) {
-                if ($invoice->status === self::STATUS_PAID) {
-                    // Cek income sudah ada?
-                    if (!\App\Models\Income::where('invoice_id', $invoice->id)->exists()) {
-                        app(\App\Http\Controllers\Api\IncomeController::class)->createFromInvoice($invoice);
-                    }
-                } elseif ($invoice->status === self::STATUS_UNPAID) {
-                    if (!\App\Models\Expense::where('invoice_id', $invoice->id)->exists()) {
-                        app(\App\Http\Controllers\Api\ExpenseController::class)->createFromInvoice($invoice);
-                    }
-                }
-            }
-        });
+        return $proyek->save();
     }
 }
-
-    // Realtime: Summary laba/rugi proyek
-//     public function getProjectFinancialSummary()
-//     {
-//         $totalProjectIncome = \App\Models\Income::where('proyek_id', $this->proyek_id)
-//             ->where('status', 'Diterima')
-//             ->sum('jumlah');
-//         $totalProjectExpenses = \App\Models\Expense::where('proyek_id', $this->proyek_id)
-//             ->where('status', 'Lunas')
-//             ->sum('amount');
-//         $projectProfitLoss = $totalProjectIncome - $totalProjectExpenses;
-//         $projectProfitLossPercentage = $totalProjectExpenses > 0
-//             ? ($projectProfitLoss / $totalProjectExpenses) * 100
-//             : 0;
-//         return [
-//             'total_project_income' => $totalProjectIncome,
-//             'total_project_expenses' => $totalProjectExpenses,
-//             'project_profit_loss' => $projectProfitLoss,
-//             'project_profit_loss_percentage' => $projectProfitLossPercentage
-//         ];
-//     }
-
-//     // Override the save method to ensure calculations are always up to date
-//     public function save(array $options = [])
-//     {
-//         // Calculate net profit if total amount or profit margin changes
-//         if ($this->isDirty(['total_amount', 'profit_margin_percentage'])) {
-//             $this->calculateNetProfit();
-//         }
-
-//         // Calculate profit/loss if relevant fields change
-//         if ($this->isDirty(['net_profit', 'total_amount', 'profit_margin_percentage'])) {
-//             $this->calculateProfitLoss();
-//         }
-
-//         return parent::save($options);
-//     }
-// }

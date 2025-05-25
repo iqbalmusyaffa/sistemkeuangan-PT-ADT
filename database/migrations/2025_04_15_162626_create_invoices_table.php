@@ -32,7 +32,8 @@ return new class extends Migration
             $table->boolean('use_pph_non_final')->default(false);
             $table->boolean('use_pph_final')->default(false);
             $table->decimal('pph_jasa_amount', 18, 2)->default(0);
-$table->decimal('pph_barang_amount', 18, 2)->default(0);
+            $table->decimal('pph_barang_amount', 18, 2)->default(0);
+            $table->decimal('grand_total', 20, 2)->default(0);
             $table->text('notes')->nullable();
             $table->enum('status', ['unpaid', 'partially_paid', 'paid', 'cancelled'])->default('unpaid');
             $table->timestamps();
@@ -42,6 +43,7 @@ $table->decimal('pph_barang_amount', 18, 2)->default(0);
             $table->index('proyek_id');
             $table->index('status');
         });
+
     }
 
     /**

@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useColorModes } from '@coreui/vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
 import AppBreadcrumb from '@/components/dashboard/AppBreadcrumb.vue'
 import AppHeaderDropdownAccnt from '@/components/dashboard/AppHeaderDropdownAccnt.vue'
@@ -43,13 +44,13 @@ onMounted(() => {
   <CHeader position="sticky" :class="headerClassNames">
     <CContainer class="border-bottom px-4" fluid>
       <CHeaderToggler @click="sidebar.toggleVisible()" style="margin-inline-start: -14px">
-        <CIcon icon="cil-menu" size="lg" />
+        <FontAwesomeIcon :icon="['fas', 'bars']" size="lg" />
       </CHeaderToggler>
       <CHeaderNav class="ms-auto">
         <CNavItem>
           <CDropdown placement="bottom-end" variant="nav-item">
             <CDropdownToggle :caret="false">
-              <CIcon icon="cil-bell" size="lg" />
+              <FontAwesomeIcon :icon="['fas', 'bell']" size="lg" />
               <CBadge
                 v-if="recentActivities.length > 0"
                 color="danger"
@@ -102,8 +103,8 @@ onMounted(() => {
             class="px-2"
             @click="setColorMode(colorMode === 'dark' ? 'light' : 'dark')"
           >
-            <CIcon
-              :icon="colorMode === 'dark' ? 'cil-sun' : 'cil-moon'"
+            <FontAwesomeIcon
+              :icon="colorMode === 'dark' ? ['fas', 'sun'] : ['fas', 'moon']"
               size="lg"
               :class="{ 'text-warning': colorMode === 'dark' }"
             />

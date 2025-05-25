@@ -45,7 +45,7 @@ class IncomeController extends Controller
             }
 
             $incomes = $query->latest()->get();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'List data pemasukan',
@@ -54,7 +54,7 @@ class IncomeController extends Controller
         } catch (\Exception $e) {
             Log::error('Error in IncomeController@index: ' . $e->getMessage());
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage()
             ], 500);
         }
@@ -85,7 +85,7 @@ class IncomeController extends Controller
             // Validasi jumlah pembayaran jika terkait termin
             if ($validated['termin_id']) {
                 $termin = Termin::findOrFail($validated['termin_id']);
-                
+
                 if ($validated['type'] === 'dp') {
                     // Validasi DP
                     $totalDpPaid = $termin->total_dp_paid;
@@ -102,6 +102,23 @@ class IncomeController extends Controller
                         return response()->json([
                             'success' => false,
                             'message' => 'Jumlah pelunasan melebihi nilai pelunasan yang ditentukan'
+                        ], 422);
+                    }
+                }
+            }
+
+            // Validasi total income tidak melebihi budget proyek
+            if (!empty($validated['proyek_id']) && $validated['status'] === 'Diterima') {
+                $proyek = Proyek::find($validated['proyek_id']);
+                if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                    $totalIncome = Income::where('proyek_id', $proyek->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    if (($totalIncome + $validated['jumlah']) > $currentBudget) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Total pemasukan melebihi anggaran proyek.'
                         ], 422);
                     }
                 }
@@ -156,7 +173,7 @@ class IncomeController extends Controller
         try {
             $income = Income::with(['kategori', 'paymentMethod', 'proyek', 'createdBy', 'updatedBy', 'termin'])
                 ->findOrFail($id);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Detail pemasukan ditemukan',
@@ -165,7 +182,7 @@ class IncomeController extends Controller
         } catch (\Exception $e) {
             Log::error('Error in IncomeController@show: ' . $e->getMessage());
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Data tidak ditemukan: ' . $e->getMessage()
             ], 404);
         }
@@ -178,7 +195,7 @@ class IncomeController extends Controller
     {
         try {
             DB::beginTransaction();
-            
+
             $income = Income::findOrFail($id);
 
             $validated = $request->validate([
@@ -191,6 +208,26 @@ class IncomeController extends Controller
                 'status' => 'required|in:Pending,Diterima,Ditolak',
                 'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
             ]);
+
+
+            // Validasi total income tidak melebihi budget proyek saat update
+            if (!empty($validated['proyek_id']) && $validated['status'] === 'Diterima') {
+                $proyek = Proyek::find($validated['proyek_id']);
+                if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                    // Kurangi income lama jika status sebelumnya Diterima dan proyek sama
+                    $totalIncome = Income::where('proyek_id', $proyek->id)
+                        ->where('status', 'Diterima')
+                        ->where('id', '!=', $income->id)
+                        ->sum('jumlah');
+                    if (($totalIncome + $validated['jumlah']) > $currentBudget) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Total pemasukan melebihi anggaran proyek.'
+                        ], 422);
+                    }
+                }
+            }
 
             $income->fill($validated);
             $income->updated_by = Auth::id();
@@ -243,7 +280,7 @@ class IncomeController extends Controller
     {
         try {
             DB::beginTransaction();
-            
+
             $income = Income::findOrFail($id);
 
             // Delete bukti pembayaran file if exists
@@ -268,7 +305,7 @@ class IncomeController extends Controller
             DB::rollBack();
             Log::error('Error in IncomeController@destroy: ' . $e->getMessage());
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'Gagal menghapus data: ' . $e->getMessage()
             ], 500);
         }
@@ -281,7 +318,7 @@ class IncomeController extends Controller
     {
         try {
             $proyek = Proyek::findOrFail($projectId);
-            
+
             $summary = [
                 'total_income' => Income::where('proyek_id', $projectId)
                     ->where('status', 'Diterima')
@@ -337,6 +374,21 @@ class IncomeController extends Controller
                 $income->termin_id = $invoice->termins->first()->id;
             }
 
+
+            // Validasi total income tidak melebihi budget proyek
+            if ($income->proyek_id) {
+                $proyek = Proyek::find($income->proyek_id);
+                if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                    $totalIncome = Income::where('proyek_id', $proyek->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    if (($totalIncome + $income->jumlah) > $currentBudget) {
+                        throw new \Exception('Total pemasukan melebihi anggaran proyek.');
+                    }
+                }
+            }
+
             $income->save();
 
             DB::commit();
@@ -371,6 +423,21 @@ class IncomeController extends Controller
             $income->created_by = auth()->id();
             $income->updated_by = auth()->id();
 
+
+            // Validasi total income tidak melebihi budget proyek
+            if ($income->proyek_id) {
+                $proyek = Proyek::find($income->proyek_id);
+                if ($proyek) {
+                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+                    $totalIncome = Income::where('proyek_id', $proyek->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    if (($totalIncome + $income->jumlah) > $currentBudget) {
+                        throw new \Exception('Total pemasukan melebihi anggaran proyek.');
+                    }
+                }
+            }
+
             $income->save();
 
             DB::commit();
@@ -380,6 +447,40 @@ class IncomeController extends Controller
             DB::rollBack();
             Log::error('Error creating income from termin: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * Get total DP paid for a project and termin
+     */
+    public function getTotalDpPaid(Request $request)
+    {
+        try {
+            $query = Income::where('type', 'dp')
+                ->where('status', 'Diterima');
+
+            if ($request->has('proyek_id')) {
+                $query->where('proyek_id', $request->proyek_id);
+            }
+
+            if ($request->has('invoice_id')) {
+                $query->whereHas('termin', function($q) use ($request) {
+                    $q->where('invoice_id', $request->invoice_id);
+                });
+            }
+
+            $totalDpPaid = $query->sum('jumlah');
+
+            return response()->json([
+                'success' => true,
+                'total_dp_paid' => $totalDpPaid
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in IncomeController@getTotalDpPaid: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mendapatkan total DP yang sudah dibayar: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

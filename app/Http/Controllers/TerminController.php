@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Termin;
 use App\Models\Income;
+use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -46,7 +47,7 @@ class TerminController extends Controller
             // Create income record if status is DP Dibayar or Lunas
             if (in_array($request->status_termin, ['DP Dibayar', 'Lunas'])) {
                 $amount = $request->status_termin === 'DP Dibayar' ? $termin->nilai_dp : $termin->nilai_pelunasan;
-                
+
                 Income::create([
                     'proyek_id' => $termin->proyek_id,
                     'kategori_id' => 1, // Assuming 1 is the ID for "Pembayaran Termin"
@@ -55,6 +56,23 @@ class TerminController extends Controller
                     'tanggal' => $request->status_termin === 'DP Dibayar' ? $request->tanggal_dp_dibayar : $request->tanggal_pelunasan_dibayar,
                     'status' => 'Pending',
                     'deskripsi' => "Pembayaran {$request->status_termin} untuk termin {$termin->nama_termin}",
+                    'bukti_pembayaran_url' => $path ?? null,
+                    'termin_id' => $termin->id
+                ]);
+            }
+
+            // Create expense record if status is DP Dibayar or Lunas
+            if (in_array($request->status_termin, ['DP Dibayar', 'Lunas'])) {
+                $amount = $request->status_termin === 'DP Dibayar' ? $termin->nilai_dp : $termin->nilai_pelunasan;
+
+                Expense::create([
+                    'proyek_id' => $termin->proyek_id,
+                    'kategori_id' => 2, // Assuming 2 is the ID for "Pengeluaran Termin"
+                    'payment_method_id' => 1, // Assuming 1 is the ID for "Transfer"
+                    'jumlah' => $amount,
+                    'tanggal' => $request->status_termin === 'DP Dibayar' ? $request->tanggal_dp_dibayar : $request->tanggal_pelunasan_dibayar,
+                    'status' => 'Pending',
+                    'deskripsi' => "Pengeluaran {$request->status_termin} untuk termin {$termin->nama_termin}",
                     'bukti_pembayaran_url' => $path ?? null,
                     'termin_id' => $termin->id
                 ]);
@@ -162,7 +180,7 @@ class TerminController extends Controller
 
             // Set headers
             $headers = [
-                'Nama Termin', 'Jenis Termin', 'Termin Ke', 'Nilai Termin', 
+                'Nama Termin', 'Jenis Termin', 'Termin Ke', 'Nilai Termin',
                 'Persentase DP', 'Nilai DP', 'Nilai Pelunasan', 'Tanggal DP',
                 'Tanggal Pelunasan', 'Status', 'Status Approval', 'Keterangan'
             ];
@@ -315,4 +333,4 @@ class TerminController extends Controller
             ], 500);
         }
     }
-} 
+}

@@ -56,16 +56,16 @@
             <CCol md="3">
               <CCard class="bg-primary text-white">
                 <CCardBody>
-                  <h6>Total Termin</h6>
-                  <h3>{{ formatCurrency(totalTermin) }}</h3>
-                </CCardBody>
+  <h6>Total Termin</h6>
+  <h3>{{ formatCurrency(summary.total_termin) }}</h3>
+</CCardBody>
               </CCard>
             </CCol>
             <CCol md="3">
               <CCard class="bg-success text-white">
                 <CCardBody>
                   <h6>Total DP</h6>
-                  <h3>{{ formatCurrency(totalDP) }}</h3>
+                  <h3>{{ formatCurrency(summary.total_dp) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -73,15 +73,15 @@
               <CCard class="bg-info text-white">
                 <CCardBody>
                   <h6>Total Pelunasan</h6>
-                  <h3>{{ formatCurrency(totalPelunasan) }}</h3>
+                  <h3>{{ formatCurrency(summary.total_pelunasan) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
             <CCol md="3">
               <CCard class="bg-warning text-white">
                 <CCardBody>
-                  <h6>Total Keseluruhan</h6>
-                  <h3>{{ formatCurrency(totalKeseluruhan) }}</h3>
+                  <h6>Sisa Belum Dibayar</h6>
+                  <h3>{{ formatCurrency(summary.sisa_belum_dibayar) }}</h3>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -114,78 +114,77 @@
                   <th>Aksi</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr v-for="item in termins" :key="item.id">
-                  <td>{{ item.nama_termin }}</td>
-                  <td>{{ item.jenis_termin }}</td>
-                  <td>{{ item.termin_ke }}</td>
-                  <td>{{ formatCurrency(item.nilai_termin) }}</td>
-                  <td>{{ item.persentase_dp }}</td>
-                  <td>{{ formatCurrency(item.nilai_dp) }}</td>
-                  <td>{{ formatCurrency(item.nilai_pelunasan) }}</td>
-                  <td>{{ item.tanggal_dp }}</td>
-                  <td>{{ item.tanggal_pelunasan }}</td>
-                  <td>{{ item.status_termin }}</td>
-                  <td>{{ item.status_approval }}</td>
-                  <td>{{ item.approved_by }}</td>
-                  <td>{{ item.approved_at }}</td>
-                  <td>{{ item.tanggal_dp_dibayar }}</td>
-                  <td>{{ item.tanggal_pelunasan_dibayar }}</td>
-                  <td>{{ item.keterangan }}</td>
-                  <td>
-                    <a v-if="item.bukti_pembayaran_url" :href="item.bukti_pembayaran_url" target="_blank">Lihat</a>
-                  </td>
-                  <td>{{ item.created_at }}</td>
-                  <td>{{ item.updated_at }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-info" @click="openStatusModal(item)">Update Status</button>
-                    <template v-if="isApprover && item.status_approval === 'Pending' && ['DP Dibayar','Lunas'].includes(item.status_termin)">
-                      <button class="btn btn-sm btn-success" @click="approveTermin(item)">Approve</button>
-                      <button class="btn btn-sm btn-danger" @click="rejectTermin(item)">Reject</button>
-                      <button class="btn btn-sm btn-warning" @click="pendingTermin(item)">Pending</button>
-                    </template>
-                  </td>
-                </tr>
-              </tbody>
+              <tbody></tbody>
             </table>
           </div>
         </CCardBody>
       </CCard>
-      <CCard v-if="selectedProject && selectedInvoice" class="mt-3">
-        <CCardHeader>
-          <strong>Ringkasan Termin</strong>
-        </CCardHeader>
-        <CCardBody>
-          <CRow>
-            <CCol md="6">
-              <CTable>
-                <CTableBody>
-                  <CTableRow>
-                    <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
-                    <CTableDataCell class="text-end"> {{ formatCurrency(totalInvoiceAmount) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total Nilai Termin</CTableDataCell>
-                    <CTableDataCell class="text-end"> {{ formatCurrency(totalTermin) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total DP</CTableDataCell>
-                    <CTableDataCell class="text-end"> {{ formatCurrency(totalDP) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow>
-                    <CTableDataCell>Total Pelunasan</CTableDataCell>
-                    <CTableDataCell class="text-end"> {{ formatCurrency(totalPelunasan) }}</CTableDataCell>
-                  </CTableRow>
-                  <CTableRow class="fw-bold">
-                    <CTableDataCell>Total Keseluruhan</CTableDataCell>
-                    <CTableDataCell class="text-end"> {{ formatCurrency(totalKeseluruhan) }}</CTableDataCell>
-                  </CTableRow>
-                </CTableBody>
-              </CTable>
-            </CCol>
-          </CRow>
-        </CCardBody>
-      </CCard>
+<CCard v-if="selectedProject && selectedInvoice" class="mt-3">
+  <CCardHeader>
+    <strong>Ringkasan Termin</strong>
+  </CCardHeader>
+  <CCardBody>
+    <CRow>
+      <CCol md="6">
+        <CTable>
+          <CTableBody>
+            <CTableRow v-if="taxLabel">
+              <CTableDataCell>{{ taxLabel }}</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(taxValue) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow v-if="selectedInvoiceObj && selectedInvoiceObj.pph_final_amount">
+  <CTableDataCell>PPH Final</CTableDataCell>
+  <CTableDataCell class="text-end">{{ formatCurrency(selectedInvoiceObj.pph_final_amount) }}</CTableDataCell>
+</CTableRow>
+            <CTableRow v-if="ppnLabel">
+              <CTableDataCell>{{ ppnLabel }}</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(ppnValue) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow v-if="!taxLabel && !ppnLabel">
+              <CTableDataCell>Tanpa Pajak</CTableDataCell>
+              <CTableDataCell class="text-end">0</CTableDataCell>
+            </CTableRow>
+
+          </CTableBody>
+        </CTable>
+      </CCol>
+      <CCol md="6">
+        <CTable>
+          <CTableBody>
+            <CTableRow>
+              <CTableDataCell>Total Belanja (Invoice)</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalInvoiceAmount) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Nilai Termin</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalTermin) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total DP</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalDP) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Pelunasan</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalPelunasan) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow>
+              <CTableDataCell>Total Dibayar</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalPaid) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow class="fw-bold">
+              <CTableDataCell>Sisa Belum Dibayar</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(totalRemaining) }}</CTableDataCell>
+            </CTableRow>
+            <CTableRow class="fw-bold">
+              <CTableDataCell>Nilai Akhir Setelah Pajak</CTableDataCell>
+              <CTableDataCell class="text-end">{{ formatCurrency(finalAmount) }}</CTableDataCell>
+            </CTableRow>
+          </CTableBody>
+        </CTable>
+      </CCol>
+    </CRow>
+  </CCardBody>
+</CCard>
     </CCol>
 
     <!-- Modal Form -->
@@ -273,10 +272,8 @@
               <div class="input-group">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
-                  type="text"
-                  :value="formatCurrency(form.remaining_dp !== undefined ? form.remaining_dp : 0)"
-                  id="remaining_dp"
                   readonly
+                  :value="formatCurrency(sisaDP)"
                 />
               </div>
             </CCol>
@@ -311,7 +308,7 @@
               <span class="input-group-text">Rp</span>
               <CFormInput
                 type="text"
-                :value="formatCurrency(form.remaining_total !== undefined ? form.remaining_total : 0)"
+                :value="formatCurrency(sisaTerminBelumDibayar)"
                 id="remaining_total"
                 readonly
               />
@@ -356,11 +353,6 @@
               </div>
             </CCol>
           </CRow>
-// Handler untuk upload bukti pembayaran pada form create/edit termin
-const handleBuktiPembayaranForm = (event) => {
-  const file = event.target.files[0];
-  form.value.bukti_pembayaran = file || null;
-};
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="invoice_id">Invoice</CFormLabel>
@@ -462,15 +454,113 @@ const handleBuktiPembayaranForm = (event) => {
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch, computed } from "vue";
+
+import { ref, onMounted, nextTick, watch, computed, onUnmounted } from "vue";
 import axios from "axios";
 import $ from "jquery";
 import Swal from "sweetalert2";
 import "datatables.net-dt/css/dataTables.dataTables.min.css";
 import "datatables.net-responsive-dt/css/responsive.dataTables.min.css";
 import "datatables.net-responsive-dt";
+import 'datatables.net';
 
+// --- All refs and variables must be declared at the top ---
+const selectedProject = ref("");
+const selectedInvoice = ref("");
+let dataTableInstance = null;
 
+// --- DataTable initialization function ---
+function initDataTable() {
+  // Destroy previous instance if exists
+  if (dataTableInstance) {
+    dataTableInstance.clear().destroy();
+    dataTableInstance = null;
+  }
+  // Only initialize if both filters are selected
+  if (!selectedProject.value || !selectedInvoice.value) return;
+  // Wait for DOM
+  nextTick(() => {
+    if (!document.getElementById('terminTable')) return;
+    dataTableInstance = $('#terminTable').DataTable({
+      processing: true,
+      serverSide: true,
+      responsive: true,
+      destroy: true,
+      ajax: {
+        url: '/api/termins',
+        type: 'GET',
+        data: function (d) {
+          d.proyek_id = selectedProject.value;
+          d.invoice_id = selectedInvoice.value;
+        },
+        beforeSend: function (xhr) {
+          const token = sessionStorage.getItem('token');
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+      },
+      columns: [
+        { data: 'nama_termin', title: 'Nama Termin' },
+        { data: 'jenis_termin', title: 'Jenis Termin' },
+        { data: 'termin_ke', title: 'Termin Ke' },
+        { data: 'nilai_termin', title: 'Nilai Termin', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'persentase_dp', title: 'Persentase DP', render: d => d ? d + '%' : '-' },
+        { data: 'nilai_dp', title: 'Nilai DP', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'nilai_pelunasan', title: 'Nilai Pelunasan', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
+        { data: 'tanggal_dp', title: 'Tanggal DP', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'tanggal_pelunasan', title: 'Deadline Pembayaran', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'status_termin', title: 'Status', render: d => d || '-' },
+        { data: 'status_approval', title: 'Status Approval', render: d => d || '-' },
+        { data: 'approved_by_name', title: 'Disetujui Oleh', render: d => d || '-' },
+        { data: 'approved_at', title: 'Waktu Disetujui', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        { data: 'tanggal_dp_dibayar', title: 'Tgl DP Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'tanggal_pelunasan_dibayar', title: 'Tgl Pelunasan Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
+        { data: 'keterangan', title: 'Keterangan', render: d => d || '-' },
+        { data: 'bukti_pembayaran_url', title: 'Bukti Pembayaran', render: d => d ? `<a href="${d}" target="_blank">Lihat</a>` : '-' },
+        { data: 'created_at', title: 'Dibuat', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        { data: 'updated_at', title: 'Diupdate', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
+        {
+          data: null,
+          title: 'Aksi',
+          orderable: false,
+          render: function (data, type, row) {
+            return `<button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+                    <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>`;
+          }
+        }
+      ],
+      language: {
+        processing: "Memproses...",
+        search: "Cari:",
+        lengthMenu: "Tampilkan _MENU_ data",
+        info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+        infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
+        infoFiltered: "(difilter dari _MAX_ total data)",
+        zeroRecords: "Tidak ditemukan data yang sesuai",
+        paginate: {
+          first: "Pertama",
+          last: "Terakhir",
+          next: "Selanjutnya",
+          previous: "Sebelumnya"
+        }
+      },
+      scrollX: true
+    });
+    // Button event listeners (edit/delete)
+    $('#terminTable').off('click', '.edit-btn').on('click', '.edit-btn', function () {
+      const id = $(this).data('id');
+      // Find the row data and open modal
+      const rowData = dataTableInstance.row($(this).parents('tr')).data();
+      if (rowData) openModal('edit', rowData);
+    });
+    $('#terminTable').off('click', '.delete-btn').on('click', '.delete-btn', function () {
+      const id = $(this).data('id');
+      // Implement delete logic or emit event
+      Swal.fire('Fitur hapus belum diimplementasikan');
+    });
+  });
+}
+
+// State declarations
 const form = ref({
   proyek_id: '',
   invoice_id: '',
@@ -507,6 +597,7 @@ const statusForm = ref({
   approved_at: ''
 });
 
+
 const projects = ref([]);
 const projectOptions = ref([]);
 const invoices = ref([]);
@@ -522,12 +613,24 @@ const modalButtonText = ref("Simpan");
 const modalMode = ref("tambah");
 const editingId = ref(null);
 const updatingStatusId = ref(null);
-const selectedProject = ref("");
-const selectedInvoice = ref("");
 
 // Manual mode state
 const manualNilaiTermin = ref(false);
 const manualNilaiDP = ref(false);
+
+const totalDpSudahDibayar = ref(0);
+
+
+// Default summary object to avoid undefined error
+const defaultSummary = {
+  total_termin: 0,
+  total_dp: 0,
+  total_pelunasan: 0,
+  total_pembelian_material: 0,
+  total_dp_sudah_dibayar: 0,
+  sisa_belum_dibayar: 0
+};
+const summary = ref({ ...defaultSummary });
 
 // Computed Properties
 const groupedProjects = computed(() => {
@@ -562,30 +665,101 @@ const totalKeseluruhan = computed(() => {
 });
 
 const selectedInvoiceObj = computed(() => {
-  return invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  return invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
 });
 
 const totalInvoiceAmount = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.total_amount) : 0;
 });
 
 const totalInvoicePaid = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.amount_paid) : 0;
 });
 
 const totalInvoiceUnpaid = computed(() => {
-  const inv = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
+  const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
   return inv ? Number(inv.total_amount) - Number(inv.amount_paid) : 0;
 });
 
 const modalInvoiceObj = computed(() => {
-  return invoices.value.find(inv => String(inv.id) === String(form.value.invoice_id));
+  return invoices.value.find(inv => `${inv.id}` === `${form.value.invoice_id}`);
 });
 
 const modalTotalInvoiceAmount = computed(() => {
   return modalInvoiceObj.value && modalInvoiceObj.value.total_amount ? Number(modalInvoiceObj.value.total_amount) : 0;
+});
+
+const totalPaid = computed(() => {
+  return termins.value.reduce((sum, termin) => {
+    if (termin.status_termin === 'DP Dibayar') {
+      return sum + (Number(termin.nilai_dp) || 0);
+    } else if (termin.status_termin === 'Lunas') {
+      return sum + (Number(termin.nilai_termin) || 0);
+    }
+    return sum;
+  }, 0);
+});
+
+const totalRemaining = computed(() => {
+  return totalTermin.value - (totalPurchases.value + totalDpSudahDibayar.value);
+});
+
+const taxLabel = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return null;
+  if (inv.use_pph_non_final) return 'PPH Non Final';
+  if (inv.use_pph_final) return 'PPH Final';
+  return null;
+});
+const taxValue = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return 0;
+  if (inv.use_pph_non_final) return inv.pph_non_final_amount || 0;
+  if (inv.use_pph_final) return inv.pph_final_amount || 0;
+  return 0;
+});
+const ppnLabel = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (inv && inv.use_ppn) return 'PPN (11%)';
+  return null;
+});
+const ppnValue = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (inv && inv.use_ppn) return inv.ppn_amount || 0;
+  return 0;
+});
+const finalAmount = computed(() => {
+  const inv = selectedInvoiceObj.value;
+  if (!inv) return 0;
+  // Nilai akhir = total_amount + ppn - pph
+  let total = Number(inv.total_amount) || 0;
+  if (inv.use_ppn) total += Number(inv.ppn_amount) || 0;
+  if (inv.use_pph_non_final) total -= Number(inv.pph_non_final_amount) || 0;
+  if (inv.use_pph_final) total -= Number(inv.pph_final_amount) || 0;
+  return total;
+});
+
+// Tambahkan computed properties untuk menghitung nilai DP, pelunasan, dan sisa pembayaran secara dinamis
+const nilaiDP = computed(() => {
+  return (form.value.persentase_dp / 100) * form.value.nilai_termin;
+});
+
+const nilaiPelunasan = computed(() => {
+  return form.value.nilai_termin - nilaiDP.value;
+});
+
+const sisaDP = computed(() => {
+  return form.value.status_termin === 'Belum Dibayar' ? nilaiDP.value : 0;
+});
+
+const sisaPelunasan = computed(() => {
+  return form.value.status_termin === 'Belum Dibayar' ? nilaiPelunasan.value : 0;
+});
+
+const sisaTerminBelumDibayar = computed(() => {
+  return sisaDP.value + sisaPelunasan.value;
 });
 
 // Helper Methods
@@ -778,7 +952,7 @@ const fetchPurchases = async (proyekId, invoiceId) => {
       allPurchases = response.data.data;
     }
 
-    purchases.value = allPurchases.filter(p => String(p.invoice_id) === String(invoiceId));
+    purchases.value = allPurchases.filter(p => `${p.invoice_id}` === `${invoiceId}`);
 
     const invoiceTotal = Number(invoiceResponse.data.total_amount) || 0;
     form.value.nilai_termin = invoiceTotal;
@@ -796,6 +970,25 @@ const fetchPurchases = async (proyekId, invoiceId) => {
       text: error.value
     });
   }
+};
+
+// Fungsi utilitas untuk menghitung total DP, pelunasan, dan termin yang dibayar
+const hitungTerminDibayar = (list, excludeId = null) => {
+  const filtered = excludeId ? list.filter(t => t.id !== excludeId) : list;
+  let dp = 0, pelunasan = 0, total = 0;
+  filtered.forEach(t => {
+    const nilaiDP = Number(t.nilai_dp) || 0;
+    const nilaiPelunasan = Number(t.nilai_pelunasan) || 0;
+    if (t.status_termin === 'DP Dibayar') {
+      dp += nilaiDP;
+      total += nilaiDP;
+    } else if (t.status_termin === 'Lunas') {
+      dp += nilaiDP;
+      pelunasan += nilaiPelunasan;
+      total += nilaiDP + nilaiPelunasan;
+    }
+  });
+  return { dp, pelunasan, total };
 };
 
 // Event Handlers
@@ -818,7 +1011,7 @@ const openModal = async (mode, termin = null) => {
   if (mode === "edit" && termin) {
     // Hitung sisa DP, pelunasan, total (kecuali termin yang sedang diedit)
     const invoiceId = termin.invoice_id || selectedInvoice.value;
-    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId) && t.id !== termin.id);
+    const filteredTermins = termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}` && t.id !== termin.id);
     const totalDPdibayar = filteredTermins.reduce((sum, t) => {
       if (t.status_termin === 'DP Dibayar') {
         return sum + (Number(t.nilai_dp) || 0);
@@ -836,13 +1029,29 @@ const openModal = async (mode, termin = null) => {
       }
       return sum;
     }, 0);
-    const invoice = invoices.value.find(inv => String(inv.id) === String(invoiceId));
-    const invoiceTotal = invoice && invoice.total_amount ? Number(invoice.total_amount) : 0;
+    const invoice = invoices.value.find(inv => `${inv.id}` === `${invoiceId}`);
+    // Logic: jika ada pajak (ppn/pph), ambil dari finalAmount, jika tidak ada pajak ambil dari total_amount
+    let nilaiAkhirSetelahPajak = 0;
+    if (invoice) {
+      const usePpn = invoice.use_ppn;
+      const usePphNonFinal = invoice.use_pph_non_final;
+      const usePphFinal = invoice.use_pph_final;
+      if (usePpn || usePphNonFinal || usePphFinal) {
+        // Hitung manual sesuai logic finalAmount
+        let total = Number(invoice.total_amount) || 0;
+        if (usePpn) total += Number(invoice?.ppn_amount ?? 0);
+        if (usePphNonFinal) total -= Number(invoice.pph_non_final_amount) || 0;
+        if (usePphFinal) total -= Number(invoice.pph_final_amount) || 0;
+        nilaiAkhirSetelahPajak = total;
+      } else {
+        nilaiAkhirSetelahPajak = Number(invoice.total_amount) || 0;
+      }
+    }
     form.value = {
       proyek_id: termin.proyek_id || selectedProject.value,
-      invoice_id: String(invoiceId || ""),
+      invoice_id: `${invoiceId || ""}`,
       nama_termin: termin.nama_termin,
-      nilai_termin: termin.nilai_termin,
+      nilai_termin: nilaiAkhirSetelahPajak,
       persentase_dp: termin.persentase_dp,
       nilai_dp: termin.nilai_dp,
       nilai_pelunasan: termin.nilai_pelunasan,
@@ -852,48 +1061,47 @@ const openModal = async (mode, termin = null) => {
       tanggal_pelunasan_dibayar: termin.tanggal_pelunasan_dibayar ? new Date(termin.tanggal_pelunasan_dibayar).toISOString().split('T')[0] : "",
       status_termin: termin.status_termin,
       keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(termin.nilai_termin),
+      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
       displayNilaiDP: formatCurrency(termin.nilai_dp),
       displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan),
       bukti_pembayaran: null,
       bukti_pembayaran_url: termin.bukti_pembayaran_url || null,
-      remaining_dp: Math.max((Number(termin.nilai_dp) || 0) - totalDPdibayar, 0),
-      remaining_pelunasan: Math.max((Number(termin.nilai_pelunasan) || 0) - totalPelunasanDibayar, 0),
-      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+      remaining_dp: Math.max(totalDPdibayar - (Number(termin.nilai_dp) || 0), 0),
+      remaining_pelunasan: Math.max(totalPelunasanDibayar - (Number(termin.nilai_pelunasan) || 0), 0),
+      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
     };
     editingId.value = termin.id;
     modalTitle.value = "Edit Termin";
     modalButtonText.value = "Update";
   } else {
-    const selectedInvoiceObj = invoices.value.find(inv => String(inv.id) === String(selectedInvoice.value));
-    const nilai_termin = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    const selectedInvoiceObj = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
     const today = new Date().toISOString().split('T')[0];
     // Hitung sisa DP, pelunasan, total dari termin yang sudah dibayar pada invoice ini
     const invoiceId = selectedInvoice.value;
-    const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId));
-    const totalDPdibayar = filteredTermins.reduce((sum, t) => {
-      if (t.status_termin === 'DP Dibayar') {
-        return sum + (Number(t.nilai_dp) || 0);
-      } else if (t.status_termin === 'Lunas') {
-        return sum + (Number(t.nilai_dp) || 0);
+    const { dp: totalDPdibayar, pelunasan: totalPelunasanDibayar, total: totalTerminDibayar } =
+      hitungTerminDibayar(termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}`));
+
+    // Logic: jika ada pajak (ppn/pph), ambil dari finalAmount, jika tidak ada pajak ambil dari total_amount
+    let nilaiAkhirSetelahPajak = 0;
+    if (selectedInvoiceObj) {
+      const usePpn = selectedInvoiceObj.use_ppn;
+      const usePphNonFinal = selectedInvoiceObj.use_pph_non_final;
+      const usePphFinal = selectedInvoiceObj.use_pph_final;
+      if (usePpn || usePphNonFinal || usePphFinal) {
+        let total = Number(selectedInvoiceObj.total_amount) || 0;
+        if (usePpn) total += Number(selectedInvoiceObj.ppn_amount) || 0;
+        if (usePphNonFinal) total -= Number(selectedInvoiceObj.pph_non_final_amount) || 0;
+        if (usePphFinal) total -= Number(selectedInvoiceObj.pph_final_amount) || 0;
+        nilaiAkhirSetelahPajak = total;
+      } else {
+        nilaiAkhirSetelahPajak = Number(selectedInvoiceObj.total_amount) || 0;
       }
-      return sum;
-    }, 0);
-    const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (t.status_termin === 'Lunas' ? Number(t.nilai_pelunasan) || 0 : 0), 0);
-    const totalTerminDibayar = filteredTermins.reduce((sum, t) => {
-      if (t.status_termin === 'DP Dibayar') {
-        return sum + (Number(t.nilai_dp) || 0);
-      } else if (t.status_termin === 'Lunas') {
-        return sum + (Number(t.nilai_dp) || 0) + (Number(t.nilai_pelunasan) || 0);
-      }
-      return sum;
-    }, 0);
-    const invoiceTotal = selectedInvoiceObj && selectedInvoiceObj.total_amount ? Number(selectedInvoiceObj.total_amount) : 0;
+    }
     form.value = {
       proyek_id: selectedProject.value,
-      invoice_id: String(selectedInvoice.value || ""),
+      invoice_id: `${selectedInvoice.value || ""}`,
       nama_termin: "",
-      nilai_termin: nilai_termin,
+      nilai_termin: nilaiAkhirSetelahPajak,
       persentase_dp: 0,
       nilai_dp: 0,
       nilai_pelunasan: 0,
@@ -903,33 +1111,15 @@ const openModal = async (mode, termin = null) => {
       tanggal_pelunasan_dibayar: "",
       status_termin: "Belum Dibayar",
       keterangan: "",
-      displayNilaiTermin: formatCurrency(nilai_termin),
+      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
       displayNilaiDP: formatCurrency(0),
       displayNilaiPelunasan: formatCurrency(0),
       bukti_pembayaran: null,
       bukti_pembayaran_url: null,
       remaining_dp: 0,
       remaining_pelunasan: 0,
-      remaining_total: Math.max(invoiceTotal - totalTerminDibayar, 0)
+      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
     };
-// Watcher untuk update sisa DP & pelunasan otomatis saat input berubah
-// (sudah diimport di baris 465)
-// Watcher untuk update sisa DP & pelunasan otomatis saat input berubah (top-level, bukan di dalam fungsi)
-// Watcher untuk update sisa DP & pelunasan otomatis saat input atau data termin berubah
-watch([
-  () => form.value.nilai_dp,
-  () => form.value.nilai_pelunasan,
-  () => termins.value.map(t => [t.id, t.total_dp_paid, t.total_pelunasan_paid, t.total_paid, t.status_termin]).join('-')
-], ([newNilaiDP, newNilaiPelunasan]) => {
-  // Ambil termin yang sedang diedit/ditambah
-  const invoiceId = form.value.invoice_id;
-  const filteredTermins = termins.value.filter(t => String(t.invoice_id) === String(invoiceId) && (!editingId.value || t.id !== editingId.value));
-  // Hitung total pembayaran DP & pelunasan real-time dari backend (bukan hanya status termin)
-  const totalDPdibayar = filteredTermins.reduce((sum, t) => sum + (Number(t.total_dp_paid) || 0), 0);
-  const totalPelunasanDibayar = filteredTermins.reduce((sum, t) => sum + (Number(t.total_pelunasan_paid) || 0), 0);
-  form.value.remaining_dp = Math.max((Number(newNilaiDP) || 0) - totalDPdibayar, 0);
-  form.value.remaining_pelunasan = Math.max((Number(newNilaiPelunasan) || 0) - totalPelunasanDibayar, 0);
-});
     editingId.value = null;
     modalTitle.value = "Tambah Termin";
     modalButtonText.value = "Simpan";
@@ -966,31 +1156,30 @@ const handleSubmit = async () => {
   error.value = "";
 
   try {
-    // Validasi dasar
-  if (!form.value.proyek_id) {
+    // Basic validation
+    if (!form.value.proyek_id) {
       throw new Error("Proyek wajib dipilih!");
     }
-
     if (!form.value.invoice_id) {
       throw new Error("Invoice wajib dipilih!");
-  }
+    }
 
     if (!form.value.nama_termin?.trim()) {
       throw new Error("Nama termin wajib diisi!");
-  }
+    }
 
-  if (!form.value.nilai_termin || form.value.nilai_termin <= 0) {
+    if (!form.value.nilai_termin || form.value.nilai_termin <= 0) {
       throw new Error("Nilai termin harus lebih dari 0!");
-  }
+    }
 
-  if (!form.value.persentase_dp || form.value.persentase_dp < 0 || form.value.persentase_dp > 100) {
+    if (!form.value.persentase_dp || form.value.persentase_dp < 0 || form.value.persentase_dp > 100) {
       throw new Error("Persentase DP harus antara 0-100%!");
-  }
+    }
 
-    // Hitung ulang nilai DP dan pelunasan
-  calculateValues();
+    // Recalculate values
+    calculateValues();
 
-    // Pastikan total DP + Pelunasan = Nilai Termin
+    // Ensure total DP + Pelunasan = Nilai Termin
     const total = form.value.nilai_dp + form.value.nilai_pelunasan;
     if (Math.abs(total - form.value.nilai_termin) > 0.01) {
       throw new Error("Total DP dan Pelunasan harus sama dengan Nilai Termin");
@@ -1001,12 +1190,12 @@ const handleSubmit = async () => {
       throw new Error("Token tidak ditemukan. Silakan login kembali.");
     }
 
-    // Format data untuk API
+    // Format data for API
     const formattedData = {
       proyek_id: Number(form.value.proyek_id),
       invoice_id: Number(form.value.invoice_id),
       nama_termin: form.value.nama_termin.trim(),
-        jenis_termin: form.value.jenis_termin,
+      jenis_termin: form.value.jenis_termin,
       termin_ke: form.value.termin_ke ? Number(form.value.termin_ke) : null,
       nilai_termin: Number(form.value.nilai_termin),
       persentase_dp: Number(form.value.persentase_dp),
@@ -1016,9 +1205,9 @@ const handleSubmit = async () => {
       tanggal_pelunasan: form.value.tanggal_pelunasan || null,
       tanggal_dp_dibayar: form.value.tanggal_dp_dibayar || null,
       tanggal_pelunasan_dibayar: form.value.tanggal_pelunasan_dibayar || null,
-        status_termin: form.value.status_termin,
+      status_termin: form.value.status_termin,
       keterangan: form.value.keterangan?.trim() || null
-      };
+    };
 
     console.log('Sending data to API:', formattedData);
 
@@ -1028,7 +1217,7 @@ const handleSubmit = async () => {
       'Content-Type': 'application/json'
     };
 
-      if (form.value.bukti_pembayaran) {
+    if (form.value.bukti_pembayaran) {
       const formData = new FormData();
       Object.entries(formattedData).forEach(([key, value]) => {
         if (value !== null) {
@@ -1054,13 +1243,13 @@ const handleSubmit = async () => {
     console.log('Response from API:', response.data);
 
     if (response.data.status === 'success') {
-    Swal.fire({
-      icon: "success",
-      title: "Berhasil!",
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil!",
         text: modalMode.value === "edit" ? "Data termin diperbarui." : "Data termin ditambahkan."
-    });
+      });
       closeModal();
-    await fetchTermins();
+      await fetchTermins();
       window.dispatchEvent(new Event('termin-updated'));
     } else {
       throw new Error(response.data.message || "Terjadi kesalahan saat menyimpan data");
@@ -1090,12 +1279,12 @@ const handleSubmit = async () => {
         html: `<pre style="text-align: left">${errorList}</pre>`
       });
     } else {
-    Swal.fire({
-      icon: "error",
-      title: "Error",
+      Swal.fire({
+        icon: "error",
+        title: "Error",
         text: errorMessage
-    });
-  }
+      });
+    }
   } finally {
     loading.value = false;
   }
@@ -1209,18 +1398,20 @@ watch(selectedInvoice, async (newValue) => {
   }
 });
 
-// Setelah fetchTermins selesai, inisialisasi DataTable
-watch(termins, async (newVal) => {
-  await nextTick();
-  if ($.fn.DataTable.isDataTable('#terminTable')) {
-    $('#terminTable').DataTable().destroy();
-  }
-  $('#terminTable').DataTable();
-});
+
 
 onMounted(async () => {
   await fetchProjects();
-  // DataTable akan diinisialisasi otomatis oleh watcher
+  await fetchTermins();
+  initDataTable();
+});
+
+onUnmounted(() => {
+  if (table) table.destroy();
+  if (dataTableInstance) {
+    dataTableInstance.clear().destroy();
+    dataTableInstance = null;
+  }
 });
 
 const fields = [
@@ -1243,6 +1434,19 @@ const getStatusColor = (status) => {
     case 'DP Dibayar':
       return 'info';
     case 'Belum Dibayar':
+      return 'warning';
+    default:
+      return 'secondary';
+  }
+};
+
+const getApprovalColor = (status) => {
+  switch (status) {
+    case 'Approved':
+      return 'success';
+    case 'Rejected':
+      return 'danger';
+    case 'Pending':
       return 'warning';
     default:
       return 'secondary';
@@ -1277,148 +1481,7 @@ const updateTerminApproval = async (item, status) => {
   formData.append('status_approval', status);
   formData.append('approved_by', user.id);
   formData.append('approved_at', new Date().toISOString());
-  // Optional: keterangan jika ada// ... existing code ...
-
-const errors = ref({
-  nilai_termin: '',
-  nilai_dp: '',
-  nilai_pelunasan: ''
-});
-
-const handleNilaiTerminInput = (event) => {
-  if (!manualNilaiTermin.value) return;
-  const value = event.target.value.replace(/[^\d]/g, '');
-  const newValue = Number(value) || 0;
-  if (newValue > modalTotalInvoiceAmount.value) {
-    errors.value.nilai_termin = 'Nilai termin tidak boleh melebihi total invoice';
-    Swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: errors.value.nilai_termin
-    });
-    return;
-  }
-  errors.value.nilai_termin = '';
-  form.value.nilai_termin = newValue;
-  form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
-  if (!manualNilaiDP.value) calculateValues();
-};
-
-const handleNilaiDPInput = (event) => {
-  if (!manualNilaiDP.value) return;
-  const value = event.target.value.replace(/[^\d]/g, '');
-  const newValue = Number(value) || 0;
-  if (newValue > form.value.nilai_termin) {
-    errors.value.nilai_dp = 'Nilai DP tidak boleh melebihi nilai termin';
-    Swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: errors.value.nilai_dp
-    });
-    return;
-  }
-  errors.value.nilai_dp = '';
-  form.value.nilai_dp = newValue;
-  form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-  if (form.value.nilai_termin > 0) {
-    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
-    if (!manualNilaiTermin.value) {
-      form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-      form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-    }
-  }
-};
-
-const handleNilaiPelunasanInput = (event) => {
-  const value = event.target.value.replace(/[^\d]/g, '');
-  const newValue = Number(value) || 0;
-  if (newValue > form.value.nilai_termin) {
-    errors.value.nilai_pelunasan = 'Nilai pelunasan tidak boleh melebihi nilai termin';
-    Swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: errors.value.nilai_pelunasan
-    });
-    return;
-  }
-  errors.value.nilai_pelunasan = '';
-  form.value.nilai_pelunasan = newValue;
-  form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-  if (form.value.nilai_termin > 0 && !manualNilaiDP.value) {
-    form.value.nilai_dp = form.value.nilai_termin - form.value.nilai_pelunasan;
-    form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
-  }
-};
-
-// ... existing code ...
-const handleStatusSubmit = async () => {
-  // Validasi dasar
-  if (!statusForm.value.status_termin) {
-    Swal.fire({ icon: 'error', title: 'Status termin wajib dipilih!' });
-    return;
-  }
-  if (!statusForm.value.status_approval) {
-    Swal.fire({ icon: 'error', title: 'Status approval wajib dipilih!' });
-    return;
-  }
-  if ((['DP Dibayar', 'Lunas'].includes(statusForm.value.status_termin)) && !statusForm.value.bukti_pembayaran && !statusForm.value.bukti_pembayaran_url) {
-    Swal.fire('Peringatan', 'Bukti pembayaran wajib diupload', 'warning');
-    return;
-  }
-  const actionText = statusForm.value.status_approval === 'Approved' ? 'Menyetujui' : (statusForm.value.status_approval === 'Rejected' ? 'Menolak' : 'Menunda');
-  const confirmResult = await Swal.fire({
-    title: `Konfirmasi`,
-    text: `Anda yakin ingin ${actionText.toLowerCase()} termin ini?`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Ya',
-    cancelButtonText: 'Batal'
-  });
-  if (!confirmResult.isConfirmed) return;
-
-  try {
-    const token = sessionStorage.getItem('token');
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}');
-    const formData = new FormData();
-    formData.append('status_termin', statusForm.value.status_termin);
-    formData.append('status_approval', statusForm.value.status_approval);
-    formData.append('approved_by', user.id);
-    formData.append('approved_at', new Date().toISOString());
-    formData.append('tanggal_dp_dibayar', statusForm.value.tanggal_dp_dibayar || '');
-    formData.append('tanggal_pelunasan_dibayar', statusForm.value.tanggal_pelunasan_dibayar || '');
-    formData.append('keterangan', statusForm.value.keterangan || '');
-    if (statusForm.value.bukti_pembayaran) {
-      formData.append('bukti_pembayaran', statusForm.value.bukti_pembayaran);
-    }
-    await axios.post(`/api/termins/${updatingStatusId.value}/update-status`, formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-    Swal.fire('Berhasil', 'Status termin berhasil diperbarui', 'success');
-    closeStatusModal();
-    await fetchTermins();
-  } catch (err) {
-    const validationErrors = err.response?.data?.errors;
-    if (validationErrors) {
-      const errorList = Object.entries(validationErrors)
-        .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
-        .join('\n');
-      Swal.fire({
-        icon: 'error',
-        title: 'Validasi Gagal',
-        html: `<pre style="text-align: left">${errorList}</pre>`
-      });
-    } else {
-      Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
-    }
-  }
-};
-
-// ... existing code ...
-
+  // Optional: keterangan jika ada
   if (item.keterangan) formData.append('keterangan', item.keterangan);
   // Optional: tanggal_dp_dibayar dan tanggal_pelunasan_dibayar jika ada
   if (item.tanggal_dp_dibayar) formData.append('tanggal_dp_dibayar', item.tanggal_dp_dibayar);
@@ -1453,8 +1516,194 @@ const handleStatusSubmit = async () => {
     }
   }
 };
-</script>
 
+const handleBuktiPembayaranForm = (event) => {
+  form.value.bukti_pembayaran = event.target.files[0];
+};
+
+const exportToPDF = async () => {
+  try {
+    const token = sessionStorage.getItem('token');
+    if (!selectedProject.value) {
+      Swal.fire('Pilih proyek terlebih dahulu!');
+      return;
+    }
+    let url = `/api/termins/export-pdf/${selectedProject.value}`;
+    // Jika backend sudah support invoice_id, tambahkan query param
+    if (selectedInvoice.value) {
+      url += `?invoice_id=${selectedInvoice.value}`;
+    }
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      responseType: 'blob'
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', 'termin-report.pdf');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(link.href);
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: err.response?.data?.message || 'Gagal mengekspor ke PDF'
+    });
+  }
+};
+
+const exportToExcel = async () => {
+  try {
+    const token = sessionStorage.getItem('token');
+    if (!selectedProject.value) {
+      Swal.fire('Pilih proyek terlebih dahulu!');
+      return;
+    }
+    let url = `/api/termins/export-excel/${selectedProject.value}`;
+    if (selectedInvoice.value) {
+      url += `?invoice_id=${selectedInvoice.value}`;
+    }
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      responseType: 'blob'
+    });
+    const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', 'termin-report.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(link.href);
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: err.response?.data?.message || 'Gagal mengekspor ke Excel'
+    });
+  }
+};
+
+const handleExcelImport = (event) => {
+  const file = event.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = e.target.result;
+      // Handle the imported data
+    };
+    reader.readAsBinaryString(file);
+  }
+};
+
+const fetchTotalDpSudahDibayar = async () => {
+  if (!selectedProject.value || !selectedInvoice.value) {
+    totalDpSudahDibayar.value = 0;
+    return;
+  }
+  try {
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get('/api/incomes/total-dp-paid', {
+      params: {
+        proyek_id: selectedProject.value,
+        invoice_id: selectedInvoice.value
+      },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    totalDpSudahDibayar.value = Number(response.data.total_dp_paid) || 0;
+  } catch (err) {
+    totalDpSudahDibayar.value = 0;
+  }
+};
+
+watch([selectedProject, selectedInvoice], ([newProject, newInvoice]) => {
+  if (dataTableInstance) {
+    dataTableInstance.ajax.reload();
+  } else {
+    nextTick(() => {
+      initDataTable();
+    });
+  }
+});
+
+const fetchSummary = async () => {
+  if (!selectedProject.value || !selectedInvoice.value) {
+    summary.value = {
+      total_termin: 0,
+      total_dp: 0,
+      total_pelunasan: 0,
+      total_pembelian_material: 0,
+      total_dp_sudah_dibayar: 0,
+      sisa_belum_dibayar: 0
+    };
+    return;
+  }
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get('/api/termins/summary', {
+      params: {
+        proyek_id: selectedProject.value,
+        invoice_id: selectedInvoice.value
+      },
+      headers: { Authorization: `Bearer ${token}` }
+    });
+      summary.value = {
+        ...defaultSummary,
+        ...(response.data || {})
+      };
+  } catch (err) {
+    summary.value = {
+      total_termin: 0,
+      total_dp: 0,
+      total_pelunasan: 0,
+      total_pembelian_material: 0,
+      total_dp_sudah_dibayar: 0,
+      sisa_belum_dibayar: 0
+    };
+  }
+};
+
+watch([selectedProject, selectedInvoice], async ([newProject, newInvoice]) => {
+  if (newProject && newInvoice) {
+    await fetchSummary();
+  }
+});
+
+// Expose necessary properties and methods to template
+defineExpose({
+  selectedProject,
+  selectedInvoice,
+  projects,
+  invoices,
+  termins,
+  showModal,
+  showStatusModal,
+  modalTitle,
+  modalButtonText,
+  form,
+  statusForm,
+  editingId,
+  updatingStatusId,
+  modalMode,
+  invoiceOptions,
+  handleSubmit,
+  handleStatusSubmit,
+  openModal,
+  openStatusModal,
+  closeModal,
+  closeStatusModal,
+  handleBuktiPembayaranForm,
+  exportToPDF,
+  exportToExcel,
+  handleExcelImport
+});
+</script>
 <style scoped>
 .w-100 {
   width: 100%;
@@ -1646,6 +1895,8 @@ table.dataTable tbody td {
   bottom: 0;
   width: 6px;
   pointer-events: none;
-  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.1));
+  background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0.1));
 }
 </style>
+
+

@@ -1,8 +1,37 @@
+<template>
+  <CDropdown placement="bottom-end" variant="nav-item">
+    <CDropdownToggle class="py-0 pe-0" :caret="false">
+      <div class="d-flex align-items-center gap-2">
+        <CAvatar :src="avatar" size="md" />
+      </div>
+    </CDropdownToggle>
+    <CDropdownMenu class="pt-0" style="min-width: 200px">
+      <CDropdownHeader
+        component="h6"
+        class="bg-light fw-semibold py-2 px-3"
+      >
+        Settings
+      </CDropdownHeader>
+      <CDropdownItem @click="goToProfile" class="d-flex align-items-center px-3 py-2">
+        <FontAwesomeIcon :icon="['fas', 'user']" class="me-2" /> Profile
+      </CDropdownItem>
+      <CDropdownItem @click="goToSettings" class="d-flex align-items-center px-3 py-2">
+        <FontAwesomeIcon :icon="['fas', 'cog']" class="me-2" /> Settings
+      </CDropdownItem>
+      <CDropdownDivider class="my-1" />
+      <CDropdownItem @click="logout" class="d-flex align-items-center px-3 py-2">
+        <FontAwesomeIcon :icon="['fas', 'lock']" class="me-2" /> Logout
+      </CDropdownItem>
+    </CDropdownMenu>
+  </CDropdown>
+</template>
+
 <script setup>
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import avatar from '@/assets/images/avatars/8.jpg'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -36,34 +65,6 @@ const logout = async () => {
   }
 }
 </script>
-
-<template>
-  <CDropdown placement="bottom-end" variant="nav-item">
-    <CDropdownToggle class="py-0 pe-0" :caret="false">
-      <div class="d-flex align-items-center gap-2">
-        <CAvatar :src="avatar" size="md" />
-      </div>
-    </CDropdownToggle>
-    <CDropdownMenu class="pt-0" style="min-width: 200px">
-      <CDropdownHeader
-        component="h6"
-        class="bg-light fw-semibold py-2 px-3"
-      >
-        Settings
-      </CDropdownHeader>
-      <CDropdownItem @click="goToProfile" class="d-flex align-items-center px-3 py-2">
-        <CIcon icon="cil-user" class="me-2" /> Profile
-      </CDropdownItem>
-      <CDropdownItem @click="goToSettings" class="d-flex align-items-center px-3 py-2">
-        <CIcon icon="cil-settings" class="me-2" /> Settings
-      </CDropdownItem>
-      <CDropdownDivider class="my-1" />
-      <CDropdownItem @click="logout" class="d-flex align-items-center px-3 py-2">
-        <CIcon icon="cil-lock-locked" class="me-2" /> Logout
-      </CDropdownItem>
-    </CDropdownMenu>
-  </CDropdown>
-</template>
 
 <style scoped>
 :deep(.dropdown-item) {

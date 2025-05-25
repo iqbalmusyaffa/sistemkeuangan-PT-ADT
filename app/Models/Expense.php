@@ -32,12 +32,12 @@ class Expense extends Model
         'description',
         'transaction_date',
         'status',
-        'payment_method',
+        'payment_method_id',
         'source_type',
         'source_id',
         'prepared_fund',
         'bukti',
-        'invoice_id' // Add invoice_id to the fillable array
+        'invoice_id'
     ];
 
     protected $casts = [
@@ -226,5 +226,17 @@ class Expense extends Model
             'prepared_fund' => $termin->jumlah_pembayaran,
             'invoice_id' => $termin->invoice_id // Connect the expense to the invoice
         ]);
+    }
+
+    public function getSourceInstanceAttribute()
+    {
+        if (!$this->source_type || !$this->source_id) return null;
+        if ($this->source_type === 'termin') {
+            return Termin::find($this->source_id);
+        }
+        if ($this->source_type === 'purchase') {
+            return Purchasematerial::find($this->source_id);
+        }
+        return null;
     }
 }

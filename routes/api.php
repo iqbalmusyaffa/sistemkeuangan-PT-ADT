@@ -52,8 +52,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Company routes
     Route::apiResource('companies', CompanyController::class);
     // Income routes
+    Route::get('/incomes/total-dp-paid', [IncomeController::class, 'getTotalDpPaid']);
+    Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
     Route::apiResource('incomes', IncomeController::class);
-
     // Pengeluaran (Expense)
     Route::apiResource('expenses', ExpenseController::class);
     Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
@@ -79,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
     Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
     Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
+    Route::get('termins-datatables', [App\Http\Controllers\Api\TerminController::class, 'datatables']);
 
     // Additional proyek-related routes
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
