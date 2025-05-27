@@ -235,6 +235,37 @@
                 <CFormTextarea v-model="form.deskripsi" id="deskripsi" rows="3" />
               </CCol>
             </CRow>
+            <!-- New fields for description, transaction date, and category -->
+            <CRow class="mb-3">
+              <CCol md="12">
+                <CFormLabel for="description">Deskripsi Material</CFormLabel>
+                <CFormInput
+                  v-model="newPurchase.description"
+                  placeholder="Masukkan deskripsi material"
+                  required
+                />
+              </CCol>
+            </CRow>
+            <CRow class="mb-3">
+              <CCol md="6">
+                <CFormLabel for="transaction_date">Tanggal Transaksi</CFormLabel>
+                <CFormInput
+                  v-model="newPurchase.transaction_date"
+                  type="date"
+                  placeholder="Pilih tanggal transaksi"
+                  required
+                />
+              </CCol>
+              <CCol md="6">
+                <CFormLabel for="category_id">Kategori Material</CFormLabel>
+                <CFormSelect
+                  v-model="newPurchase.category_id"
+                  :options="categories"
+                  placeholder="Pilih kategori material"
+                  required
+                />
+              </CCol>
+            </CRow>
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
         </CModalBody>
@@ -810,7 +841,7 @@ const handleSubmit = async () => {
             deskripsi: form.value.deskripsi || '-',
             is_service: isServiceUnit.value,
             category_id: isServiceUnit.value ? null : form.value.category_id,
-            service_category_id: isServiceUnit.value ? form.value.category_id : null,
+            service_category_id: isServiceUnit.value ? form.value.service_category_id : null,
             merek_id: isServiceUnit.value ? null : form.value.merek_id
           }]
         }, {
@@ -843,7 +874,7 @@ const handleSubmit = async () => {
       deskripsi: form.value.deskripsi || '-',
       is_service: isService,
       category_id: isService ? null : form.value.category_id,
-      service_category_id: isService ? form.value.category_id : null,
+      service_category_id: isService ? form.value.service_category_id : null,
       merek_id: isService ? null : form.value.merek_id
     };
     let response;

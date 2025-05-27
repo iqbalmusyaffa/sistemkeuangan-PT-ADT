@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('purchase_materials', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('invoice_id')->nullable()->constrained('invoices')->onDelete('cascade');
+           $table->foreignId('invoice_id')->nullable()->constrained('invoices')->onDelete('cascade');
             $table->foreignId('proyek_id')->constrained('proyeks')->onDelete('cascade');
             $table->string('item');
             $table->foreignId('merek_id')->nullable()->constrained('mereks')->nullOnDelete();
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->text('deskripsi')->nullable();
             $table->boolean('is_service')->default(false);
             $table->foreignId('service_category_id')->nullable()->constrained('service_categories')->nullOnDelete();
-            $table->foreignId('expense_id')->nullable()->constrained('expenses')->nullOnDelete();
+           $table->unsignedBigInteger('expense_id')->nullable();
             $table->foreignId('termin_id')->nullable()->constrained('termins')->onDelete('set null');
             $table->timestamps();
 

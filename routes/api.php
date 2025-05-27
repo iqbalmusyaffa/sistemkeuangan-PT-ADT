@@ -56,9 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
     Route::apiResource('incomes', IncomeController::class);
     // Pengeluaran (Expense)
+     Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::apiResource('expenses', ExpenseController::class);
     Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
     Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
+    Route::post('/expenses/{expense}/update-status', [ExpenseController::class, 'updateStatus']);
+    // DataTables server-side endpoint for pengeluaran
     // Merek routes
     Route::apiResource('mereks', MerekController::class);
     Route::post('/mereks/find-or-create', [MerekController::class, 'findOrCreate']);
@@ -154,6 +157,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/purchase-materials/{id}', [PurchaseMaterialController::class, 'destroy']);
     Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
     Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
+    Route::get('/purchase-materials/{id}/service-category', [PurchaseMaterialController::class, 'getServiceCategory']);
 
     // Kategori routes
     Route::apiResource('kategori', KategoriTransaksiController::class);

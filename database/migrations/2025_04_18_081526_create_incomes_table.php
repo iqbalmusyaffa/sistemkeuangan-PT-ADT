@@ -28,7 +28,7 @@ class CreateIncomesTable extends Migration
     $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
     $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
     $table->timestamps();
-    $table->softDeletes();
+    // $table->softDeletes();
         });
     }
 

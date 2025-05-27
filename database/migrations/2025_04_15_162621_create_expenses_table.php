@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('expenses', function (Blueprint $table) {
-         $table->id();
+       $table->id();
     $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
     $table->foreignId('proyek_id')->constrained('proyeks')->onDelete('cascade');
     $table->foreignId('category_id')->nullable()->constrained('kategoris')->nullOnDelete();
@@ -41,5 +41,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('expenses');
+        Schema::table('expenses', function (Blueprint $table) {
+            $table->dropForeign(['service_category_id']);
+            $table->dropForeign(['purchase_material_id']);
+            $table->dropColumn('purchase_material_id');
+        });
     }
 };
