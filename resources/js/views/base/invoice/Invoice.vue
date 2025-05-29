@@ -995,8 +995,8 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
     });
 
     const setHargaFromServiceCategory = (item) => {
-      if (isServiceType(item) && item.category_id) {
-        const selectedCategory = getServiceCategoriesByUnit(item.unit_id, item).find(cat => String(cat.id) === String(item.category_id))
+      if (isServiceType(item) && item.category_id) { // Use service_category_id instead of category_id for service items
+        const selectedCategory = getServiceCategoriesByUnit(item.unit_id, item).find(cat => String(cat.id) === String(item.service_category_id))
         console.log('Selected service category:', selectedCategory)
         if (selectedCategory) {
           item.harga = selectedCategory.harga !== undefined ? selectedCategory.harga : (selectedCategory.price !== undefined ? selectedCategory.price : 0)
@@ -1262,17 +1262,15 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         if (form.value.is_cash) {
           delete payload.termins;
         } else {
+          // If not cash, you might still want to handle termins for the invoice,
+          // or if termins are managed separately, remove them from payload here too.
+          // For now, based on your current logic, it seems termins are only relevant
+          // if is_cash is false.
           delete payload.termins;
         }
 
-        // Ensure expense_id is set correctly in purchase_materials
-        form.value.purchase_materials.forEach(item => {
-          if (!item.expense_id) {
-            // Set a default expense_id or fetch it dynamically if needed
-            item.expense_id = null; // Replace this with actual logic to fetch expense_id
-          }
-        });
-
+        // 1. Create invoice (this will also trigger PurchaseMaterial observers,
+        // which will create associated expenses and update invoice total_amount)
         const response = await axios.post('/api/invoices', payload, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1284,8 +1282,9 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           throw new Error(response.data.message || 'Gagal membuat invoice');
         }
 
-        const invoiceId = response.data.id || response.data.data?.id;
+        const invoiceId = response.data.data.id || response.data.id; // Get the ID from the response
         if (form.value.is_cash === false) {
+          // Redirect to termin page if it's a termin-based invoice
           window.location.href = `/termin?invoice_id=${invoiceId}`;
         } else {
           Swal.fire({
@@ -1294,7 +1293,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
             text: 'Invoice berhasil ditambahkan'
           });
           closeModal();
-          loadInvoices();
+          loadInvoices(); // Reload the data table
         }
       } catch (error) {
         console.error('Error submitting form:', error);
@@ -1360,7 +1359,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
                   id: String(item.merek.id),
                   name: item.merek.name
                 } : null,
-                expense_id: item.expense_id || null,
+                expense_id: item.expense_id || null, // Ensure expense_id is loaded
                 is_service: !!item.is_service,
                 serviceCategories: item.serviceCategories || []
               }))
@@ -1387,39 +1386,39 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         // Debug log untuk merek
         console.log('MEREKS:', mereks.value, 'ITEM MEREK_ID:', form.value.purchase_materials.map(i => i.merek_id));
        if (Array.isArray(invoice.purchase_materials)) {
-      invoice.purchase_materials.forEach(item => {
-        if (item.category && !categories.value.some(c => String(c.id) === String(item.category.id))) {
-          categories.value.push({
-            ...item.category,
-            id: String(item.category.id),
-            unit_id: String(item.category.unit_id)
+          invoice.purchase_materials.forEach(item => {
+            if (item.category && !categories.value.some(c => String(c.id) === String(item.category.id))) {
+              categories.value.push({
+                ...item.category,
+                id: String(item.category.id),
+                unit_id: String(item.category.unit_id)
+              });
+            }
+            if (item.service_category && !serviceCategories.value.some(sc => String(sc.id) === String(item.service_category.id))) {
+              serviceCategories.value.push({
+                ...item.service_category,
+                id: String(item.service_category.id),
+                unit_id: String(item.service_category.unit_id)
+              });
+            }
+            // Tambahkan merek ke master jika belum ada
+            if (item.merek && !mereks.value.some(m => String(m.id) === String(item.merek.id))) {
+              mereks.value.push({
+                ...item.merek,
+                id: String(item.merek.id).trim(),
+                name: item.merek.name
+              });
+              // Normalisasi seluruh id di mereks agar selalu string
+              mereks.value = mereks.value.map(m => ({ ...m, id: String(m.id) }))
+              // Force reactivity after push
+              mereks.value = [...mereks.value];
+              // Trigger reactivity
+              nextTick(() => {});
+            }
           });
+          // Debug log untuk mereks setelah push
+          console.log('AFTER PUSH MEREKS:', mereks.value);
         }
-        if (item.service_category && !serviceCategories.value.some(sc => String(sc.id) === String(item.service_category.id))) {
-          serviceCategories.value.push({
-            ...item.service_category,
-            id: String(item.service_category.id),
-            unit_id: String(item.service_category.unit_id)
-          });
-        }
-        // Tambahkan merek ke master jika belum ada
-        if (item.merek && !mereks.value.some(m => String(m.id) === String(item.merek.id))) {
-          mereks.value.push({
-            ...item.merek,
-            id: String(item.merek.id).trim(),
-            name: item.merek.name
-          });
-          // Normalisasi seluruh id di mereks agar selalu string
-          mereks.value = mereks.value.map(m => ({ ...m, id: String(m.id) }))
-          // Force reactivity after push
-          mereks.value = [...mereks.value];
-          // Trigger reactivity
-          nextTick(() => {});
-        }
-      });
-      // Debug log untuk mereks setelah push
-      console.log('AFTER PUSH MEREKS:', mereks.value);
-    }
         // Trigger handleUnitChange dan handleCategoryChange untuk setiap item agar dropdown sinkron
         nextTick(() => {
           form.value.purchase_materials.forEach(item => {
@@ -1444,7 +1443,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
     const deleteInvoice = async (id) => {
       const result = await Swal.fire({
         title: 'Apakah Anda yakin?',
-        text: "Invoice akan dihapus secara permanen!",
+        text: "Invoice akan dihapus secara permanen! Ini juga akan menghapus semua item pembelian, termin, dan pengeluaran terkait.",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#3085d6',
@@ -1471,7 +1470,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Gagal menghapus invoice'
+            text: 'Gagal menghapus invoice: ' + (err.response?.data?.message || err.message)
           })
           console.error(err)
         }
@@ -1598,8 +1597,8 @@ const getMaterialCategories = (unitId, item = null) => {
       () => form.value.purchase_materials.map(item => [item.category_id, item.unit_id]),
       (newVals, oldVals) => {
         form.value.purchase_materials.forEach(item => {
-          if (isServiceType(item) && item.category_id && item.unit_id) {
-            const selectedCategory = getServiceCategoriesByUnit(item.unit_id, item).find(cat => String(cat.id) === String(item.category_id))
+          if (isServiceType(item) && item.service_category_id && item.unit_id) { // Changed category_id to service_category_id
+            const selectedCategory = getServiceCategoriesByUnit(item.unit_id, item).find(cat => String(cat.id) === String(item.service_category_id)) // Changed category_id to service_category_id
             if (selectedCategory) {
               let hargaVal = 0;
               if (selectedCategory.harga !== undefined && selectedCategory.harga !== null && selectedCategory.harga !== '') {
@@ -1642,10 +1641,10 @@ const getMaterialCategories = (unitId, item = null) => {
     // === Pajak & Grand Total: SAMA DENGAN BACKEND ===
     // Semua dihitung dari subtotal (totalInvoice)
     const ppnAmount = computed(() => form.value.use_ppn ? (totalInvoice.value * 0.11) : 0);
-const pphNonFinalTotal = computed(() => form.value.use_pph_non_final ? (totalInvoice.value * 0.025) : 0);
-const pphFinal = computed(() => form.value.use_pph_final ? (totalInvoice.value * 0.03) : 0);
-const grandTotal = computed(() => totalInvoice.value + ppnAmount.value - pphNonFinalTotal.value - pphFinal.value);
-const totalWithTax = grandTotal;
+    const pphNonFinalTotal = computed(() => form.value.use_pph_non_final ? (totalInvoice.value * 0.025) : 0);
+    const pphFinal = computed(() => form.value.use_pph_final ? (totalInvoice.value * 0.03) : 0);
+    const grandTotal = computed(() => totalInvoice.value + ppnAmount.value - pphNonFinalTotal.value - pphFinal.value);
+    const totalWithTax = grandTotal;
 
     const fetchPaymentMethods = async () => {
       try {
@@ -1974,7 +1973,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
   console.log("Updated Grand Total:", filteredGrandTotal.value);
 });
 </script>
-
 <style scoped>
  .w-100 {
     width: 100%;

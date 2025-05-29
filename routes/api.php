@@ -71,7 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('purchasematerials', PurchasematerialController::class);
     // Proyek routes
     Route::apiResource('proyeks', ProyekController::class);
-
+Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     // Termin routes
     Route::apiResource('termins', TerminController::class);
     Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);

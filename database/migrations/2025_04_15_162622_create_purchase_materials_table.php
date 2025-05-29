@@ -27,7 +27,8 @@ return new class extends Migration
             $table->text('deskripsi')->nullable();
             $table->boolean('is_service')->default(false);
             $table->foreignId('service_category_id')->nullable()->constrained('service_categories')->nullOnDelete();
-           $table->unsignedBigInteger('expense_id')->nullable();
+            $table->unsignedBigInteger('expense_id')->nullable();
+            $table->foreign('expense_id')->references('id')->on('expenses')->onDelete('set null');
             $table->foreignId('termin_id')->nullable()->constrained('termins')->onDelete('set null');
             $table->timestamps();
 

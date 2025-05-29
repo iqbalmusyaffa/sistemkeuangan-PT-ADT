@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Termin;
 use App\Models\Expense;
 use App\Traits\Trackable;
+use Illuminate\Support\Facades\Log; // Added Log import
 
 class PurchaseMaterial extends Model
 {
@@ -33,7 +34,7 @@ class PurchaseMaterial extends Model
         'deskripsi',
         'proyek_id',
         'invoice_id',
-        'expense_id',
+        'expense_id', // Make sure this is fillable
     ];
 
     protected $casts = [
@@ -102,7 +103,7 @@ class PurchaseMaterial extends Model
 
     public function expense()
     {
-        return $this->belongsTo(Expense::class);
+        return $this->belongsTo(Expense::class, 'expense_id');
     }
 
     // Accessor untuk kategori aktif
@@ -117,7 +118,7 @@ class PurchaseMaterial extends Model
         return $this->getActiveCategory()?->nama_kategori ?? null;
     }
 
-    // Event model untuk hitung total harga otomatis
+    // Event model untuk hitung total harga otomatis dan buat expense
     protected static function booted()
     {
         static::creating(function ($purchase) {
@@ -133,10 +134,27 @@ class PurchaseMaterial extends Model
             if ($purchase->invoice) {
                 $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
                 $purchase->invoice->save();
+                // Re-calculate financial values for the invoice if necessary
+                $purchase->invoice->calculateAllFinancialValues();
             }
+
             // Trigger expense otomatis dari pembelian jika belum ada
-            if (!\App\Models\Expense::where('source_type', 'purchase')->where('source_id', $purchase->id)->exists()) {
-                \App\Models\Expense::createFromPurchase($purchase);
+            // OR if it's new, or if expense_id is not set.
+            // This is the core part that needs to ensure expense_id is set.
+            if (empty($purchase->expense_id)) {
+                try {
+                    $expense = Expense::createFromPurchase($purchase);
+                    // Crucial: assign the expense_id returned from the method
+                    $purchase->expense_id = $expense->id;
+                    $purchase->saveQuietly(); // Use saveQuietly to prevent infinite looping of the 'saved' event
+                    Log::info("Expense created and linked for PurchaseMaterial ID {$purchase->id}. Expense ID: {$expense->id}");
+                } catch (\Exception $e) {
+                    Log::error("Failed to create expense from purchase in booted method for ID {$purchase->id}: " . $e->getMessage());
+                    // Consider rolling back the purchase creation if expense creation is critical
+                    // or mark the purchase for review.
+                }
+            } else {
+                Log::info("Expense already linked for PurchaseMaterial ID {$purchase->id}. Expense ID: {$purchase->expense_id}");
             }
         });
 
@@ -145,6 +163,17 @@ class PurchaseMaterial extends Model
             if ($purchase->invoice) {
                 $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
                 $purchase->invoice->save();
+                // Re-calculate financial values for the invoice if necessary
+                $purchase->invoice->calculateAllFinancialValues();
+            }
+
+            // Optionally delete the associated expense when PurchaseMaterial is deleted
+            if ($purchase->expense_id) {
+                $expense = Expense::find($purchase->expense_id);
+                if ($expense && $expense->source_type === Expense::SOURCE_PURCHASE && $expense->source_id === $purchase->id) {
+                    $expense->delete();
+                    Log::info("Associated expense ID {$purchase->expense_id} deleted for PurchaseMaterial ID {$purchase->id}.");
+                }
             }
         });
     }

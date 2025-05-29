@@ -108,7 +108,7 @@ class ExpenseController extends Controller
                 'description' => 'required|string',
                 'transaction_date' => 'required|date',
                 'status' => 'required|in:pending,approved,rejected,Lunas',
-                'payment_method' => 'required|string',
+                'payment_method_id' => 'required|exists:payment_methods,id', // Changed from payment_method to payment_method_id
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
                 'source_id' => 'nullable|integer'
@@ -144,6 +144,17 @@ class ExpenseController extends Controller
                         return response()->json([
                             'status' => 'error',
                             'message' => 'Jumlah pengeluaran tidak boleh melebihi total harga pembelian material'
+                        ], 422);
+                    }
+                    // This check is good to prevent manual duplicate expense entries
+                    $existingExpense = \App\Models\Expense::where('source_type', 'purchase')
+                        ->where('source_id', $validated['source_id'])
+                        ->first();
+
+                    if ($existingExpense) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Pengeluaran untuk pembelian ini sudah tercatat.'
                         ], 422);
                     }
                 }
@@ -199,7 +210,6 @@ class ExpenseController extends Controller
         try {
             Log::info('Attempting to fetch expense with ID: ' . $id);
 
-            // First, get the expense without any relationships
             $expense = Expense::find($id);
 
             if (!$expense) {
@@ -211,7 +221,7 @@ class ExpenseController extends Controller
             }
 
             // Load basic relationships
-            $expense->load(['proyek', 'category', 'serviceCategory']);
+            $expense->load(['proyek', 'category', 'serviceCategory', 'invoice']); // Load invoice relation
 
             // Handle source relationship separately
             if (!empty($expense->source_type) && !empty($expense->source_id)) {
@@ -264,14 +274,13 @@ class ExpenseController extends Controller
                 'description' => 'string',
                 'transaction_date' => 'date',
                 'status' => 'in:pending,approved,rejected,Lunas',
-                'payment_method' => 'string',
+                'payment_method_id' => 'exists:payment_methods,id', // Changed from payment_method to payment_method_id
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
                 'source_id' => 'nullable|integer'
             ]);
 
             DB::beginTransaction();
-
 
             // Validasi khusus jika source_type diisi
             if (!empty($validated['source_type']) && !empty($validated['source_id'])) {
@@ -309,7 +318,8 @@ class ExpenseController extends Controller
                 $proyek = \App\Models\Proyek::find($validated['proyek_id']);
                 if ($proyek) {
                     $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                    $totalExpenses = $proyek->expenses()->sum('amount');
+                    // Exclude the current expense's amount from total expenses for validation
+                    $totalExpenses = $proyek->expenses()->where('id', '!=', $expense->id)->sum('amount');
                     $sisaAnggaran = $currentBudget - $totalExpenses;
                     if ($validated['amount'] > $sisaAnggaran) {
                         return response()->json([
@@ -362,10 +372,11 @@ class ExpenseController extends Controller
         try {
             $expense = Expense::findOrFail($id);
 
-            if ($expense->source_type) {
+            // Check if expense is linked to a source type that should not be manually deleted
+            if ($expense->source_type === Expense::SOURCE_PURCHASE || $expense->source_type === Expense::SOURCE_TERMIN || $expense->source_type === Expense::SOURCE_INVOICE) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Tidak dapat menghapus pengeluaran yang terkait dengan termin atau pembelian'
+                    'message' => 'Tidak dapat menghapus pengeluaran yang terkait dengan pembelian material, termin, atau invoice. Harap hapus dari sumbernya.'
                 ], 403);
             }
 
@@ -389,6 +400,18 @@ class ExpenseController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function datatables(Request $request)
+    {
+        $query = Expense::with(['proyek', 'category', 'serviceCategory']);
+        if ($request->has('proyek_id')) {
+            $query->where('proyek_id', $request->proyek_id);
+        }
+        // Add more filters as needed
+
+        // Use Yajra DataTables if installed
+        return \DataTables::of($query)->make(true);
     }
 
     protected function calculateProjectSummaries($proyekId)
@@ -425,73 +448,73 @@ class ExpenseController extends Controller
         ];
     }
 
-    public function createFromPurchase(Purchasematerial $purchase)
-    {
-        try {
-            DB::beginTransaction();
+    // This method is called by PurchaseMaterial's booted method, no need to call it manually from frontend
+    // public function createFromPurchase(Purchasematerial $purchase)
+    // {
+    //     try {
+    //         DB::beginTransaction();
+    //
+    //         // Validasi budget proyek sebelum create expense
+    //         $proyek = $purchase->proyek;
+    //         if ($proyek) {
+    //             $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+    //             $totalExpenses = $proyek->expenses()->sum('amount');
+    //             if (($totalExpenses + $purchase->total_harga) > $currentBudget) {
+    //                 throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
+    //             }
+    //         }
+    //
+    //         $expense = Expense::createFromPurchase($purchase); // This now returns the expense
+    //
+    //         DB::commit();
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Expense created from purchase',
+    //             'data' => $expense // Return the expense data
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Log::error('Error creating expense from purchase: ' . $e->getMessage());
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Failed to create expense from purchase: ' . $e->getMessage() // Include error message
+    //         ], 500);
+    //     }
+    // }
 
-
-            // Validasi budget proyek sebelum create expense
-            $proyek = $purchase->proyek;
-            if ($proyek) {
-                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                $totalExpenses = $proyek->expenses()->sum('amount');
-                if (($totalExpenses + $purchase->total_harga) > $currentBudget) {
-                    throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
-                }
-            }
-
-            $expense = Expense::createFromPurchase($purchase);
-
-            DB::commit();
-            return response()->json([
-                'success' => true,
-                'message' => 'Expense created from purchase',
-                'data' => $expense
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating expense from purchase: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create expense from purchase'
-            ], 500);
-        }
-    }
-
-    public function createFromTermin(Termin $termin)
-    {
-        try {
-            DB::beginTransaction();
-
-
-            // Validasi budget proyek sebelum create expense
-            $proyek = $termin->proyek;
-            if ($proyek) {
-                $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                $totalExpenses = $proyek->expenses()->sum('amount');
-                if (($totalExpenses + $termin->nilai_termin) > $currentBudget) {
-                    throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
-                }
-            }
-
-            $expense = Expense::createFromTermin($termin);
-
-            DB::commit();
-            return response()->json([
-                'success' => true,
-                'message' => 'Expense created from termin',
-                'data' => $expense
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error creating expense from termin: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create expense from termin'
-            ], 500);
-        }
-    }
+    // This method is called by Termin's booted method or similar logic
+    // public function createFromTermin(Termin $termin)
+    // {
+    //     try {
+    //         DB::beginTransaction();
+    //
+    //         // Validasi budget proyek sebelum create expense
+    //         $proyek = $termin->proyek;
+    //         if ($proyek) {
+    //             $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+    //             $totalExpenses = $proyek->expenses()->sum('amount');
+    //             if (($totalExpenses + $termin->nilai_termin) > $currentBudget) {
+    //                 throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
+    //             }
+    //         }
+    //
+    //         $expense = Expense::createFromTermin($termin); // This now returns the expense
+    //
+    //         DB::commit();
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Expense created from termin',
+    //             'data' => $expense // Return the expense data
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Log::error('Error creating expense from termin: ' . $e->getMessage());
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'Failed to create expense from termin: ' . $e->getMessage() // Include error message
+    //         ], 500);
+    //     }
+    // }
 
     public function getProjectExpenseSummary($proyekId)
     {
@@ -514,13 +537,12 @@ class ExpenseController extends Controller
 
     /**
      * Create expense automatically when invoice is not paid
+     * This method would typically be called by Invoice logic, not directly as an API endpoint usually
      */
     public function createFromInvoice($invoice)
     {
         try {
             DB::beginTransaction();
-
-            // Create expense record
 
             // Validasi budget proyek sebelum create expense
             $proyek = $invoice->proyek;
@@ -532,18 +554,29 @@ class ExpenseController extends Controller
                 }
             }
 
+            // Check for existing expense for this invoice to prevent duplicates
+            $existingExpense = Expense::where('source_type', Expense::SOURCE_INVOICE)
+                                      ->where('source_id', $invoice->id)
+                                      ->first();
+
+            if ($existingExpense) {
+                Log::info("Expense for Invoice ID {$invoice->id} already exists. Returning existing one.");
+                DB::rollBack(); // Ensure no new transaction is committed if not needed
+                return $existingExpense;
+            }
+
             $expense = new Expense();
             $expense->proyek_id = $invoice->proyek_id;
-            $expense->category_id = $invoice->kategori_id;
+            $expense->category_id = $invoice->kategori_id; // Ensure $invoice->kategori_id exists or is nullable
             $expense->amount = $invoice->total_amount;
-            $expense->description = "Tagihan invoice {$invoice->invoice_number}";
+            $expense->description = "Tagihan invoice " . ($invoice->invoice_number ?? $invoice->id);
             $expense->transaction_date = now();
-            $expense->status = 'pending';
-            $expense->payment_method = $invoice->payment_method_id;
-            $expense->source_type = 'invoice';
+            $expense->status = 'pending'; // Invoices often create pending expenses
+            $expense->payment_method_id = $invoice->payment_method_id; // Use payment_method_id
+            $expense->source_type = Expense::SOURCE_INVOICE;
             $expense->source_id = $invoice->id;
             $expense->invoice_id = $invoice->id;
-            $expense->user_id = auth()->id();
+            $expense->user_id = auth()->id(); // Assign current authenticated user
 
             $expense->save();
 
