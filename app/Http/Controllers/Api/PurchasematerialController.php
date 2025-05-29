@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Purchasematerial;
-use App\Models\Proyek; // Corrected: Use Proyek model, not Project
+use App\Models\Proyek;
 use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use App\Http\Resources\PurchaseMaterialResource;
 use App\Models\Invoice;
 use Illuminate\Support\Facades\Validator;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 
 class PurchasematerialController extends Controller
 {
@@ -73,9 +74,10 @@ class PurchasematerialController extends Controller
             // Get the project to check budget
             $proyek = Proyek::findOrFail($request->proyek_id);
             $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Sum all expenses related to this project that are 'Lunas' or directly from invoices.
             $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
-                                              ->where('status', 'Lunas')
-                                              ->sum('amount');
+                ->where('status', 'Lunas')
+                ->sum('amount');
             $availableBudget = $currentProjectBudget - $existingProjectExpenses;
 
             if ($availableBudget < $totalHarga) {
@@ -103,16 +105,6 @@ class PurchasematerialController extends Controller
                 'merek_id' => $request->merek_id,
                 'is_service' => $request->is_service ?? false,
             ]);
-
-            // The Expense creation and invoice total_amount update are now handled by PurchaseMaterial's booted method.
-            // The following explicit calls are no longer needed here because the 'saved' event of PurchaseMaterial triggers them.
-            // However, for the sake of clarity in understanding the flow, here's how it *would* look if not using observers:
-            // $invoice = Invoice::findOrFail($request->invoice_id);
-            // $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-            // $invoice->save();
-            // $expense = \App\Models\Expense::createFromPurchase($purchaseMaterial);
-            // $purchaseMaterial->expense_id = $expense->id;
-            // $purchaseMaterial->save();
 
             DB::commit();
             // Reload the purchase material to ensure expense_id is populated from the observer
@@ -165,11 +157,12 @@ class PurchasematerialController extends Controller
             // Perform budget validation if amount is changing significantly
             $proyek = Proyek::findOrFail($purchaseMaterial->proyek_id);
             $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Exclude the current expense's amount from total expenses for validation if it was already 'Lunas'
             $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
-                                              ->where('status', 'Lunas')
-                                              ->where('source_type', Expense::SOURCE_PURCHASE)
-                                              ->where('source_id', '!=', $purchaseMaterial->id) // Exclude current purchase for recalculation
-                                              ->sum('amount');
+                ->where('status', 'Lunas')
+                ->where('source_type', Expense::SOURCE_PURCHASE)
+                ->where('source_id', '!=', $purchaseMaterial->id)
+                ->sum('amount');
 
             $projectedTotalExpenses = $existingProjectExpenses + $totalHarga;
 
@@ -197,20 +190,26 @@ class PurchasematerialController extends Controller
                 'is_service' => $request->is_service ?? false,
             ]);
 
-            // The invoice total amount update is now handled by PurchaseMaterial's booted method.
-            // The following explicit calls are no longer needed here.
-            // $invoice = $purchaseMaterial->invoice;
-            // $invoice->total_amount = optional($invoice->purchaseMaterials())->sum('total_harga') ?? 0;
-            // $invoice->save();
-
             // Update associated expense (if exists)
             if ($purchaseMaterial->expense) {
+                // Determine expense status based on the invoice's status
+                $invoiceStatus = $purchaseMaterial->invoice ? $purchaseMaterial->invoice->status : Expense::STATUS_PENDING;
+                $expenseStatus = Expense::STATUS_PENDING; // Default
+                if ($invoiceStatus === Invoice::STATUS_PAID) {
+                    $expenseStatus = Expense::STATUS_LUNAS;
+                } else if ($invoiceStatus === Invoice::STATUS_UNPAID || $invoiceStatus === Invoice::STATUS_PARTIALLY_PAID) {
+                    $expenseStatus = Expense::STATUS_PENDING;
+                }
+
                 $purchaseMaterial->expense->update([
                     'amount' => $totalHarga,
                     'description' => "Pembelian " . ($purchaseMaterial->item ?? '') . " untuk proyek " . optional($purchaseMaterial->proyek)->nama_proyek,
                     'category_id' => $purchaseMaterial->is_service ? null : $purchaseMaterial->category_id,
                     'service_category_id' => $purchaseMaterial->is_service ? $purchaseMaterial->service_category_id : null,
                     'prepared_fund' => $totalHarga,
+                    'status' => $expenseStatus, // Set updated expense status based on invoice
+                    'proyek_id' => $purchaseMaterial->proyek_id, // Ensure proyek_id is updated on expense too
+                    'payment_method_id' => $purchaseMaterial->invoice->payment_method_id, // Get payment method from invoice
                 ]);
             } else {
                 // If for some reason expense doesn't exist, create it (should be rare if booted method works)
@@ -219,7 +218,6 @@ class PurchasematerialController extends Controller
                 $purchaseMaterial->expense_id = $expense->id;
                 $purchaseMaterial->saveQuietly();
             }
-
 
             DB::commit();
             $purchaseMaterial->load('expense'); // Reload to ensure latest expense_id
@@ -246,11 +244,6 @@ class PurchasematerialController extends Controller
 
             // The expense will be deleted by the PurchaseMaterial's `deleted` observer.
             $purchaseMaterial->delete();
-
-            // The invoice total amount update is now handled by PurchaseMaterial's booted method.
-            // The following explicit calls are no longer needed here.
-            // $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-            // $invoice->save();
 
             DB::commit();
             return response()->json([
@@ -337,8 +330,8 @@ class PurchasematerialController extends Controller
 
         $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
         $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
-                                          ->where('status', 'Lunas')
-                                          ->sum('amount');
+            ->where('status', 'Lunas')
+            ->sum('amount');
         $availableBudget = $currentProjectBudget - $existingProjectExpenses;
 
         if ($availableBudget < $totalPembelian) {
@@ -370,14 +363,13 @@ class PurchasematerialController extends Controller
                     'total_harga' => $totalHarga,
                     'is_service' => $item['is_service'] ?? false,
                 ]);
-                // The `saved` observer on `PurchaseMaterial` will automatically create the Expense and link it.
-                $purchases[] = $purchase; // Add the created purchase (which now has expense_id from observer)
+                $purchases[] = $purchase;
             }
 
             // Update total_amount invoice after all purchase material saved by observer
-            // The `Invoice` model's `calculateAllFinancialValues()` method will be called when `purchaseMaterials` relationship changes
             $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-            $invoice->save(); // This will trigger invoice's `calculateAllFinancialValues`
+            $invoice->save();
+            $invoice->calculateAllFinancialValues();
 
             DB::commit();
             return response()->json(['status' => 'success', 'message' => 'Semua item berhasil disimpan', 'data' => PurchaseMaterialResource::collection($purchases)]);

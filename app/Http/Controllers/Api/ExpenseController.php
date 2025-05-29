@@ -19,7 +19,7 @@ class ExpenseController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Expense::with(['proyek', 'category', 'serviceCategory']);
+            $query = Expense::with(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
 
             // Filter by project if provided
             if ($request->has('proyek_id')) {
@@ -47,6 +47,8 @@ class ExpenseController extends Controller
             $expenses = $expenses->map(function ($expense) {
                 $data = $expense->toArray();
                 $data['category_name'] = $expense->category_name;
+                // Ensure payment method name is also included
+                $data['payment_method_name'] = $expense->paymentMethod ? $expense->paymentMethod->name : null;
                 return $data;
             });
 
@@ -108,7 +110,7 @@ class ExpenseController extends Controller
                 'description' => 'required|string',
                 'transaction_date' => 'required|date',
                 'status' => 'required|in:pending,approved,rejected,Lunas',
-                'payment_method_id' => 'required|exists:payment_methods,id', // Changed from payment_method to payment_method_id
+                'payment_method_id' => 'required|exists:payment_methods,id',
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
                 'source_id' => 'nullable|integer'
@@ -177,7 +179,7 @@ class ExpenseController extends Controller
             $expense = Expense::create($validated);
 
             // Load necessary relations
-            $expense->load(['proyek', 'category', 'serviceCategory']);
+            $expense->load(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
             $expense->category_name = $expense->category_name;
 
             DB::commit();
@@ -221,7 +223,7 @@ class ExpenseController extends Controller
             }
 
             // Load basic relationships
-            $expense->load(['proyek', 'category', 'serviceCategory', 'invoice']); // Load invoice relation
+            $expense->load(['proyek', 'category', 'serviceCategory', 'invoice', 'paymentMethod']); // Load invoice and paymentMethod relation
 
             // Handle source relationship separately
             if (!empty($expense->source_type) && !empty($expense->source_id)) {
@@ -274,7 +276,7 @@ class ExpenseController extends Controller
                 'description' => 'string',
                 'transaction_date' => 'date',
                 'status' => 'in:pending,approved,rejected,Lunas',
-                'payment_method_id' => 'exists:payment_methods,id', // Changed from payment_method to payment_method_id
+                'payment_method_id' => 'required|exists:payment_methods,id',
                 'prepared_fund' => 'boolean',
                 'source_type' => 'nullable|in:termin,purchase',
                 'source_id' => 'nullable|integer'
@@ -334,7 +336,7 @@ class ExpenseController extends Controller
             $expense->update($validated);
 
             // Load necessary relations
-            $expense->load(['proyek', 'category', 'serviceCategory']);
+            $expense->load(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
             $expense->category_name = $expense->category_name;
 
             DB::commit();
@@ -404,7 +406,7 @@ class ExpenseController extends Controller
 
     public function datatables(Request $request)
     {
-        $query = Expense::with(['proyek', 'category', 'serviceCategory']);
+        $query = Expense::with(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
         if ($request->has('proyek_id')) {
             $query->where('proyek_id', $request->proyek_id);
         }
@@ -447,74 +449,6 @@ class ExpenseController extends Controller
                 : 0
         ];
     }
-
-    // This method is called by PurchaseMaterial's booted method, no need to call it manually from frontend
-    // public function createFromPurchase(Purchasematerial $purchase)
-    // {
-    //     try {
-    //         DB::beginTransaction();
-    //
-    //         // Validasi budget proyek sebelum create expense
-    //         $proyek = $purchase->proyek;
-    //         if ($proyek) {
-    //             $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-    //             $totalExpenses = $proyek->expenses()->sum('amount');
-    //             if (($totalExpenses + $purchase->total_harga) > $currentBudget) {
-    //                 throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
-    //             }
-    //         }
-    //
-    //         $expense = Expense::createFromPurchase($purchase); // This now returns the expense
-    //
-    //         DB::commit();
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => 'Expense created from purchase',
-    //             'data' => $expense // Return the expense data
-    //         ]);
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         Log::error('Error creating expense from purchase: ' . $e->getMessage());
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Failed to create expense from purchase: ' . $e->getMessage() // Include error message
-    //         ], 500);
-    //     }
-    // }
-
-    // This method is called by Termin's booted method or similar logic
-    // public function createFromTermin(Termin $termin)
-    // {
-    //     try {
-    //         DB::beginTransaction();
-    //
-    //         // Validasi budget proyek sebelum create expense
-    //         $proyek = $termin->proyek;
-    //         if ($proyek) {
-    //             $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-    //             $totalExpenses = $proyek->expenses()->sum('amount');
-    //             if (($totalExpenses + $termin->nilai_termin) > $currentBudget) {
-    //                 throw new \Exception('Total pengeluaran melebihi anggaran proyek.');
-    //             }
-    //         }
-    //
-    //         $expense = Expense::createFromTermin($termin); // This now returns the expense
-    //
-    //         DB::commit();
-    //         return response()->json([
-    //             'success' => true,
-    //             'message' => 'Expense created from termin',
-    //             'data' => $expense // Return the expense data
-    //         ]);
-    //     } catch (\Exception $e) {
-    //         DB::rollBack();
-    //         Log::error('Error creating expense from termin: ' . $e->getMessage());
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'Failed to create expense from termin: ' . $e->getMessage() // Include error message
-    //         ], 500);
-    //     }
-    // }
 
     public function getProjectExpenseSummary($proyekId)
     {
@@ -567,12 +501,21 @@ class ExpenseController extends Controller
 
             $expense = new Expense();
             $expense->proyek_id = $invoice->proyek_id;
-            $expense->category_id = $invoice->kategori_id; // Ensure $invoice->kategori_id exists or is nullable
+            // Assuming invoice->kategori_id exists and is appropriate for an expense
+            $expense->category_id = $invoice->kategori_id ?? null; // Make sure this is intended
             $expense->amount = $invoice->total_amount;
             $expense->description = "Tagihan invoice " . ($invoice->invoice_number ?? $invoice->id);
             $expense->transaction_date = now();
-            $expense->status = 'pending'; // Invoices often create pending expenses
-            $expense->payment_method_id = $invoice->payment_method_id; // Use payment_method_id
+            // Map Invoice status to Expense status
+            $expenseStatus = Expense::STATUS_PENDING;
+            if ($invoice->status === \App\Models\Invoice::STATUS_PAID) {
+                $expenseStatus = Expense::STATUS_LUNAS;
+            } else if ($invoice->status === \App\Models\Invoice::STATUS_UNPAID || $invoice->status === \App\Models\Invoice::STATUS_PARTIALLY_PAID) {
+                $expenseStatus = Expense::STATUS_PENDING;
+            }
+            $expense->status = $expenseStatus;
+            $expense->payment_method_id = $invoice->payment_method_id; // Use payment_method_id from invoice
+
             $expense->source_type = Expense::SOURCE_INVOICE;
             $expense->source_id = $invoice->id;
             $expense->invoice_id = $invoice->id;

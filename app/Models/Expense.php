@@ -11,6 +11,7 @@ use App\Models\ServiceCategory;
 use App\Models\Purchasematerial;
 use App\Models\Termin;
 use App\Models\Invoice;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Traits\Trackable;
@@ -32,7 +33,7 @@ class Expense extends Model
         'description',
         'transaction_date',
         'status',
-        'payment_method_id', // Note: This field is in fillable but not used in createFromPurchase
+        'payment_method_id',
         'source_type',
         'source_id',
         'prepared_fund',
@@ -87,6 +88,13 @@ class Expense extends Model
         return $this->belongsTo(ServiceCategory::class, 'service_category_id')->withDefault(function ($category) {
             $category->nama_kategori = 'Unknown Service Category';
         });
+    }
+
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class)->withDefault([
+            'name' => 'Unknown Payment Method',
+        ]);
     }
 
     public function source()
@@ -192,15 +200,33 @@ class Expense extends Model
         $isService = $purchase->is_service;
 
         // Ensure expense does not already exist for this purchase
-        // This is a safety check; ideally, the caller should prevent duplicate calls
         $existingExpense = self::where('source_type', self::SOURCE_PURCHASE)
             ->where('source_id', $purchase->id)
             ->first();
 
         if ($existingExpense) {
-            // If an expense already exists, return it instead of creating a duplicate
             Log::info("Expense already exists for PurchaseMaterial ID {$purchase->id}. Returning existing expense.");
             return $existingExpense;
+        }
+
+        // Map Invoice status to Expense status
+        $expenseStatus = self::STATUS_PENDING; // Default to pending
+        if ($purchase->invoice) {
+            switch ($purchase->invoice->status) {
+                case Invoice::STATUS_PAID:
+                    $expenseStatus = self::STATUS_LUNAS;
+                    break;
+                case Invoice::STATUS_PARTIALLY_PAID:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+                case Invoice::STATUS_UNPAID:
+                case Invoice::STATUS_CANCELLED:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+                default:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+            }
         }
 
         $expense = self::create([
@@ -210,11 +236,12 @@ class Expense extends Model
             'service_category_id' => $isService ? $purchase->service_category_id : null,
             'amount' => $purchase->total_harga,
             'description' => "Pembelian " . ($purchase->item ?? '') . " untuk proyek " . optional($purchase->proyek)->nama_proyek,
-            'transaction_date' => now(), // Or use a relevant date from purchase, e.g., $purchase->created_at->toDateString()
-            'status' => self::STATUS_LUNAS, // Assuming immediate expense for purchases
+            'transaction_date' => now(), // Or use a relevant date from purchase
+            'status' => $expenseStatus, // SET STATUS BASED ON MAPPED INVOICE STATUS
             'source_type' => self::SOURCE_PURCHASE,
             'source_id' => $purchase->id,
             'prepared_fund' => $purchase->total_harga,
+            'payment_method_id' => $purchase->invoice ? $purchase->invoice->payment_method_id : null, // Get payment method from invoice
             'invoice_id' => $purchase->invoice_id
         ]);
 
@@ -233,18 +260,27 @@ class Expense extends Model
             return $existingExpense;
         }
 
+        // Map Termin status to Expense status
+        $expenseStatus = self::STATUS_PENDING; // Default to pending
+        if ($termin->status_termin === 'Lunas') {
+            $expenseStatus = self::STATUS_LUNAS;
+        } else {
+            $expenseStatus = self::STATUS_PENDING;
+        }
+
         $expense = self::create([
             'user_id' => auth()->id(),
             'proyek_id' => $termin->proyek_id,
             'category_id' => $termin->category_id, // Ensure termin has a category_id if needed
-            'service_category_id' => null,
-            'amount' => $termin->jumlah_pembayaran,
+            'service_category_id' => null, // Assuming termin is not for service categories
+            'amount' => $termin->jumlah_pembayaran, // Using jumlah_pembayaran from termin
             'description' => "Pembayaran termin {$termin->nama_termin} untuk proyek " . optional($termin->proyek)->nama_proyek,
             'transaction_date' => $termin->tanggal_pembayaran,
-            'status' => $termin->status_pembayaran,
+            'status' => $expenseStatus, // Use the mapped status
             'source_type' => self::SOURCE_TERMIN,
             'source_id' => $termin->id,
             'prepared_fund' => $termin->jumlah_pembayaran,
+            'payment_method_id' => $termin->invoice ? $termin->invoice->payment_method_id : null, // Get payment method from invoice
             'invoice_id' => $termin->invoice_id
         ]);
 

@@ -95,7 +95,7 @@ class Invoice extends Model
     {
         if ($this->amount_paid <= 0) {
             return self::STATUS_UNPAID;
-        } elseif ($this->amount_paid < $this->total_amount) {
+        } elseif ($this->amount_paid < ($this->grand_total ?? $this->total_amount)) { // Compare against grand_total if it exists
             return self::STATUS_PARTIALLY_PAID;
         }
         return self::STATUS_PAID;
@@ -126,14 +126,18 @@ class Invoice extends Model
             } else {
                 $allLunas = $termins->every(fn($t) => $t->status_termin === 'Lunas');
                 $allBelumDibayar = $termins->every(fn($t) => $t->status_termin === 'Belum Dibayar');
-                $allDpDibayar = $termins->every(fn($t) => $t->status_termin === 'DP Dibayar');
+                // Check if any termin is 'DP Dibayar' or other partial payment statuses
+                $hasPartialPayment = $termins->contains(fn($t) => $t->status_termin === 'DP Dibayar' || $t->status_termin === 'Sebagian Dibayar');
+
 
                 if ($allLunas) {
                     $this->status = self::STATUS_PAID;
                 } elseif ($allBelumDibayar) {
                     $this->status = self::STATUS_UNPAID;
+                } elseif ($hasPartialPayment) {
+                   $this->status = self::STATUS_PARTIALLY_PAID;
                 } else {
-                    // Termins mixed or partially paid cases
+                    // Fallback for mixed statuses, or other unhandled partial cases
                     $this->status = self::STATUS_PARTIALLY_PAID;
                 }
             }
@@ -200,20 +204,14 @@ class Invoice extends Model
 
     public function getTotalIncomeAttribute(): float
     {
-        $netProfit = $this->net_profit ?? 0;
-        $otherIncomes = Income::where('proyek_id', $this->proyek_id)
-            ->whereNull('invoice_id')
-            ->where('status', 'Diterima')
-            ->sum('jumlah');
-
-        return $netProfit + $otherIncomes;
+        // Total income related to this specific invoice
+        return $this->net_profit ?? 0;
     }
 
     public function getTotalExpensesAttribute(): float
     {
-        return Expense::where('proyek_id', $this->proyek_id)
-            ->where('status', 'Lunas')
-            ->sum('amount');
+        // Total expenses directly linked to this invoice
+        return $this->expenses()->where('status', 'Lunas')->sum('amount');
     }
 
     public function getProfitLossAttribute(): float
@@ -234,17 +232,15 @@ class Invoice extends Model
 
     public function getTotalProjectIncomeAttribute(): float
     {
-        $invoiceIncome = $this->total_income;
-        $otherIncomes = Income::where('proyek_id', $this->proyek_id)
-            ->whereNull('invoice_id')
-            ->where('status', 'Diterima')
+        // Sum of all incomes associated with the project, including this invoice's payments and other incomes
+        return Income::where('proyek_id', $this->proyek_id)
+            ->where('status', 'Diterima') // Only count received incomes
             ->sum('jumlah');
-
-        return $invoiceIncome + $otherIncomes;
     }
 
     public function getTotalProjectExpensesAttribute(): float
     {
+        // Sum of all expenses associated with the project that are 'Lunas'
         return Expense::where('proyek_id', $this->proyek_id)
             ->where('status', 'Lunas')
             ->sum('amount');
@@ -264,7 +260,7 @@ class Invoice extends Model
     // Manual calculations
     public function calculateProfitLoss(): void
     {
-        $this->total_income = $this->net_profit ?? 0;
+        $this->total_income = $this->grand_total ?? $this->total_amount;
         $this->total_expenses = $this->expenses()->where('status', 'Lunas')->sum('amount');
         $this->profit_loss = $this->total_income - $this->total_expenses;
         $this->profit_loss_percentage = $this->total_expenses > 0
@@ -275,25 +271,27 @@ class Invoice extends Model
 
     public function calculateTaxes(): void
     {
-        // Subtotal barang & jasa
+        // Subtotal barang & jasa from purchase materials
         $subtotalBarang = $this->purchaseMaterials()->where('is_service', false)->sum('total_harga');
         $subtotalJasa = $this->purchaseMaterials()->where('is_service', true)->sum('total_harga');
 
-        // PPH Non Final: barang 1.5%, jasa 2%
+        // PPN (11% of total_amount before PPH)
+        $this->ppn_amount = $this->use_ppn ? ($this->total_amount * 0.11) : 0;
+
+        // PPH Non Final: goods 1.5%, services 2% (from total_amount, not net profit)
+        $this->pph_barang_amount = $subtotalBarang * 0.015;
+        $this->pph_jasa_amount = $subtotalJasa * 0.02;
+
         $this->pph_non_final_amount = $this->use_pph_non_final
-            ? ($subtotalBarang * 0.015) + ($subtotalJasa * 0.02)
+            ? ($this->pph_barang_amount + $this->pph_jasa_amount)
             : 0;
 
-        // PPH Final: 22% dari laba bersih
+        // PPH Final: 0.5% from total gross income if using PP23 for MSMEs
+        // If it's 22% from net_profit, ensure net_profit is calculated first.
+        // Based on the given code, it's 22% of net_profit
         $this->pph_final_amount = $this->use_pph_final
             ? (($this->net_profit ?? 0) * 0.22)
             : 0;
-
-        // PPN (11% dari total_amount)
-        $this->ppn_amount = $this->use_ppn ? ($this->total_amount * 0.11) : 0;
-
-        $this->pph_barang_amount = $subtotalBarang * 0.015;
-        $this->pph_jasa_amount = $subtotalJasa * 0.02;
 
         $this->save();
     }
@@ -308,13 +306,13 @@ class Invoice extends Model
     public function calculateGrandTotal(): float
     {
         Log::info('Calculating Grand Total for Invoice ID: ' . $this->id);
-        Log::info('  Initial total_amount: ' . $this->total_amount);
-        Log::info('  use_ppn: ' . ($this->use_ppn ? 'true' : 'false'));
-        Log::info('  use_pph_non_final: ' . ($this->use_pph_non_final ? 'true' : 'false'));
-        Log::info('  use_pph_final: ' . ($this->use_pph_final ? 'true' : 'false'));
-        Log::info('  ppn_amount: ' . $this->ppn_amount);
-        Log::info('  pph_non_final_amount: ' . $this->pph_non_final_amount);
-        Log::info('  pph_final_amount: ' . $this->pph_final_amount);
+        Log::info('    Initial total_amount: ' . $this->total_amount);
+        Log::info('    use_ppn: ' . ($this->use_ppn ? 'true' : 'false'));
+        Log::info('    use_pph_non_final: ' . ($this->use_pph_non_final ? 'true' : 'false'));
+        Log::info('    use_pph_final: ' . ($this->use_pph_final ? 'true' : 'false'));
+        Log::info('    ppn_amount: ' . $this->ppn_amount);
+        Log::info('    pph_non_final_amount: ' . $this->pph_non_final_amount);
+        Log::info('    pph_final_amount: ' . $this->pph_final_amount);
 
         $total = $this->total_amount ?? 0;
 
@@ -324,15 +322,17 @@ class Invoice extends Model
         }
 
         // Subtract PPH Non Final (goods and services)
+        // PPH Non Final reduces the amount received by the vendor/provider (the invoice creator)
         $total -= $this->pph_non_final_amount;
 
         // Subtract PPH Final if enabled
+        // PPH Final is usually a deduction from the gross income
         if ($this->use_pph_final) {
             $total -= $this->pph_final_amount;
         }
 
         $this->grand_total = $total;
-        Log::info('  Calculated grand_total: ' . $this->grand_total);
+        Log::info('    Calculated grand_total: ' . $this->grand_total);
         $this->save();
 
         return $this->grand_total;
@@ -345,6 +345,7 @@ class Invoice extends Model
         $this->calculateTaxes();
         $this->calculateGrandTotal();
         $this->calculateProfitLoss();
+        $this->save(); // Save after all calculations are done
     }
 
     public function getProjectFinancialSummary(): array
@@ -353,18 +354,23 @@ class Invoice extends Model
         $totalTerminAmount = $termins->sum('nilai_termin');
         $totalPaidTermin = $termins->where('status_termin', 'Lunas')->sum('nilai_termin');
         $totalDPPaid = $termins->where('status_termin', 'DP Dibayar')->sum('nilai_dp');
-        $totalExpenseAmount = $this->expenses->sum('amount');
+        $totalExpenseAmount = $this->expenses->sum('amount'); // Direct expenses from this invoice
+
+        // Total expenses for the project
+        $projectTotalExpenses = Expense::where('proyek_id', $this->proyek_id)->where('status', 'Lunas')->sum('amount');
+        // Total income for the project (from all sources like invoices, and other direct incomes)
+        $projectTotalIncome = Income::where('proyek_id', $this->proyek_id)->where('status', 'Diterima')->sum('jumlah');
 
         return [
-            'total_income' => $this->total_income,
-            'total_expenses' => $this->total_expenses,
-            'profit_loss' => $this->profit_loss,
-            'profit_loss_percentage' => $this->profit_loss_percentage,
-            'total_termin_amount' => $totalTerminAmount,
-            'total_paid_termin' => $totalPaidTermin,
-            'total_dp_paid' => $totalDPPaid,
-            'total_expense_amount' => $totalExpenseAmount,
-            'remaining_payment' => $totalTerminAmount - $totalPaidTermin - $totalDPPaid,
+            'total_income' => (float) $projectTotalIncome,
+            'total_expenses' => (float) $projectTotalExpenses,
+            'profit_loss' => (float) ($projectTotalIncome - $projectTotalExpenses),
+            'profit_loss_percentage' => $projectTotalExpenses > 0 ? (float) (($projectTotalIncome - $projectTotalExpenses) / $projectTotalExpenses) * 100 : 0,
+            'total_termin_amount' => (float) $totalTerminAmount,
+            'total_paid_termin' => (float) $totalPaidTermin,
+            'total_dp_paid' => (float) $totalDPPaid,
+            'total_expense_amount' => (float) $totalExpenseAmount,
+            'remaining_payment' => (float) ($totalTerminAmount - $totalPaidTermin - $totalDPPaid),
         ];
     }
 

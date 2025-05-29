@@ -12,8 +12,9 @@ use App\Models\Proyek;
 use App\Models\Invoice;
 use App\Models\Termin;
 use App\Models\Expense;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 use App\Traits\Trackable;
-use Illuminate\Support\Facades\Log; // Added Log import
+use Illuminate\Support\Facades\Log;
 
 class PurchaseMaterial extends Model
 {
@@ -34,7 +35,7 @@ class PurchaseMaterial extends Model
         'deskripsi',
         'proyek_id',
         'invoice_id',
-        'expense_id', // Make sure this is fillable
+        'expense_id',
     ];
 
     protected $casts = [
@@ -134,13 +135,11 @@ class PurchaseMaterial extends Model
             if ($purchase->invoice) {
                 $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
                 $purchase->invoice->save();
-                // Re-calculate financial values for the invoice if necessary
+                // Re-calculate financial values for the invoice
                 $purchase->invoice->calculateAllFinancialValues();
             }
 
             // Trigger expense otomatis dari pembelian jika belum ada
-            // OR if it's new, or if expense_id is not set.
-            // This is the core part that needs to ensure expense_id is set.
             if (empty($purchase->expense_id)) {
                 try {
                     $expense = Expense::createFromPurchase($purchase);
@@ -150,11 +149,35 @@ class PurchaseMaterial extends Model
                     Log::info("Expense created and linked for PurchaseMaterial ID {$purchase->id}. Expense ID: {$expense->id}");
                 } catch (\Exception $e) {
                     Log::error("Failed to create expense from purchase in booted method for ID {$purchase->id}: " . $e->getMessage());
-                    // Consider rolling back the purchase creation if expense creation is critical
-                    // or mark the purchase for review.
                 }
             } else {
                 Log::info("Expense already linked for PurchaseMaterial ID {$purchase->id}. Expense ID: {$purchase->expense_id}");
+                // If expense exists, and purchase material was updated, update the expense as well.
+                if ($purchase->isDirty('total_harga') || $purchase->isDirty('is_service') || $purchase->isDirty('category_id') || $purchase->isDirty('service_category_id') || $purchase->isDirty('proyek_id')) {
+                    $expense = $purchase->expense;
+                    if ($expense) {
+                        // Determine expense status based on the invoice's status
+                        $invoiceStatus = $purchase->invoice ? $purchase->invoice->status : Expense::STATUS_PENDING;
+                        $expenseStatus = Expense::STATUS_PENDING;
+                        if ($invoiceStatus === Invoice::STATUS_PAID) {
+                            $expenseStatus = Expense::STATUS_LUNAS;
+                        } else if ($invoiceStatus === Invoice::STATUS_UNPAID || $invoiceStatus === Invoice::STATUS_PARTIALLY_PAID) {
+                            $expenseStatus = Expense::STATUS_PENDING;
+                        }
+
+                        $expense->update([
+                            'amount' => $purchase->total_harga,
+                            'description' => "Pembelian " . ($purchase->item ?? '') . " untuk proyek " . optional($purchase->proyek)->nama_proyek,
+                            'category_id' => $purchase->is_service ? null : $purchase->category_id,
+                            'service_category_id' => $purchase->is_service ? $purchase->service_category_id : null,
+                            'prepared_fund' => $purchase->total_harga,
+                            'status' => $expenseStatus, // Update status based on invoice
+                            'proyek_id' => $purchase->proyek_id, // Ensure proyek_id is updated on expense too
+                            'payment_method_id' => $purchase->invoice->payment_method_id, // Get payment method from invoice
+                        ]);
+                        Log::info("Associated expense ID {$expense->id} updated for PurchaseMaterial ID {$purchase->id}.");
+                    }
+                }
             }
         });
 
@@ -163,7 +186,7 @@ class PurchaseMaterial extends Model
             if ($purchase->invoice) {
                 $purchase->invoice->total_amount = $purchase->invoice->purchaseMaterials()->sum('total_harga');
                 $purchase->invoice->save();
-                // Re-calculate financial values for the invoice if necessary
+                // Re-calculate financial values for the invoice
                 $purchase->invoice->calculateAllFinancialValues();
             }
 

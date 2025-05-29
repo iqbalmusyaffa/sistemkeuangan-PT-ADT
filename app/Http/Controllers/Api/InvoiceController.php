@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Proyek;
-use App\Models\Income; // Added Income import
+use App\Models\Income;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 
 class InvoiceController extends Controller
 {
@@ -24,10 +25,10 @@ class InvoiceController extends Controller
             'purchaseMaterials.serviceCategory',
             'purchaseMaterials.unit',
             'purchaseMaterials.merek',
-            'purchaseMaterials.expense', // Added expense to eager load
+            'purchaseMaterials.expense',
             'termins',
             'expenses',
-            'paymentMethod' // Added paymentMethod
+            'paymentMethod'
         ]);
         if ($request->has('proyek_id')) {
             $query->where('proyek_id', $request->proyek_id);
@@ -45,10 +46,10 @@ class InvoiceController extends Controller
             'purchaseMaterials.serviceCategory',
             'purchaseMaterials.unit',
             'purchaseMaterials.merek',
-            'purchaseMaterials.expense', // Added expense to eager load
+            'purchaseMaterials.expense',
             'termins',
             'expenses',
-            'paymentMethod' // Added paymentMethod
+            'paymentMethod'
         ])->findOrFail($id);
         return new InvoiceResource($invoice);
     }
@@ -81,7 +82,8 @@ class InvoiceController extends Controller
                 'expenses.*.description' => 'required_with:expenses|string',
                 'expenses.*.amount' => 'required_with:expenses|numeric|min:0',
                 'expenses.*.category_id' => 'required_with:expenses|exists:kategoris,id',
-                'expenses.*.service_category_id' => 'nullable|exists:service_categories,id', // Added service category for direct expenses
+                'expenses.*.service_category_id' => 'nullable|exists:service_categories,id',
+                'expenses.*.payment_method_id' => 'required_with:expenses|exists:payment_methods,id', // Added validation for payment_method_id
             ]);
 
             \Log::info('Validated invoice data:', $validated);
@@ -167,7 +169,8 @@ class InvoiceController extends Controller
                         'category_id' => $expense['category_id'] ?? null,
                         'service_category_id' => $expense['service_category_id'] ?? null,
                         'transaction_date' => now(),
-                        'status' => 'Lunas', // Assuming direct expenses are marked as Lunas
+                        'status' => Expense::STATUS_PENDING,
+                        'payment_method_id' => $expense['payment_method_id'], // Assign payment_method_id here
                         'user_id' => auth()->id(),
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -215,26 +218,71 @@ class InvoiceController extends Controller
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:unpaid,partially_paid,paid,cancelled',
             'amount_paid' => 'required|numeric|min:0',
-            'payment_method_id' => 'nullable|exists:payment_methods,id',
+            'payment_method_id' => 'nullable|exists:payment_methods,id', // Make payment_method_id nullable for updates if it's not always provided
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 400);
         }
 
-        $invoice = Invoice::findOrFail($id);
-        $invoice->status = $request->status;
-        $invoice->amount_paid = $request->amount_paid;
-        $invoice->status = $invoice->determineStatus();
-        if ($request->has('payment_method_id')) {
-            $invoice->payment_method_id = $request->payment_method_id;
+        try {
+            DB::beginTransaction();
+            $invoice = Invoice::findOrFail($id);
+
+            // Update invoice payment and status
+            $invoice->amount_paid = $request->amount_paid;
+            $invoice->status = $invoice->determineStatus(); // Re-determine status based on new amount paid
+            if ($request->has('payment_method_id')) {
+                $invoice->payment_method_id = $request->payment_method_id;
+            }
+            $invoice->save();
+
+            // After updating the payment, recalculate all financial values
+            $invoice->calculateAllFinancialValues();
+
+            // Update statuses of associated expenses based on the new invoice status
+            $newExpenseStatus = Expense::STATUS_PENDING;
+            if ($invoice->status === Invoice::STATUS_PAID) {
+                $newExpenseStatus = Expense::STATUS_LUNAS;
+            } else if ($invoice->status === Invoice::STATUS_PARTIALLY_PAID) {
+                $newExpenseStatus = Expense::STATUS_PENDING;
+            } else if ($invoice->status === Invoice::STATUS_UNPAID) {
+                $newExpenseStatus = Expense::STATUS_PENDING;
+            }
+
+
+            // Update expenses linked via purchase materials
+            $invoice->purchaseMaterials->each(function ($purchaseMaterial) use ($newExpenseStatus, $invoice) {
+                if ($purchaseMaterial->expense) {
+                    $purchaseMaterial->expense->update([
+                        'status' => $newExpenseStatus,
+                        'payment_method_id' => $invoice->payment_method_id // Update expense payment_method_id from invoice
+                    ]);
+                }
+            });
+
+            // Update direct expenses linked to this invoice
+            $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $invoice) {
+                $expense->update([
+                    'status' => $newExpenseStatus,
+                    'payment_method_id' => $invoice->payment_method_id // Update expense payment_method_id from invoice
+                ]);
+            });
+
+            DB::commit();
+
+            return new InvoiceResource($invoice->fresh()); // Return fresh instance to include updated relationships
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Error updating invoice: ' . $e->getMessage(), [
+                'invoice_id' => $id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update invoice. ' . $e->getMessage(),
+            ], 500);
         }
-        $invoice->save();
-
-        // After updating the payment, recalculate all financial values
-        $invoice->calculateAllFinancialValues();
-
-        return new InvoiceResource($invoice);
     }
 
     // Menghapus invoice
@@ -274,7 +322,7 @@ class InvoiceController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0',
-            'payment_method_id' => 'nullable|exists:payment_methods,id',
+            'payment_method_id' => 'required|exists:payment_methods,id', // payment_method_id is required for a new payment record
         ]);
 
         if ($validator->fails()) {
@@ -292,6 +340,38 @@ class InvoiceController extends Controller
             // Add the payment amount to the existing amount_paid
             $newAmountPaid = $invoice->amount_paid + $request->amount;
             $invoice->updateAmountPaid($newAmountPaid); // This method also updates status and saves
+
+            // After updating the payment, recalculate all financial values
+            $invoice->calculateAllFinancialValues();
+
+            // Update statuses of associated expenses based on the new invoice status
+            $newExpenseStatus = Expense::STATUS_PENDING;
+            if ($invoice->status === Invoice::STATUS_PAID) {
+                $newExpenseStatus = Expense::STATUS_LUNAS;
+            } else if ($invoice->status === Invoice::STATUS_PARTIALLY_PAID) {
+                $newExpenseStatus = Expense::STATUS_PENDING;
+            } else if ($invoice->status === Invoice::STATUS_UNPAID) {
+                $newExpenseStatus = Expense::STATUS_PENDING;
+            }
+
+            // Update expenses linked via purchase materials
+            $invoice->purchaseMaterials->each(function ($purchaseMaterial) use ($newExpenseStatus, $request) {
+                if ($purchaseMaterial->expense) {
+                    $purchaseMaterial->expense->update([
+                        'status' => $newExpenseStatus,
+                        'payment_method_id' => $request->payment_method_id // Update expense payment_method_id from payment record
+                    ]);
+                }
+            });
+
+            // Update direct expenses linked to this invoice
+            $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $request) {
+                $expense->update([
+                    'status' => $newExpenseStatus,
+                    'payment_method_id' => $request->payment_method_id // Update expense payment_method_id from payment record
+                ]);
+            });
+
 
             // Create an income record for this payment
             $income = Income::create([
@@ -326,7 +406,7 @@ class InvoiceController extends Controller
                 'message' => 'Payment recorded successfully',
                 'data' => [
                     'invoice' => new InvoiceResource($invoice),
-                    'income' => $income // Return the created income record if needed
+                    'income' => $income
                 ]
             ]);
         } catch (\Exception $e) {
