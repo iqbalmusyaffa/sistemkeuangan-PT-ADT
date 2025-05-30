@@ -159,6 +159,7 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
     Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
     Route::get('/purchase-materials/{id}/service-category', [PurchaseMaterialController::class, 'getServiceCategory']);
+    Route::get('/invoices/datatables', [InvoiceController::class, 'datatables']);
 
     // Kategori routes
     Route::apiResource('kategori', KategoriTransaksiController::class);
