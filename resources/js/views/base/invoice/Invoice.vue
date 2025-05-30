@@ -239,7 +239,7 @@
                 required
               >
                 <option value="">Pilih Metode Pembayaran</option>
-                <option v-for="method in paymentMethods" :key="method.id" :value="method.id">
+                <option v-for="method in paymentMethods" :key="method.id" :value="String(method.id)">
                   {{ method.nama_metode }}
                 </option>
               </CFormSelect>
@@ -654,7 +654,7 @@ const filteredGrandTotal = computed(() => {
   // Hitung nilai pajak berdasarkan filter yang dicentang
   const ppnAmount = filterPpn.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.ppn_amount || 0), 0) : 0;
   const pphNonFinalAmount = filterPphNonFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_non_final_amount || 0), 0) : 0;
-  const pphFinalAmount = filterPphFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_final_amount || 0), 0) : 0;
+  const pphFinalAmount = filterPphFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_final_amount) || 0, 0) : 0;
 
 
   // Hitung Grand Total dengan penyesuaian pajak
@@ -897,20 +897,58 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
                   return statusMap[data] || data
                 }
               },
-              {
-                title: 'Actions',
-                data: null,
-                render: (data, type, row) => `
-                  <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><span class="cicon-eye" data-id="${row.id}"></span></button>
-                  <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><span class="cicon-pencil" data-id="${row.id}"></span></button>
-                  <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><span class="cicon-trash" data-id="${row.id}"></span></button>
-                `,
-                orderable: false
-              }
-            ],
-            order: [[1, 'desc']],
-            responsive: true
-          });
+        {
+          title: 'Actions',
+          data: null,
+          render: (data, type, row) => `
+            <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><i class="fa fa-eye"></i></button>
+            <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><i class="fa fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><i class="fa fa-trash"></i></button>
+            <button class="btn btn-sm btn-secondary pdf-btn" data-id="${row.id}"><i class="fa fa-file-pdf"></i> PDF</button>
+          `,
+          orderable: false
+        }
+      ],
+      order: [[1, 'desc']],
+      responsive: true
+    });
+
+    // PDF button event
+    $(invoiceTableRef.value).on('click', '.pdf-btn', function() {
+      const id = $(this).data('id');
+      downloadInvoicePdf(id);
+    });
+
+    // Download Invoice PDF
+    const downloadInvoicePdf = async (invoiceId) => {
+      const token = sessionStorage.getItem('token');
+      if (!token) {
+        Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+        return;
+      }
+      try {
+        const response = await axios.get(`/api/invoice/${invoiceId}/pdf`, {
+          responseType: 'blob',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/pdf'
+          }
+        });
+        if (response.data.size === 0) {
+          throw new Error('File PDF kosong');
+        }
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `invoice_${invoiceId}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        Swal.fire('Error', err.response?.data?.message || 'Gagal download PDF', 'error');
+      }
+    };
 
           $(invoiceTableRef.value).on('click', '.view-btn', function() {
             const id = $(this).data('id')
@@ -995,6 +1033,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
       modalMode.value = mode
       editingId.value = id
       modalTitle.value = mode === 'tambah' ? 'Tambah Invoice' : (mode === 'edit' ? 'Edit Invoice' : 'Detail Invoice')
+  await fetchPaymentMethods(); // Load payment methods before showing the modal
       if ((mode === 'edit' || mode === 'view') && id) {
         await loadMasterData();
         await loadProjects();
@@ -1255,10 +1294,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         if (form.value.is_cash) {
           delete payload.termins;
         } else {
-          // If not cash, you might still want to handle termins for the invoice,
-          // or if termins are managed separately, remove them from payload here too.
-          // For now, based on your current logic, it seems termins are only relevant
-          // if is_cash is false.
           delete payload.termins;
         }
 
@@ -1289,7 +1324,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           loadInvoices(); // Reload the data table
         }
       } catch (error) {
-        console.error('Error submitting form:', error);
         if (error.response?.status === 401) {
           sessionStorage.removeItem('token');
           window.location.href = '/login';
@@ -1306,18 +1340,16 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
 
     const loadInvoice = async (id) => {
       try {
-        const token = sessionStorage.getItem('token')
+        const token = sessionStorage.getItem('token');
         const response = await axios.get(`/api/invoices/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        })
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const invoice = response.data.data;
         form.value = {
           proyek_id: String(invoice.proyek?.id || ''),
           invoice_date: invoice.invoice_date ? invoice.invoice_date.substring(0, 10) : '',
           status: invoice.status || 'unpaid',
-          payment_method_id: String(invoice.payment_method_id || ''),
+          payment_method_id: String(invoice.payment_method?.id || ''), // Ambil ID dari objek payment_method
           notes: invoice.notes || '',
           use_ppn: !!invoice.use_ppn,
           use_pph_non_final: !!invoice.use_pph_non_final,
@@ -1372,9 +1404,26 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
                 expense_id: null,
                 is_service: false,
                 serviceCategories: []
-              }]
-        }
-       if (Array.isArray(invoice.purchase_materials)) {
+              }],
+        };
+
+    // Validasi payment_method_id
+    const validPaymentMethod = paymentMethods.value.find(
+    (method) => String(method.id) === String(form.value.payment_method_id)
+    );
+
+    if (!validPaymentMethod) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Peringatan',
+        text: 'Metode pembayaran tidak valid, silakan pilih metode pembayaran yang tersedia.',
+      });
+      form.value.payment_method_id = ''; // Reset jika tidak valid
+    } else {
+      form.value.payment_method_id = String(validPaymentMethod.id);
+    }
+
+        if (Array.isArray(invoice.purchase_materials)) {
           invoice.purchase_materials.forEach(item => {
             if (item.category && !categories.value.some(c => String(c.id) === String(item.category.id))) {
               categories.value.push({
@@ -1404,6 +1453,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
               // Trigger reactivity
               nextTick(() => {});
             }
+             // Validasi payment_method_id
           });
 
         }
@@ -1422,9 +1472,9 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         Swal.fire({
           icon: 'error',
           title: 'Error',
-          text: errorMsg
+          text: errorMsg,
         });
-        console.error(err);
+
       }
     }
 
@@ -1635,22 +1685,23 @@ const getMaterialCategories = (unitId, item = null) => {
     const totalWithTax = grandTotal;
 
     const fetchPaymentMethods = async () => {
-      try {
-        const token = sessionStorage.getItem('token');
-        const response = await axios.get('/api/payment-methods', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (Array.isArray(response.data.data)) {
-          paymentMethods.value = response.data.data;
-        } else if (Array.isArray(response.data)) {
-          paymentMethods.value = response.data;
-        } else {
-          paymentMethods.value = [];
-        }
-      } catch (e) {
-        paymentMethods.value = [];
-      }
-    };
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get('/api/payment-methods', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (Array.isArray(response.data.data)) {
+      paymentMethods.value = response.data.data;
+    } else if (Array.isArray(response.data)) {
+      paymentMethods.value = response.data;
+    } else {
+      paymentMethods.value = [];
+    }
+  } catch (e) {
+    paymentMethods.value = [];
+    // console.error('Error fetching payment methods:', e);
+  }
+};
 
     // Tidak perlu mountCoreUIIcons, gunakan FontAwesomeIcon langsung di template
     const initDataTable = () => {
@@ -1692,6 +1743,7 @@ const getMaterialCategories = (unitId, item = null) => {
         responsive: false
       });
 
+      // Event listeners for action buttons
       $(invoiceTableRef.value).on('click', '.view-btn', function() {
         const id = $(this).data('id');
         openModal('view', id);
@@ -1886,7 +1938,6 @@ const getMaterialCategories = (unitId, item = null) => {
     );
 
 
-
     const canUsePpn = computed(() => {
       return invoices.value.some(inv => inv.use_ppn)
     })
@@ -1930,6 +1981,7 @@ watch([subtotalBarang, subtotalJasa, filterPphNonFinal], () => {
 // Total PPH Non Final dari result API untuk summary (bukan dari form)
 const filteredPphNonFinalTotal = computed(() => {
   return filteredInvoices.value.reduce((sum, inv) => sum + (Number(inv.pph_non_final_amount) || 0), 0);
+
 });
 
 // Watcher untuk log perubahan filter pajak dan filteredInvoices
