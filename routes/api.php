@@ -143,6 +143,7 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::post('/invoices', [InvoiceController::class, 'store']);
     Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
     Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
+    Route::post('/invoices/{id}/update-status', [InvoiceController::class, 'updateStatus']);
 
     // New routes for invoice payments and financials
     Route::post('/invoices/{id}/payment', [InvoiceController::class, 'recordPayment']);

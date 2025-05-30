@@ -392,21 +392,21 @@
                     <strong>Total Harga: {{ formatCurrency(item.total_harga) }}</strong>
                   </CCol>
                   <CCol md="6" class="text-end">
-                    <CButton
-                      v-if="modalMode !== 'view'"
-                      color="danger"
-                      size="sm"
-                      @click="removeItem(index)"
-                      :disabled="form.purchase_materials.length === 1"
-                    >
-                      <CIcon icon="cil-trash" /> Hapus Item
-                    </CButton>
+                  <CButton
+                    v-if="modalMode !== 'view'"
+                    color="danger"
+                    size="sm"
+                    @click="removeItem(index)"
+                    :disabled="form.purchase_materials.length === 1"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'trash']" /> Hapus Item
+                  </CButton>
                   </CCol>
                 </CRow>
               </div>
               <div class="mt-3">
                 <CButton v-if="modalMode !== 'view'" color="success" size="sm" @click="addItem">
-                  <CIcon icon="cil-plus" /> Tambah Item
+                  <FontAwesomeIcon :icon="['fas', 'plus']" /> Tambah Item
                 </CButton>
               </div>
             </CCol>
@@ -461,10 +461,10 @@
                     </div>
                   </CCol>
                   <CCol md="6">
-                    <div class="mb-2">
+                    <!-- <div class="mb-2">
                       <strong>Laba Bersih ({{ profitMarginLabel }}):</strong>
                       <span class="float-end">{{ formatCurrency(netProfit) }}</span>
-                    </div>
+                    </div> -->
                     <div class="mb-2" v-if="form.use_pph_final">
                       <strong>PPH Final (3%):</strong>
                       <span class="float-end">{{ formatCurrency(pphFinal) }}</span>
@@ -642,17 +642,12 @@ const filteredPphFinalAmount = computed(() => {
 });
 
 const filteredGrandTotal = computed(() => {
-  console.log("Filter PPN Aktif:", filterPpn.value);
-  console.log("Filter PPH Non Final Aktif:", filterPphNonFinal.value);
-  console.log("Filter PPH Final Aktif:", filterPphFinal.value);
 
   // Hitung subtotal terlebih dahulu
   const subtotal = filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0);
-  console.log("Subtotal:", subtotal);
 
   // Jika tidak ada filter yang dicentang, tampilkan subtotal
   if (!filterPpn.value && !filterPphNonFinal.value && !filterPphFinal.value) {
-    console.log("Grand Total (tanpa filter):", subtotal);
     return subtotal;
   }
 
@@ -661,19 +656,14 @@ const filteredGrandTotal = computed(() => {
   const pphNonFinalAmount = filterPphNonFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_non_final_amount || 0), 0) : 0;
   const pphFinalAmount = filterPphFinal.value ? filteredInvoices.value.reduce((sum, inv) => sum + Number(inv.pph_final_amount || 0), 0) : 0;
 
-  console.log("PPN Amount:", ppnAmount);
-  console.log("PPH Non Final Amount:", pphNonFinalAmount);
-  console.log("PPH Final Amount:", pphFinalAmount);
 
   // Hitung Grand Total dengan penyesuaian pajak
   const grandTotal = subtotal + ppnAmount - pphNonFinalAmount - pphFinalAmount;
-  console.log("Grand Total (dengan filter):", grandTotal);
   return grandTotal;
 });
 
 // Watchers to ensure reactivity
 watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
-  console.log("Filters or invoices changed. Recalculating Grand Total...");
 });
 
 
@@ -729,7 +719,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         })
         const data = Array.isArray(response.data) ? response.data : (response.data.data ? response.data.data : [])
         item.serviceCategories = data.filter(cat => String(cat.unit_id) === String(unitId))
-        console.log('Fetched service categories:', item.serviceCategories)
+
       } catch (err) {
         item.serviceCategories = []
       }
@@ -775,12 +765,12 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           unit_id: String(cat.unit_id)
         }))
 
-        console.log('Master data loaded:', {
+  , {
           units: units.value,
           categories: categories.value,
           mereks: mereks.value,
           serviceCategories: serviceCategories.value
-        })
+        }
       } catch (error) {
         error.value = 'Gagal memuat data master: ' + (error.response?.data?.message || error.message)
         categories.value = [];
@@ -838,16 +828,14 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
     const loadProjects = async () => {
       try {
         const token = sessionStorage.getItem('token')
-        console.log('Loading projects...')
+
         const response = await axios.get('/api/proyeks', {
           headers: {
             Authorization: `Bearer ${token}`
           }
         })
-        console.log('Projects response:', response.data)
         projects.value = response.data.data || []
       } catch (err) {
-        console.error('Error loading projects:', err)
         Swal.fire({
           icon: 'error',
           title: 'Error',
@@ -875,7 +863,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           }
         });
 
-        console.log('Invoices API response:', response.data);
         invoices.value = response.data.data || [];
 
         if (dataTable) {
@@ -997,10 +984,8 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
     const setHargaFromServiceCategory = (item) => {
       if (isServiceType(item) && item.category_id) { // Use service_category_id instead of category_id for service items
         const selectedCategory = getServiceCategoriesByUnit(item.unit_id, item).find(cat => String(cat.id) === String(item.service_category_id))
-        console.log('Selected service category:', selectedCategory)
         if (selectedCategory) {
           item.harga = selectedCategory.harga !== undefined ? selectedCategory.harga : (selectedCategory.price !== undefined ? selectedCategory.price : 0)
-          console.log('Set item.harga:', item.harga)
           calculateTotalHarga(item)
         }
       }
@@ -1041,10 +1026,10 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
         purchase_materials: [{
           item: '',
           type: '',
-          qty: 1,
+          qty: '',
           harga: '',
           unit_id: '', // Ensure this is initialized as empty string
-          total_harga: 0,
+          total_harga: '',
           spesifikasi: '',
           deskripsi: '',
           category_id: '',
@@ -1076,10 +1061,10 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
       const newItem = {
         item: '',
         type: '',
-        qty: 1,
+        qty: '',
         harga: '',
         unit_id: '',
-        total_harga: 0,
+        total_harga: '',
         spesifikasi: '',
         deskripsi: '',
         category_id: '',
@@ -1200,6 +1185,16 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
       });
     };
 
+    // === TOTAL TAX ===
+    // Kompatibel dengan tampilan pajak di form modal
+    const totalTax = computed(() => {
+      let total = 0;
+      if (form.value.use_ppn) total += Number(ppnAmount?.value || 0);
+      if (form.value.use_pph_non_final) total += Number(pphNonFinalTotal?.value || 0);
+      if (form.value.use_pph_final) total += Number(pphFinal?.value || 0);
+      return total;
+    });
+
     const terminSummary = computed(() => {
       if (form.value.is_cash === 'termin') {
         return {
@@ -1256,8 +1251,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           use_pph_non_final: form.value.use_pph_non_final,
           use_pph_final: form.value.use_pph_final
         };
-        // Debug: log payload before sending
-        console.log('Invoice payload:', JSON.stringify(payload, null, 2));
 
         if (form.value.is_cash) {
           delete payload.termins;
@@ -1320,8 +1313,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
           }
         })
         const invoice = response.data.data;
-        console.log('API invoice:', invoice);
-        console.log('API purchase_materials:', invoice.purchase_materials);
         form.value = {
           proyek_id: String(invoice.proyek?.id || ''),
           invoice_date: invoice.invoice_date ? invoice.invoice_date.substring(0, 10) : '',
@@ -1383,8 +1374,6 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
                 serviceCategories: []
               }]
         }
-        // Debug log untuk merek
-        console.log('MEREKS:', mereks.value, 'ITEM MEREK_ID:', form.value.purchase_materials.map(i => i.merek_id));
        if (Array.isArray(invoice.purchase_materials)) {
           invoice.purchase_materials.forEach(item => {
             if (item.category && !categories.value.some(c => String(c.id) === String(item.category.id))) {
@@ -1416,8 +1405,7 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
               nextTick(() => {});
             }
           });
-          // Debug log untuk mereks setelah push
-          console.log('AFTER PUSH MEREKS:', mereks.value);
+
         }
         // Trigger handleUnitChange dan handleCategoryChange untuk setiap item agar dropdown sinkron
         nextTick(() => {
@@ -1664,16 +1652,7 @@ const getMaterialCategories = (unitId, item = null) => {
       }
     };
 
-    const mountCoreUIIcons = () => {
-      document.querySelectorAll('.cicon-eye').forEach(el => {
-        const icon = h(CIcon, { icon: icons.cilEye, size: 'sm' });
-        render(icon, el);
-      });
-      document.querySelectorAll('.cicon-pencil').forEach(el => {
-        const icon = h(CIcon, { icon: icons.cilPencil, size: 'sm' });
-        render(icon, el);
-      });
-};
+    // Tidak perlu mountCoreUIIcons, gunakan FontAwesomeIcon langsung di template
     const initDataTable = () => {
       if ($.fn.DataTable.isDataTable(invoiceTableRef.value)) {
         $(invoiceTableRef.value).DataTable().clear().destroy();
@@ -1700,9 +1679,10 @@ const getMaterialCategories = (unitId, item = null) => {
             title: 'Actions',
             data: null,
             render: (data, type, row) => `
-              <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><span class="cicon-eye" data-id="${row.id}"></span></button>
-              <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><span class="cicon-pencil" data-id="${row.id}"></span></button>
-              <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><span class="cicon-trash" data-id="${row.id}"></span></button>
+          <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><span><i class='fa fa-eye'></i></span></button>
+          <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><span><i class='fa fa-pen'></i></span></button>
+          <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><span><i class='fa fa-trash'></i></span></button>
+              <button class="btn btn-sm btn-primary status-btn" data-id="${row.id}">Update Status</button>
             `,
             orderable: false
           }
@@ -1724,7 +1704,6 @@ const getMaterialCategories = (unitId, item = null) => {
         const id = $(this).data('id');
         deleteInvoice(id);
       });
-      nextTick(mountCoreUIIcons);
     };
 
     const openBrandModal = (item) => {
@@ -1841,8 +1820,7 @@ const getMaterialCategories = (unitId, item = null) => {
         window.removeEventListener('termin-updated', handler)
       })
       fetchProjectSummary();
-      console.log('Initial purchase_materials:', form.value.purchase_materials);
-      console.log('Initial invoices:', invoices.value);
+      // Debug log dihapus
     })
 
     watch(selectedProject, (newValue) => {
@@ -1907,6 +1885,8 @@ const getMaterialCategories = (unitId, item = null) => {
       }
     );
 
+
+
     const canUsePpn = computed(() => {
       return invoices.value.some(inv => inv.use_ppn)
     })
@@ -1942,15 +1922,9 @@ const netProfit = computed(() => {
   return totalInvoice.value * margin;
 });
 
-// Debugging: log subtotalBarang, subtotalJasa, filteredInvoices
-console.log('subtotalBarang:', subtotalBarang.value);
-console.log('subtotalJasa:', subtotalJasa.value);
-console.log('filteredInvoices:', filteredInvoices.value);
+// Debugging logs dihapus
 
 watch([subtotalBarang, subtotalJasa, filterPphNonFinal], () => {
-  console.log('Updated subtotalBarang:', subtotalBarang.value);
-  console.log('Updated subtotalJasa:', subtotalJasa.value);
-  console.log('filterPphNonFinal:', filterPphNonFinal.value);
 });
 
 // Total PPH Non Final dari result API untuk summary (bukan dari form)
@@ -1960,17 +1934,10 @@ const filteredPphNonFinalTotal = computed(() => {
 
 // Watcher untuk log perubahan filter pajak dan filteredInvoices
 watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], ([newFilterPpn, newFilterPphNonFinal, newFilterPphFinal, newFilteredInvoices]) => {
-  console.log("Filter PPN:", newFilterPpn);
-  console.log("Filter PPH Non Final:", newFilterPphNonFinal);
-  console.log("Filter PPH Final:", newFilterPphFinal);
-  console.log("Filtered Invoices:", newFilteredInvoices);
 });
 
 // Ensure reactivity for the "Grand Total" calculation
 watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
-  console.log("Recalculating Grand Total due to changes in filters or invoices...");
-  // Trigger reactivity by accessing the computed property
-  console.log("Updated Grand Total:", filteredGrandTotal.value);
 });
 </script>
 <style scoped>

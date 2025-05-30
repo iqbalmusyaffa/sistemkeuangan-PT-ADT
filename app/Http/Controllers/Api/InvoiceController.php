@@ -66,6 +66,8 @@ class InvoiceController extends Controller
                 'purchase_materials' => 'required|array',
                 'purchase_materials.*.item' => 'required|string',
                 'purchase_materials.*.type' => 'required|string',
+                'purchase_materials.*.spesifikasi' => 'nullable|string', // <-- ADDED THIS LINE
+                'purchase_materials.*.deskripsi' => 'nullable|string',   // <-- ADDED THIS LINE
                 'purchase_materials.*.qty' => 'required|numeric|min:0',
                 'purchase_materials.*.harga' => 'required|numeric|min:0',
                 'purchase_materials.*.unit_id' => 'required|exists:units,id',
@@ -142,6 +144,8 @@ class InvoiceController extends Controller
                     'category_id' => $material['category_id'] ?? null,
                     'service_category_id' => $material['service_category_id'] ?? null,
                     'merek_id' => $material['merek_id'] ?? null,
+                    'spesifikasi' => $material['spesifikasi'] ?? null,
+                    'deskripsi' => $material['deskripsi'] ?? null,
                     'total_harga' => $totalHarga,
                     'is_service' => $isService,
                     'created_at' => now(),
