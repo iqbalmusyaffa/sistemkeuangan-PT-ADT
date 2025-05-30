@@ -501,4 +501,31 @@ class InvoiceController extends Controller
             ], 500);
         }
     }
+    /**
+     * Generate and download PDF for an invoice
+     */
+    public function cetakPdf($id)
+    {
+        try {
+            $invoice = Invoice::with([
+                'proyek',
+                'purchaseMaterials',
+                'paymentMethod',
+            ])->findOrFail($id);
+
+            $pdf = \PDF::loadView('invoices.pdf', [
+                'invoice' => $invoice
+            ]);
+            $pdf->setPaper('a4', 'portrait');
+
+            $filename = 'invoice_' . $invoice->invoice_number . '.pdf';
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Log::error('Error generating invoice PDF: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal generate PDF: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

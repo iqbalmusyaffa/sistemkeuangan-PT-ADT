@@ -897,20 +897,58 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
                   return statusMap[data] || data
                 }
               },
-              {
-                title: 'Actions',
-                data: null,
-                render: (data, type, row) => `
-                  <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><i class="fa fa-eye"></i></button>
-                  <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><i class="fa fa-pen"></i></button>
-                  <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><i class="fa fa-trash"></i></button>
-                `,
-                orderable: false
-              }
-            ],
-            order: [[1, 'desc']],
-            responsive: true
-          });
+        {
+          title: 'Actions',
+          data: null,
+          render: (data, type, row) => `
+            <button class="btn btn-sm btn-info view-btn" data-id="${row.id}"><i class="fa fa-eye"></i></button>
+            <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}"><i class="fa fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}"><i class="fa fa-trash"></i></button>
+            <button class="btn btn-sm btn-secondary pdf-btn" data-id="${row.id}"><i class="fa fa-file-pdf"></i> PDF</button>
+          `,
+          orderable: false
+        }
+      ],
+      order: [[1, 'desc']],
+      responsive: true
+    });
+
+    // PDF button event
+    $(invoiceTableRef.value).on('click', '.pdf-btn', function() {
+      const id = $(this).data('id');
+      downloadInvoicePdf(id);
+    });
+
+    // Download Invoice PDF
+    const downloadInvoicePdf = async (invoiceId) => {
+      const token = sessionStorage.getItem('token');
+      if (!token) {
+        Swal.fire('Error', 'Sesi anda telah berakhir. Silakan login kembali.', 'error');
+        return;
+      }
+      try {
+        const response = await axios.get(`/api/invoice/${invoiceId}/pdf`, {
+          responseType: 'blob',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/pdf'
+          }
+        });
+        if (response.data.size === 0) {
+          throw new Error('File PDF kosong');
+        }
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `invoice_${invoiceId}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        Swal.fire('Error', err.response?.data?.message || 'Gagal download PDF', 'error');
+      }
+    };
 
           $(invoiceTableRef.value).on('click', '.view-btn', function() {
             const id = $(this).data('id')

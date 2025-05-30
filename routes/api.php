@@ -160,7 +160,7 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
     Route::get('/purchase-materials/{id}/service-category', [PurchaseMaterialController::class, 'getServiceCategory']);
     Route::get('/invoices/datatables', [InvoiceController::class, 'datatables']);
-
+Route::get('/invoice/{id}/pdf', [InvoiceController::class, 'cetakPdf'])->name('invoice.cetakPdf');
     // Kategori routes
     Route::apiResource('kategori', KategoriTransaksiController::class);
 });
