@@ -56,9 +56,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
     Route::apiResource('incomes', IncomeController::class);
     // Pengeluaran (Expense)
+     Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::apiResource('expenses', ExpenseController::class);
     Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
     Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
+    Route::post('/expenses/{expense}/update-status', [ExpenseController::class, 'updateStatus']);
+    // DataTables server-side endpoint for pengeluaran
     // Merek routes
     Route::apiResource('mereks', MerekController::class);
     Route::post('/mereks/find-or-create', [MerekController::class, 'findOrCreate']);
@@ -68,7 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('purchasematerials', PurchasematerialController::class);
     // Proyek routes
     Route::apiResource('proyeks', ProyekController::class);
-
+Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     // Termin routes
     Route::apiResource('termins', TerminController::class);
     Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);
@@ -140,6 +143,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/invoices', [InvoiceController::class, 'store']);
     Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
     Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
+    Route::post('/invoices/{id}/update-status', [InvoiceController::class, 'updateStatus']);
 
     // New routes for invoice payments and financials
     Route::post('/invoices/{id}/payment', [InvoiceController::class, 'recordPayment']);
@@ -154,6 +158,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/purchase-materials/{id}', [PurchaseMaterialController::class, 'destroy']);
     Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
     Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
+    Route::get('/purchase-materials/{id}/service-category', [PurchaseMaterialController::class, 'getServiceCategory']);
 
     // Kategori routes
     Route::apiResource('kategori', KategoriTransaksiController::class);

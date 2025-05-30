@@ -145,9 +145,15 @@ const fetchActivityLogs = async () => {
   }
 }
 
+
 const jumlahUser = ref(0)
 const totalIncome = ref(0)
 const totalExpense = ref(0)
+const totalExpenseRemaining = ref(0)
+const totalPPN = ref(0)
+const totalPPhFinal = ref(0)
+const totalPPhNonFinal = ref(0)
+const grandTotalExpense = ref(0)
 const jumlahMetodePembayaran = ref(0)
 const jumlahTermin = ref(0)
 const jumlahPiutang = ref(0)
@@ -156,6 +162,7 @@ const jumlahInvoice = ref(0)
 const chartUsers = ref(Array(12).fill(0))
 const chartIncome = ref(Array(12).fill(0))
 const chartExpense = ref(Array(12).fill(0))
+const netIncome = ref(0)
 
 onMounted(async () => {
   const token = sessionStorage.getItem('token')
@@ -165,88 +172,76 @@ onMounted(async () => {
   jumlahUser.value = res.data.user_count
   totalIncome.value = res.data.total_income
   totalExpense.value = res.data.total_expense
+  totalExpenseRemaining.value = res.data.total_expense_remaining || 0
+  totalPPN.value = res.data.total_ppn || 0
+  totalPPhFinal.value = res.data.total_pph_final || 0
+  totalPPhNonFinal.value = res.data.total_pph_non_final || 0
+  grandTotalExpense.value = res.data.grand_total_expense || 0
   jumlahMetodePembayaran.value = res.data.payment_method_count
   jumlahTermin.value = res.data.termin_count
   jumlahPiutang.value = res.data.piutang_count
   jumlahKasbon.value = res.data.kasbon_count
   jumlahInvoice.value = res.data.invoice_count
+    netIncome.value = res.data.net_income
+
   // Jika backend sudah mengembalikan data bulanan, gunakan ini:
-  // chartUsers.value = res.data.users
-  // chartIncome.value = res.data.income
-  // chartExpense.value = res.data.expense
+  chartUsers.value = res.data.users
+  chartIncome.value = res.data.income
+  chartExpense.value = res.data.expense
   fetchActivityLogs()
 })
 </script>
 
 <template>
   <div>
+    <CRow class="mb-4">
+      <CCol :sm="4">
+        <CCard class="mb-2 bg-danger text-white">
+          <CCardBody>
+            <div class="fs-4 fw-bold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalExpense) }}</div>
+            <div class="text-white-50">Total Pengeluaran (Tanpa Pajak)</div>
+          </CCardBody>
+        </CCard>
+      </CCol>
+      <CCol :sm="4">
+        <CCard class="mb-2 bg-info text-dark">
+          <CCardBody>
+            <div class="fs-4 fw-bold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(grandTotalExpense) }}</div>
+            <div class="text-dark-50">Grand Total Pengeluaran (Termasuk Pajak)</div>
+            <ul class="mb-0 mt-2 small">
+              <li>PPN: <b>{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalPPN) }}</b></li>
+              <li>PPh Final: <b>{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalPPhFinal) }}</b></li>
+              <li>PPh Non Final: <b>{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalPPhNonFinal) }}</b></li>
+            </ul>
+          </CCardBody>
+        </CCard>
+      </CCol>
+          <CCol :sm="6">
+      <CCard class="mb-2 bg-success text-white">
+        <CCardBody>
+          <div class="fs-4 fw-bold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalIncome) }}</div>
+          <div class="text-white-50">Total Pemasukan</div>
+        </CCardBody>
+      </CCard>
+    </CCol>
+    <CCol :sm="6">
+      <CCard class="mb-2 bg-primary text-white">
+        <CCardBody>
+          <div class="fs-4 fw-bold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(netIncome) }}</div>
+          <div class="text-white-50">Saldo Bersih (Pemasukan - Pengeluaran)</div>
+        </CCardBody>
+      </CCard>
+    </CCol>
+      <CCol :sm="4">
+        <CCard class="mb-2 bg-warning text-dark">
+          <CCardBody>
+            <div class="fs-4 fw-bold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalExpenseRemaining) }}</div>
+            <div class="text-dark-50">Sisa Pengeluaran (Belum Tertutup)</div>
+          </CCardBody>
+        </CCard>
+      </CCol>
+    </CRow>
     <WidgetsStatsA class="mb-4" />
-    <!-- <CRow>
-      <CCol :md="12">
-        <CCard class="mb-4"> -->
-          <!-- <CCardBody> -->
-            <!-- <CRow>
-              <CCol :sm="5">
-                <h4 id="traffic" class="card-title mb-0">Traffic</h4>
-                <div class="small text-body-secondary">January - July 2023</div>
-              </CCol>
-              <CCol :sm="7" class="d-none d-md-block">
-                <CButton color="primary" class="float-end">
-                  <FontAwesomeIcon :icon="['fas', 'cloud-download-alt']" />
-                </CButton>
-                <CButtonGroup
-                  class="float-end me-3"
-                  role="group"
-                  aria-label="Basic outlined example"
-                >
-                  <CButton color="secondary" variant="outline">Day</CButton>
-                  <CButton color="secondary" variant="outline" active>Month</CButton>
-                  <CButton color="secondary" variant="outline">Year</CButton>
-                </CButtonGroup>
-              </CCol>
-            </CRow> -->
-            <!-- <CRow>
-              <MainChart style="height: 300px; max-height: 300px; margin-top: 40px" />
-            </CRow> -->
-          <!-- </CCardBody> -->
-          <!-- <CCardFooter>
-            <CRow
-              :xs="{ cols: 1, gutter: 4 }"
-              :sm="{ cols: 2 }"
-              :lg="{ cols: 4 }"
-              :xl="{ cols: 5 }"
-              class="mb-2 text-center"
-            >
-              <CCol>
-                <div class="text-body-secondary">Visits</div>
-                <div class="fw-semibold text-truncate">29.703 Users (40%)</div>
-                <CProgress class="mt-2" color="success" thin :precision="1" :value="40" />
-              </CCol>
-              <CCol>
-                <div class="text-body-secondary">Unique</div>
-                <div class="fw-semibold text-truncate">24.093 Users (20%)</div>
-                <CProgress class="mt-2" color="info" thin :precision="1" :value="20" />
-              </CCol>
-              <CCol>
-                <div class="text-body-secondary">Pageviews</div>
-                <div class="fw-semibold text-truncate">78.706 Views (60%)</div>
-                <CProgress class="mt-2" color="warning" thin :precision="1" :value="60" />
-              </CCol>
-              <CCol>
-                <div class="text-body-secondary">New Users</div>
-                <div class="fw-semibold text-truncate">22.123 Users (80%)</div>
-                <CProgress class="mt-2" color="danger" thin :precision="1" :value="80" />
-              </CCol>
-              <CCol class="d-none d-xl-block">
-                <div class="text-body-secondary">Bounce Rate</div>
-                <div class="fw-semibold text-truncate">Average Rate (40.15%)</div>
-                <CProgress class="mt-2" :value="40" thin :precision="1" />
-              </CCol>
-            </CRow>
-          </CCardFooter> -->
-        <!-- </CCard> -->
-      <!-- </CCol>
-    </CRow> -->
     <CRow>
       <CCol :md="12">
         <CCard class="mb-4">

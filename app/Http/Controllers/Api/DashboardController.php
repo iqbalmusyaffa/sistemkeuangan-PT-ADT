@@ -12,7 +12,16 @@ class DashboardController extends Controller
     {
         $userCount = User::count();
         $totalIncome = DB::table('incomes')->sum('jumlah');
-        $totalExpense = DB::table('expenses')->sum('amount');
+        $expenses = \App\Models\Expense::whereIn('status', ['Lunas', 'approved'])->get();
+        $totalExpense = $expenses->sum('amount');
+        $totalExpenseRemaining = $expenses->sum('prepared_fund');
+        // Pajak (jika ada field di table expenses)
+        $totalPPN = $expenses->sum('ppn_amount');
+        $totalPPhFinal = $expenses->sum('pph_final_amount');
+        $totalPPhNonFinal = $expenses->sum('pph_non_final_amount');
+            $grandTotalExpense = $totalExpense + $totalPPN + $totalPPhFinal + $totalPPhNonFinal;
+                $netIncome = $totalIncome - $grandTotalExpense;
+
         $paymentMethodCount = DB::table('payment_methods')->count();
         $terminCount = DB::table('termins')->count();
         $piutangCount = DB::table('piutangs')->count();
@@ -31,10 +40,10 @@ class DashboardController extends Controller
             ->whereYear('tanggal', $year)
             ->groupByRaw('MONTH(tanggal)')
             ->pluck('total', 'month');
-        // Expense per bulan
-        $expensePerMonth = DB::table('expenses')
-            ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total')
+        // Expense per bulan (hanya status Lunas/approved)
+        $expensePerMonth = \App\Models\Expense::selectRaw('MONTH(transaction_date) as month, SUM(amount) as total')
             ->whereYear('transaction_date', $year)
+            ->whereIn('status', ['Lunas', 'approved'])
             ->groupByRaw('MONTH(transaction_date)')
             ->pluck('total', 'month');
         // Format data untuk 12 bulan
@@ -47,8 +56,14 @@ class DashboardController extends Controller
 
         return response()->json([
             'user_count' => $userCount,
-            'total_income' => $totalIncome,
+             'net_income' => $netIncome,
+        'total_income' => $totalIncome,
             'total_expense' => $totalExpense,
+            'total_expense_remaining' => $totalExpenseRemaining,
+            'total_ppn' => $totalPPN,
+            'total_pph_final' => $totalPPhFinal,
+            'total_pph_non_final' => $totalPPhNonFinal,
+            'grand_total_expense' => $grandTotalExpense,
             'payment_method_count' => $paymentMethodCount,
             'termin_count' => $terminCount,
             'piutang_count' => $piutangCount,
@@ -78,10 +93,10 @@ class DashboardController extends Controller
             ->groupByRaw('MONTH(tanggal)')
             ->pluck('total', 'month');
 
-        // Expense per bulan
-        $expensePerMonth = \DB::table('expenses')
-            ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total')
+        // Expense per bulan (hanya status Lunas/approved)
+        $expensePerMonth = \App\Models\Expense::selectRaw('MONTH(transaction_date) as month, SUM(amount) as total')
             ->whereYear('transaction_date', $year)
+            ->whereIn('status', ['Lunas', 'approved'])
             ->groupByRaw('MONTH(transaction_date)')
             ->pluck('total', 'month');
 

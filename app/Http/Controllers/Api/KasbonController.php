@@ -322,7 +322,7 @@ class KasbonController extends Controller
 
             $pdf = Pdf::loadView('exports.kasbon_pdf', compact('kasbons'));
             $pdf->setPaper('a4', 'landscape');
-            
+
             return $pdf->download('kasbon.pdf');
         } catch (\Exception $e) {
             \Log::error('PDF Export Error: ' . $e->getMessage());

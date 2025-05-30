@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Purchasematerial;
-use App\Models\Project;
+use App\Models\Proyek;
 use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +13,7 @@ use Illuminate\Validation\Rule;
 use App\Http\Resources\PurchaseMaterialResource;
 use App\Models\Invoice;
 use Illuminate\Support\Facades\Validator;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 
 class PurchasematerialController extends Controller
 {
@@ -21,7 +22,7 @@ class PurchasematerialController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory']);
+        $query = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory', 'expense']); // Added 'expense'
 
         if ($request->has('invoice_id')) {
             $query->where('invoice_id', $request->invoice_id);
@@ -49,11 +50,11 @@ class PurchasematerialController extends Controller
             'unit_id' => 'required|exists:units,id',
             'category_id' => 'nullable|exists:kategoris,id',
             'service_category_id' => 'nullable|exists:service_categories,id',
+            'is_service' => 'sometimes|boolean',
             'qty' => 'required|numeric|min:1',
             'harga' => 'required|numeric|min:0',
             'deskripsi' => 'nullable|string',
             'merek_id' => 'nullable|exists:mereks,id',
-           'is_service' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -70,9 +71,17 @@ class PurchasematerialController extends Controller
             // Calculate total harga
             $totalHarga = $request->qty * $request->harga;
 
-            // Validasi sisa anggaran proyek sebelum insert
-            $proyek = \App\Models\Proyek::findOrFail($request->proyek_id);
-            if ($proyek->current_budget < $totalHarga) {
+            // Get the project to check budget
+            $proyek = Proyek::findOrFail($request->proyek_id);
+            $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Sum all expenses related to this project that are 'Lunas' or directly from invoices.
+            $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
+                ->where('status', 'Lunas')
+                ->sum('amount');
+            $availableBudget = $currentProjectBudget - $existingProjectExpenses;
+
+            if ($availableBudget < $totalHarga) {
+                DB::rollBack();
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Sisa anggaran proyek tidak mencukupi untuk pembelian material ini.'
@@ -97,15 +106,9 @@ class PurchasematerialController extends Controller
                 'is_service' => $request->is_service ?? false,
             ]);
 
-            // Update invoice total amount
-            $invoice = Invoice::findOrFail($request->invoice_id);
-            $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-            $invoice->save();
-
-            // Buat expense otomatis untuk pembelian material
-            \App\Models\Expense::createFromPurchase($purchaseMaterial);
-
             DB::commit();
+            // Reload the purchase material to ensure expense_id is populated from the observer
+            $purchaseMaterial->load('expense'); // Load the expense relation
             return new PurchaseMaterialResource($purchaseMaterial);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -151,6 +154,26 @@ class PurchasematerialController extends Controller
             // Calculate new total harga
             $totalHarga = $request->qty * $request->harga;
 
+            // Perform budget validation if amount is changing significantly
+            $proyek = Proyek::findOrFail($purchaseMaterial->proyek_id);
+            $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Exclude the current expense's amount from total expenses for validation if it was already 'Lunas'
+            $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
+                ->where('status', 'Lunas')
+                ->where('source_type', Expense::SOURCE_PURCHASE)
+                ->where('source_id', '!=', $purchaseMaterial->id)
+                ->sum('amount');
+
+            $projectedTotalExpenses = $existingProjectExpenses + $totalHarga;
+
+            if ($projectedTotalExpenses > $currentProjectBudget) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Update ini akan menyebabkan total pengeluaran melebihi sisa anggaran proyek.'
+                ], 422);
+            }
+
             // Update purchase material
             $purchaseMaterial->update([
                 'item' => $request->item,
@@ -167,12 +190,37 @@ class PurchasematerialController extends Controller
                 'is_service' => $request->is_service ?? false,
             ]);
 
-            // Update invoice total amount
-            $invoice = $purchaseMaterial->invoice;
-            $invoice->total_amount = optional($invoice->purchaseMaterials())->sum('total_harga') ?? 0;
-            $invoice->save();
+            // Update associated expense (if exists)
+            if ($purchaseMaterial->expense) {
+                // Determine expense status based on the invoice's status
+                $invoiceStatus = $purchaseMaterial->invoice ? $purchaseMaterial->invoice->status : Expense::STATUS_PENDING;
+                $expenseStatus = Expense::STATUS_PENDING; // Default
+                if ($invoiceStatus === Invoice::STATUS_PAID) {
+                    $expenseStatus = Expense::STATUS_LUNAS;
+                } else if ($invoiceStatus === Invoice::STATUS_UNPAID || $invoiceStatus === Invoice::STATUS_PARTIALLY_PAID) {
+                    $expenseStatus = Expense::STATUS_PENDING;
+                }
+
+                $purchaseMaterial->expense->update([
+                    'amount' => $totalHarga,
+                    'description' => "Pembelian " . ($purchaseMaterial->item ?? '') . " untuk proyek " . optional($purchaseMaterial->proyek)->nama_proyek,
+                    'category_id' => $purchaseMaterial->is_service ? null : $purchaseMaterial->category_id,
+                    'service_category_id' => $purchaseMaterial->is_service ? $purchaseMaterial->service_category_id : null,
+                    'prepared_fund' => $totalHarga,
+                    'status' => $expenseStatus, // Set updated expense status based on invoice
+                    'proyek_id' => $purchaseMaterial->proyek_id, // Ensure proyek_id is updated on expense too
+                    'payment_method_id' => $purchaseMaterial->invoice->payment_method_id, // Get payment method from invoice
+                ]);
+            } else {
+                // If for some reason expense doesn't exist, create it (should be rare if booted method works)
+                Log::warning("Expense missing for PurchaseMaterial ID {$purchaseMaterial->id} during update. Attempting to create.");
+                $expense = Expense::createFromPurchase($purchaseMaterial);
+                $purchaseMaterial->expense_id = $expense->id;
+                $purchaseMaterial->saveQuietly();
+            }
 
             DB::commit();
+            $purchaseMaterial->load('expense'); // Reload to ensure latest expense_id
             return new PurchaseMaterialResource($purchaseMaterial);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -194,11 +242,8 @@ class PurchasematerialController extends Controller
             $purchaseMaterial = Purchasematerial::findOrFail($id);
             $invoice = $purchaseMaterial->invoice;
 
+            // The expense will be deleted by the PurchaseMaterial's `deleted` observer.
             $purchaseMaterial->delete();
-
-            // Update invoice total amount
-            $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-            $invoice->save();
 
             DB::commit();
             return response()->json([
@@ -220,7 +265,8 @@ class PurchasematerialController extends Controller
     public function getProyeks()
     {
         try {
-            $proyeks = Project::select('id', 'nama', 'anggaran')->orderBy('nama')->get();
+            // Using App\Models\Proyek
+            $proyeks = Proyek::select('id', 'nama_proyek as nama', 'anggaran_kontrak as anggaran')->orderBy('nama_proyek')->get();
             return response()->json($proyeks, 200);
         } catch (\Exception $e) {
             Log::error('Error PurchasematerialController@getProyeks: ' . $e->getMessage());
@@ -233,7 +279,7 @@ class PurchasematerialController extends Controller
      */
     public function getByProject($proyekId)
     {
-        $purchaseMaterials = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory'])
+        $purchaseMaterials = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory', 'expense'])
             ->where('proyek_id', $proyekId)
             ->get();
         return PurchaseMaterialResource::collection($purchaseMaterials);
@@ -244,7 +290,7 @@ class PurchasematerialController extends Controller
      */
     public function getByInvoice($invoiceId)
     {
-        $purchaseMaterials = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory'])
+        $purchaseMaterials = Purchasematerial::with(['invoice', 'proyek', 'merek', 'unit', 'category', 'serviceCategory', 'expense'])
             ->where('invoice_id', $invoiceId)
             ->get();
         return PurchaseMaterialResource::collection($purchaseMaterials);
@@ -254,77 +300,82 @@ class PurchasematerialController extends Controller
      * Store multiple purchase materials in bulk.
      */
     public function storeBulk(Request $request)
-{
-    $request->validate([
-        'invoice_id' => 'required|exists:invoices,id',
-        'proyek_id' => 'required|exists:proyeks,id',
-        'items' => 'required|array|min:1',
-        'items.*.item' => 'required|string|max:255',
-        'items.*.type' => 'required|string', // jika perlu
-        'items.*.spesifikasi' => 'nullable|string', // jika perlu
-        'items.*.qty' => 'required|numeric|min:1',
-        'items.*.harga' => 'required|numeric|min:0',
-        'items.*.unit_id' => 'required|exists:units,id',
-        'items.*.category_id' => 'required|exists:kategoris,id',
-        'items.*.merek_id' => 'nullable|exists:mereks,id',
-        'items.*.deskripsi' => 'nullable|string',
-        'items.*.is_service' => 'nullable|boolean',
-    ]);
+    {
+        $request->validate([
+            'invoice_id' => 'required|exists:invoices,id',
+            'proyek_id' => 'required|exists:proyeks,id',
+            'items' => 'required|array|min:1',
+            'items.*.item' => 'required|string|max:255',
+            'items.*.type' => 'required|string',
+            'items.*.spesifikasi' => 'nullable|string',
+            'items.*.qty' => 'required|numeric|min:1',
+            'items.*.harga' => 'required|numeric|min:0',
+            'items.*.unit_id' => 'required|exists:units,id',
+            'items.*.category_id' => 'nullable|exists:kategoris,id', // Can be null if is_service is true
+            'items.*.merek_id' => 'nullable|exists:mereks,id',
+            'items.*.deskripsi' => 'nullable|string',
+            'items.*.is_service' => 'nullable|boolean',
+        ]);
 
-    $invoice = Invoice::findOrFail($request->invoice_id);
-    if ($invoice->proyek_id != $request->proyek_id) {
-        return response()->json(['error' => 'Invoice dan Proyek tidak cocok'], 422);
-    }
-
-    // Validasi sisa anggaran proyek sebelum insert
-    $proyek = \App\Models\Proyek::findOrFail($request->proyek_id);
-    $totalPembelian = collect($request->items)->sum(function($item) {
-        return $item['qty'] * $item['harga'];
-    });
-    if ($proyek->current_budget < $totalPembelian) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Sisa anggaran proyek tidak mencukupi untuk pembelian material ini.'
-        ], 422);
-    }
-
-    DB::beginTransaction();
-    try {
-        $purchases = [];
-        foreach ($request->items as $item) {
-            $totalHarga = $item['qty'] * $item['harga'];
-            $purchase = Purchasematerial::create([
-                'item' => $item['item'],
-                'type' => $item['type'] ?? null,
-                'spesifikasi' => $item['spesifikasi'] ?? null,
-                'qty' => $item['qty'],
-                'harga' => $item['harga'],
-                'unit_id' => $item['unit_id'],
-                'category_id' => $item['category_id'],
-                'merek_id' => $item['merek_id'] ?? null,
-                'deskripsi' => $item['deskripsi'] ?? null,
-                'proyek_id' => $request->proyek_id,
-                'invoice_id' => $request->invoice_id,
-                'total_harga' => $totalHarga,
-                'is_service' => $item['is_service'] ?? false,
-            ]);
-            $purchases[] = $purchase;
+        $invoice = Invoice::findOrFail($request->invoice_id);
+        if ($invoice->proyek_id != $request->proyek_id) {
+            return response()->json(['error' => 'Invoice dan Proyek tidak cocok'], 422);
         }
 
-        // Buat expense otomatis untuk setiap pembelian material (setelah semua purchase berhasil dibuat)
-        foreach ($purchases as $purchase) {
-            \App\Models\Expense::createFromPurchase($purchase);
+        // Validasi sisa anggaran proyek sebelum insert
+        $proyek = Proyek::findOrFail($request->proyek_id);
+        $totalPembelian = collect($request->items)->sum(function($item) {
+            return $item['qty'] * $item['harga'];
+        });
+
+        $currentProjectBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+        $existingProjectExpenses = Expense::where('proyek_id', $proyek->id)
+            ->where('status', 'Lunas')
+            ->sum('amount');
+        $availableBudget = $currentProjectBudget - $existingProjectExpenses;
+
+        if ($availableBudget < $totalPembelian) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sisa anggaran proyek tidak mencukupi untuk pembelian material ini.'
+            ], 422);
         }
 
-        // Update total_amount invoice setelah semua purchase material disimpan
-        $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
-        $invoice->save();
+        DB::beginTransaction();
+        try {
+            $purchases = [];
+            foreach ($request->items as $item) {
+                $totalHarga = $item['qty'] * $item['harga'];
 
-        DB::commit();
-        return response()->json(['status' => 'success', 'message' => 'Semua item berhasil disimpan']);
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return response()->json(['error' => 'Gagal menyimpan data: ' . $e->getMessage()], 500);
+                $purchase = Purchasematerial::create([
+                    'item' => $item['item'],
+                    'type' => $item['type'] ?? null,
+                    'spesifikasi' => $item['spesifikasi'] ?? null,
+                    'qty' => $item['qty'],
+                    'harga' => $item['harga'],
+                    'unit_id' => $item['unit_id'],
+                    'category_id' => $item['category_id'] ?? null, // Ensure handling nullable category_id for services
+                    'service_category_id' => $item['service_category_id'] ?? null, // Added service_category_id
+                    'merek_id' => $item['merek_id'] ?? null,
+                    'deskripsi' => $item['deskripsi'] ?? null,
+                    'proyek_id' => $request->proyek_id,
+                    'invoice_id' => $request->invoice_id,
+                    'total_harga' => $totalHarga,
+                    'is_service' => $item['is_service'] ?? false,
+                ]);
+                $purchases[] = $purchase;
+            }
+
+            // Update total_amount invoice after all purchase material saved by observer
+            $invoice->total_amount = $invoice->purchaseMaterials()->sum('total_harga');
+            $invoice->save();
+            $invoice->calculateAllFinancialValues();
+
+            DB::commit();
+            return response()->json(['status' => 'success', 'message' => 'Semua item berhasil disimpan', 'data' => PurchaseMaterialResource::collection($purchases)]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Gagal menyimpan data: ' . $e->getMessage()], 500);
+        }
     }
-}
 }

@@ -34,9 +34,9 @@ class InvoiceResource extends JsonResource
             'updated_at' => $this->updated_at,
 
             // Tax information
-            'use_ppn' => $this->use_ppn,
-            'use_pph_non_final' => $this->use_pph_non_final,
-            'use_pph_final' => $this->use_pph_final,
+            'use_ppn' => (bool) $this->use_ppn,
+            'use_pph_non_final' => (bool) $this->use_pph_non_final,
+            'use_pph_final' => (bool) $this->use_pph_final,
             'pph_non_final_amount' => (float) $this->pph_non_final_amount,
             'pph_final_amount' => (float) $this->pph_final_amount,
             'ppn_amount' => (float) $this->ppn_amount,

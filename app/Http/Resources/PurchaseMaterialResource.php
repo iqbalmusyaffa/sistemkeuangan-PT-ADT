@@ -30,7 +30,8 @@ class PurchaseMaterialResource extends JsonResource
             'deskripsi' => $this->deskripsi,
             'merek' => $this->merek ? new MerekResource($this->merek) : null,
             'is_service' => (bool) $this->is_service,
-            // 'invoice' and 'proyek' removed to prevent circular reference
+            'expense_id' => $this->expense_id,
+            'expense' => new ExpenseResource($this->whenLoaded('expense')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

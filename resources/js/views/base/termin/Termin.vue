@@ -88,10 +88,11 @@
           </CRow>
 
           <!-- DataTable -->
-          <div class="w-100" v-if="selectedProject && selectedInvoice">
+          <div style="width: 100%; overflow-x: auto;" v-if="selectedProject && selectedInvoice">
             <table id="terminTable" class="display" style="width:100%">
               <thead>
                 <tr>
+                    <th>No</th>
                   <th>Nama Termin</th>
                   <th>Jenis Termin</th>
                   <th>Termin Ke</th>
@@ -291,12 +292,12 @@
               </div>
             </CCol>
           <CCol md="6">
-            <CFormLabel for="remaining_pelunasan">Sisa Pelunasan</CFormLabel>
+              <CFormLabel for="remaining_pelunasan">Sisa Pelunasan</CFormLabel>
             <div class="input-group">
               <span class="input-group-text">Rp</span>
               <CFormInput
                 type="text"
-                :value="formatCurrency(form.remaining_pelunasan !== undefined ? form.remaining_pelunasan : 0)"
+                :value="formatCurrency(form.remaining_pelunasan !== undefined ? form.remaining_pelunasan : (nilaiPelunasan - (form.status_termin === 'Lunas' ? nilaiPelunasan : 0)))"
                 id="remaining_pelunasan"
                 readonly
               />
@@ -345,9 +346,9 @@
           <!-- Field Bukti Pembayaran (opsional, hanya saat create/edit termin) -->
           <CRow class="mb-3">
             <CCol md="12">
-              <CFormLabel for="bukti_pembayaran">Bukti Pembayaran (Opsional)</CFormLabel>
-              <CFormInput type="file" id="bukti_pembayaran" accept="image/*,.pdf" @change="handleBuktiPembayaranForm" />
-              <small class="text-muted">Format: JPEG, PNG, PDF (Max 2MB). Tidak wajib diisi.</small>
+              <CFormLabel for="bukti_pembayaran">Bukti Pembayaran <span v-if="['DP Dibayar','Lunas'].includes(form.status_termin)" class="text-danger">*</span></CFormLabel>
+              <CFormInput type="file" id="bukti_pembayaran" accept="image/*,.pdf" @change="handleBuktiPembayaranForm" :required="['DP Dibayar','Lunas'].includes(form.status_termin)" />
+              <small class="text-muted">Format: JPEG, PNG, PDF (Max 2MB). <span v-if="['DP Dibayar','Lunas'].includes(form.status_termin)">Wajib diisi.</span></small>
               <div v-if="form.bukti_pembayaran_url" class="mt-2">
                 <a :href="form.bukti_pembayaran_url" target="_blank">Lihat Bukti Pembayaran</a>
               </div>
@@ -453,8 +454,8 @@
   </CRow>
 </template>
 
-<script setup>
 
+<script setup>
 import { ref, onMounted, nextTick, watch, computed, onUnmounted } from "vue";
 import axios from "axios";
 import $ from "jquery";
@@ -484,7 +485,7 @@ function initDataTable() {
     dataTableInstance = $('#terminTable').DataTable({
       processing: true,
       serverSide: true,
-      responsive: true,
+      // responsive: true, // Hapus responsive agar scrollX tidak bentrok
       destroy: true,
       ajax: {
         url: '/api/termins',
@@ -499,6 +500,16 @@ function initDataTable() {
         }
       },
       columns: [
+        {
+          data: null,
+          title: 'No',
+          orderable: false,
+          searchable: false,
+          className: 'text-center',
+          render: function (data, type, row, meta) {
+            return meta.row + meta.settings._iDisplayStart + 1;
+          }
+        },
         { data: 'nama_termin', title: 'Nama Termin' },
         { data: 'jenis_termin', title: 'Jenis Termin' },
         { data: 'termin_ke', title: 'Termin Ke' },
@@ -523,8 +534,10 @@ function initDataTable() {
           title: 'Aksi',
           orderable: false,
           render: function (data, type, row) {
-            return `<button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
-                    <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>`;
+            return `
+    <button class="btn btn-sm btn-info status-btn" data-id="${row.id}">Update Status</button>
+    <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+    <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>`;
           }
         }
       ],
@@ -545,17 +558,38 @@ function initDataTable() {
       },
       scrollX: true
     });
-    // Button event listeners (edit/delete)
+    // Button event listeners (edit/delete/status)
     $('#terminTable').off('click', '.edit-btn').on('click', '.edit-btn', function () {
-      const id = $(this).data('id');
-      // Find the row data and open modal
       const rowData = dataTableInstance.row($(this).parents('tr')).data();
       if (rowData) openModal('edit', rowData);
     });
-    $('#terminTable').off('click', '.delete-btn').on('click', '.delete-btn', function () {
-      const id = $(this).data('id');
-      // Implement delete logic or emit event
-      Swal.fire('Fitur hapus belum diimplementasikan');
+    $('#terminTable').off('click', '.delete-btn').on('click', '.delete-btn', async function () {
+      const rowData = dataTableInstance.row($(this).parents('tr')).data();
+      if (!rowData) return;
+      const result = await Swal.fire({
+        title: 'Yakin ingin menghapus?',
+        text: 'Data termin yang dihapus tidak dapat dikembalikan!',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, hapus!',
+        cancelButtonText: 'Batal',
+      });
+      if (result.isConfirmed) {
+        try {
+          const token = sessionStorage.getItem('token');
+          await axios.delete(`/api/termins/${rowData.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          Swal.fire('Berhasil', 'Termin berhasil dihapus', 'success');
+          await fetchTermins();
+        } catch (err) {
+          Swal.fire('Gagal', err.response?.data?.message || 'Tidak dapat menghapus termin', 'error');
+        }
+      }
+    });
+    $('#terminTable').off('click', '.status-btn').on('click', '.status-btn', function () {
+      const rowData = dataTableInstance.row($(this).parents('tr')).data();
+      if (rowData) openStatusModal(rowData);
     });
   });
 }
@@ -1250,6 +1284,8 @@ const handleSubmit = async () => {
       });
       closeModal();
       await fetchTermins();
+      await fetchSummary(); // Memperbarui summary termin
+      await fetchDashboardSummary(); // Memperbarui data dashboard
       window.dispatchEvent(new Event('termin-updated'));
     } else {
       throw new Error(response.data.message || "Terjadi kesalahan saat menyimpan data");
@@ -1338,6 +1374,8 @@ const handleStatusSubmit = async () => {
     Swal.fire('Berhasil', 'Status termin berhasil diperbarui', 'success');
     closeStatusModal();
     await fetchTermins();
+    await fetchSummary(); // Memperbarui summary termin
+    await fetchDashboardSummary(); // Memperbarui data dashboard
   } catch (err) {
     Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
   }
@@ -1406,8 +1444,9 @@ onMounted(async () => {
   initDataTable();
 });
 
+
 onUnmounted(() => {
-  if (table) table.destroy();
+  // Remove old/undefined table variable reference
   if (dataTableInstance) {
     dataTableInstance.clear().destroy();
     dataTableInstance = null;
@@ -1632,6 +1671,19 @@ watch([selectedProject, selectedInvoice], ([newProject, newInvoice]) => {
   }
 });
 
+const fetchDashboardSummary = async () => {
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get('/api/dashboard/summary', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    // Update dashboard-related data here if needed
+    console.log('Dashboard summary updated:', response.data);
+  } catch (err) {
+    console.error('Failed to fetch dashboard summary:', err);
+  }
+};
+
 const fetchSummary = async () => {
   if (!selectedProject.value || !selectedInvoice.value) {
     summary.value = {
@@ -1653,10 +1705,11 @@ const fetchSummary = async () => {
       },
       headers: { Authorization: `Bearer ${token}` }
     });
-      summary.value = {
-        ...defaultSummary,
-        ...(response.data || {})
-      };
+    summary.value = {
+      ...defaultSummary,
+      ...(response.data || {})
+    };
+    await fetchDashboardSummary(); // Trigger dashboard summary update
   } catch (err) {
     summary.value = {
       total_termin: 0,

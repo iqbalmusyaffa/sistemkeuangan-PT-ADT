@@ -10,7 +10,8 @@ use App\Models\Kategori;
 use App\Models\ServiceCategory;
 use App\Models\Purchasematerial;
 use App\Models\Termin;
-use App\Models\Invoice;  // Add the Invoice model
+use App\Models\Invoice;
+use App\Models\PaymentMethod; // Added PaymentMethod import
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Traits\Trackable;
@@ -89,6 +90,13 @@ class Expense extends Model
         });
     }
 
+    public function paymentMethod()
+    {
+        return $this->belongsTo(PaymentMethod::class)->withDefault([
+            'name' => 'Unknown Payment Method',
+        ]);
+    }
+
     public function source()
     {
         if (empty($this->source_type) || empty($this->source_id)) {
@@ -113,7 +121,7 @@ class Expense extends Model
     // Relationship with the Invoice model
     public function invoice()
     {
-        return $this->belongsTo(Invoice::class);  // Define the relationship to Invoice
+        return $this->belongsTo(Invoice::class);
     }
 
     public function getActiveCategory()
@@ -156,13 +164,6 @@ class Expense extends Model
                 self::generateKodeTransaksi($expense);
             }
         });
-
-        // Contoh observer anti-duplikat (jika ingin trigger otomatis)
-        // static::saved(function ($expense) {
-        //     if ($expense->wasChanged('status') && $expense->status === self::STATUS_LUNAS) {
-        //         // Cek duplikat, dsb
-        //     }
-        // });
     }
 
     protected static function generateKodeTransaksi(&$expense)
@@ -192,40 +193,98 @@ class Expense extends Model
 
     public static function createFromPurchase($purchase)
     {
-        $category = $purchase->is_service ? $purchase->serviceCategory : $purchase->category;
+        if (!$purchase->proyek_id) {
+            throw new \Exception("Pembelian harus memiliki proyek.");
+        }
 
-        return self::create([
-            'user_id' => auth()->id(),
+        $isService = $purchase->is_service;
+
+        // Ensure expense does not already exist for this purchase
+        $existingExpense = self::where('source_type', self::SOURCE_PURCHASE)
+            ->where('source_id', $purchase->id)
+            ->first();
+
+        if ($existingExpense) {
+            Log::info("Expense already exists for PurchaseMaterial ID {$purchase->id}. Returning existing expense.");
+            return $existingExpense;
+        }
+
+        // Map Invoice status to Expense status
+        $expenseStatus = self::STATUS_PENDING; // Default to pending
+        if ($purchase->invoice) {
+            switch ($purchase->invoice->status) {
+                case Invoice::STATUS_PAID:
+                    $expenseStatus = self::STATUS_LUNAS;
+                    break;
+                case Invoice::STATUS_PARTIALLY_PAID:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+                case Invoice::STATUS_UNPAID:
+                case Invoice::STATUS_CANCELLED:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+                default:
+                    $expenseStatus = self::STATUS_PENDING;
+                    break;
+            }
+        }
+
+        $expense = self::create([
+            'user_id' => auth()->id() ?? $purchase->user_id, // Fallback if auth()->id() is null
             'proyek_id' => $purchase->proyek_id,
-            'category_id' => $purchase->is_service ? null : $purchase->category_id,
-            'service_category_id' => $purchase->is_service ? $purchase->service_category_id : null,
+            'category_id' => $isService ? null : $purchase->category_id,
+            'service_category_id' => $isService ? $purchase->service_category_id : null,
             'amount' => $purchase->total_harga,
-            'description' => "Pembelian {$purchase->item} untuk proyek " . optional($purchase->proyek)->nama_proyek,
-            'transaction_date' => now(),
-            'status' => 'Lunas',
-            'source_type' => 'purchase',
+            'description' => "Pembelian " . ($purchase->item ?? '') . " untuk proyek " . optional($purchase->proyek)->nama_proyek,
+            'transaction_date' => now(), // Or use a relevant date from purchase
+            'status' => $expenseStatus, // SET STATUS BASED ON MAPPED INVOICE STATUS
+            'source_type' => self::SOURCE_PURCHASE,
             'source_id' => $purchase->id,
             'prepared_fund' => $purchase->total_harga,
-            'invoice_id' => $purchase->invoice_id // Connect the expense to the invoice
+            'payment_method_id' => $purchase->invoice ? $purchase->invoice->payment_method_id : null, // Get payment method from invoice
+            'invoice_id' => $purchase->invoice_id
         ]);
+
+        return $expense; // IMPORTANT: Return the created expense instance
     }
 
     public static function createFromTermin($termin)
     {
-        return self::create([
+        // Add a check to prevent duplicate expenses for the same termin
+        $existingExpense = self::where('source_type', self::SOURCE_TERMIN)
+            ->where('source_id', $termin->id)
+            ->first();
+
+        if ($existingExpense) {
+            Log::info("Expense already exists for Termin ID {$termin->id}. Returning existing expense.");
+            return $existingExpense;
+        }
+
+        // Map Termin status to Expense status
+        $expenseStatus = self::STATUS_PENDING; // Default to pending
+        if ($termin->status_termin === 'Lunas') {
+            $expenseStatus = self::STATUS_LUNAS;
+        } else {
+            $expenseStatus = self::STATUS_PENDING;
+        }
+
+        $expense = self::create([
             'user_id' => auth()->id(),
             'proyek_id' => $termin->proyek_id,
-            'category_id' => $termin->category_id,
-            'service_category_id' => null,
-            'amount' => $termin->jumlah_pembayaran,
+            'category_id' => $termin->category_id, // Ensure termin has a category_id if needed
+            'service_category_id' => null, // Assuming termin is not for service categories
+            'amount' => $termin->jumlah_pembayaran, // Using jumlah_pembayaran from termin
             'description' => "Pembayaran termin {$termin->nama_termin} untuk proyek " . optional($termin->proyek)->nama_proyek,
             'transaction_date' => $termin->tanggal_pembayaran,
-            'status' => $termin->status_pembayaran,
-            'source_type' => 'termin',
+            'status' => $expenseStatus, // Use the mapped status
+            'source_type' => self::SOURCE_TERMIN,
             'source_id' => $termin->id,
             'prepared_fund' => $termin->jumlah_pembayaran,
-            'invoice_id' => $termin->invoice_id // Connect the expense to the invoice
+            'payment_method_id' => $termin->invoice ? $termin->invoice->payment_method_id : null, // Get payment method from invoice
+            'invoice_id' => $termin->invoice_id
         ]);
+
+        return $expense; // IMPORTANT: Return the created expense instance
     }
 
     public function getSourceInstanceAttribute()
@@ -238,5 +297,14 @@ class Expense extends Model
             return Purchasematerial::find($this->source_id);
         }
         return null;
+    }
+    public function sourcePurchase()
+    {
+        return $this->belongsTo(Purchasematerial::class, 'source_id');
+    }
+
+    public function sourceTermin()
+    {
+        return $this->belongsTo(Termin::class, 'source_id');
     }
 }

@@ -137,11 +137,28 @@
               </CCol>
               <CCol md="6">
                 <CFormLabel>Status</CFormLabel>
-                <CFormSelect v-model="form.status" required>
+                <CFormSelect v-model="form.status" required :disabled="true">
                   <option value="Pending">Pending</option>
                   <option value="Approved">Approved</option>
                   <option value="Rejected">Rejected</option>
+                  <option value="Lunas">Lunas</option>
+                  <option value="Partial">Partial</option>
                 </CFormSelect>
+              </CCol>
+              <CCol md="6">
+                <CFormLabel>Bukti Pembayaran</CFormLabel>
+                <CFormInput
+                  type="file"
+                  accept="image/png,image/jpeg,application/pdf"
+                  @change="handleBuktiChange"
+                  :disabled="true"
+                />
+                <div v-if="form.buktiName" class="mt-1 text-success">
+                  File terpilih: {{ form.buktiName }}
+                </div>
+                <div v-if="form.buktiUrl" class="mt-2">
+                  <a :href="form.buktiUrl" target="_blank">Lihat Bukti Pembayaran</a>
+                </div>
               </CCol>
             </CRow>
 
@@ -210,24 +227,144 @@
                 {{ modalButtonText }}
               </CButton>
             </div>
+
           </CForm>
         </CModalBody>
       </CModal>
-    </CRow>
-  </template>
+
+
+
+    <!-- Modal Update Status -->
+    <CModal :visible="showStatusModal" @close="closeStatusModal" title="Update Status Pengeluaran">
+      <CModalBody>
+        <div class="mb-2">
+          <strong>Status Saat Ini:</strong>
+          <span class="badge bg-info ms-2">{{ statusForm.status }}</span>
+        </div>
+        <CForm @submit.prevent="handleStatusSubmit">
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel>Status Baru</CFormLabel>
+              <CFormSelect v-model="statusForm.status" required>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Lunas">Lunas</option>
+                <option value="Partial">Partial</option>
+              </CFormSelect>
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="12">
+              <CFormLabel>Bukti Pembayaran</CFormLabel>
+              <CFormInput
+                type="file"
+                accept="image/png,image/jpeg,application/pdf"
+                @change="handleStatusBuktiChange"
+              />
+              <div v-if="statusForm.buktiName" class="mt-1 text-success">
+                File terpilih: {{ statusForm.buktiName }}
+              </div>
+              <div v-if="statusForm.buktiUrl" class="mt-2">
+                <a :href="statusForm.buktiUrl" target="_blank">Lihat Bukti Pembayaran</a>
+              </div>
+            </CCol>
+          </CRow>
+          <div class="d-flex justify-content-end gap-2">
+            <CButton color="secondary" @click="closeStatusModal">
+              Batal
+            </CButton>
+            <CButton type="submit" color="primary">
+              Update Status
+            </CButton>
+          </div>
+        </CForm>
+      </CModalBody>
+    </CModal>
+  </CRow>
+</template>
 
   <script setup>
-  import { ref, onMounted, nextTick, computed } from 'vue'
-  import { useRouter } from 'vue-router'
-  import axios from 'axios'
-  import $ from 'jquery'
-  import Swal from 'sweetalert2'
-  import "datatables.net-dt/css/dataTables.dataTables.min.css"
-  import "datatables.net-responsive-dt/css/responsive.dataTables.min.css"
-  import "datatables.net-responsive-dt"
+import { ref, onMounted, nextTick, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from 'axios'
+import $ from 'jquery'
+import Swal from 'sweetalert2'
+
+import "datatables.net-dt/css/dataTables.dataTables.min.css"
+import "datatables.net-responsive-dt/css/responsive.dataTables.min.css"
+import "datatables.net-responsive-dt"
 
   const router = useRouter()
   const dataTableRef = ref(null)
+
+// --- Status Modal State and Logic ---
+const showStatusModal = ref(false)
+const statusForm = ref({
+  status: '',
+  bukti: null,
+  buktiName: '',
+  buktiUrl: '',
+  purchase_material_id: ''
+})
+const updatingStatusId = ref(null)
+
+
+const openStatusModal = async (expenseOrId) => {
+  // Accept either an expense object or just an ID
+  const id = typeof expenseOrId === 'object' ? expenseOrId.id : expenseOrId;
+  updatingStatusId.value = id;
+  try {
+    const token = sessionStorage.getItem('token');
+    const res = await axios.get(`/api/expenses/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const expense = res.data.data;
+    statusForm.value = {
+      status: expense.status || '',
+      bukti: null,
+      buktiName: '',
+      buktiUrl: expense.bukti ? `/storage/${expense.bukti}` : '',
+      purchase_material_id: expense.purchase_material_id || ''
+    };
+    showStatusModal.value = true;
+  } catch (err) {
+    Swal.fire('Error', 'Gagal mengambil data pengeluaran terbaru', 'error');
+  }
+}
+
+const closeStatusModal = () => {
+  showStatusModal.value = false
+}
+
+const handleStatusBuktiChange = (e) => {
+  const file = e.target.files[0]
+  statusForm.value.bukti = file
+  statusForm.value.buktiName = file ? file.name : ''
+}
+
+const handleStatusSubmit = async () => {
+  if (["Lunas", "Partial"].includes(statusForm.value.status) && !statusForm.value.bukti && !statusForm.value.buktiUrl) {
+    return Swal.fire('Peringatan', 'Bukti pembayaran wajib diupload jika status Lunas/Partial', 'warning')
+  }
+  try {
+    const token = sessionStorage.getItem('token')
+    const fd = new FormData()
+    fd.append('status', statusForm.value.status)
+    if (statusForm.value.bukti) {
+      fd.append('bukti', statusForm.value.bukti)
+    }
+    // Use plain POST for update-status (avoid 405 error)
+    await axios.post(`/api/expenses/${updatingStatusId.value}/update-status`, fd, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    Swal.fire('Berhasil', 'Status pengeluaran berhasil diperbarui', 'success')
+    showStatusModal.value = false
+    await fetchData()
+  } catch (err) {
+    Swal.fire('Error', 'Gagal memperbarui status', 'error')
+  }
+}
 
   const projects = ref([])
   const categories = ref([])
@@ -245,8 +382,6 @@
   const form = ref({
     proyek_id: '',
     category_type: '',
-    category_id: '',
-    service_category_id: '',
     amount: 0,
     displayAmount: '',
     description: '',
@@ -256,8 +391,17 @@
     prepared_fund: 0,
     displayPreparedFund: '',
     kode_transaksi: '',
-    isManualKode: false
+    isManualKode: false,
+    bukti: null,
+    buktiName: '',
+    buktiUrl: ''
   })
+
+  const handleBuktiChange = (e) => {
+    const file = e.target.files[0];
+    form.value.bukti = file;
+    form.value.buktiName = file ? file.name : '';
+  }
 
   const serviceCategories = ref([])
 
@@ -346,6 +490,7 @@
     }
   };
 
+  // Server-side DataTables with scroll
   const filterByProject = async () => {
     if (!selectedProject.value) {
       expenses.value = [];
@@ -360,29 +505,15 @@
       loading.value = true;
       const token = sessionStorage.getItem('token');
 
-
-      const [expenseRes, projectDetailsRes] = await Promise.all([
-        axios.get('/api/expenses', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { proyek_id: selectedProject.value }
-        }),
-        axios.get(`/api/proyeks/${selectedProject.value}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-
-
-      if (!expenseRes.data || !expenseRes.data.data) {
-        throw new Error('Invalid response format from expenses API');
-      }
-
+      // Get project details only (not expenses)
+      const projectDetailsRes = await axios.get(`/api/proyeks/${selectedProject.value}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       selectedProjectDetails.value = projectDetailsRes.data;
-      expenses.value = expenseRes.data.data;
 
-
-      // Pastikan data sudah ada sebelum DataTable diinisialisasi
+      // Pastikan DataTable diinisialisasi ulang
       await nextTick();
-      initDataTable();
+      initDataTableServerSide();
     } catch (e) {
       error.value = 'Gagal memuat data pengeluaran proyek';
       Swal.fire({
@@ -401,32 +532,45 @@
     selectedProjectDetails.value = null;
     expenses.value = [];
     if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
-      $(dataTableRef.value).DataTable().destroy();
+      $(dataTableRef.value).DataTable().clear().destroy();
       $(dataTableRef.value).empty();
     }
   };
 
-  const initDataTable = () => {
-
+  // Inisialisasi DataTable server-side dengan scroll
+  const initDataTableServerSide = () => {
     if ($.fn.DataTable.isDataTable(dataTableRef.value)) {
-      $(dataTableRef.value).DataTable().destroy();
+      $(dataTableRef.value).DataTable().clear().destroy();
+      $(dataTableRef.value).empty();
     }
 
     $(dataTableRef.value).DataTable({
-      data: expenses.value,
+      processing: true,
+      serverSide: true,
+      ajax: {
+        url: '/api/expenses/datatables',
+        type: 'GET',
+        headers: { Authorization: `Bearer ${sessionStorage.getItem('token')}` },
+        data: function (d) {
+          d.proyek_id = selectedProject.value;
+        },
+        dataSrc: function (json) {
+          console.log('Data diterima dari server:', json);
+          return json.data;
+        }
+      },
       columns: [
         {
-          title: 'No',
+          title: '<span class="fw-bold">No</span>',
           data: null,
-          width: '5%',
-          className: 'text-center',
-          render: (data, type, row, meta) => meta.row + 1
+          className: 'text-center align-middle',
+          orderable: false,
+          render: (data, type, row, meta) => meta.row + 1 + meta.settings._iDisplayStart
         },
         {
-          title: 'Tanggal',
+          title: '<span class="fw-bold">Tanggal</span>',
           data: 'transaction_date',
-          width: '10%',
-          className: 'text-center',
+          className: 'text-center align-middle',
           render: (data) => {
             if (!data) return '-';
             const date = new Date(data);
@@ -438,72 +582,81 @@
           }
         },
         {
-          title: 'Kode',
+          title: '<span class="fw-bold">Kode</span>',
           data: 'kode_transaksi',
-          width: '10%',
-          className: 'text-center',
+          className: 'text-center align-middle',
           render: (data) => data || '-'
         },
         {
-          title: 'Nama Proyek',
+          title: '<span class="fw-bold">Proyek</span>',
           data: 'proyek.nama_proyek',
-          width: '20%',
-          render: (data, type, row) => data || 'N/A'
+          className: 'align-middle',
+          render: (data, type, row) => row.proyek?.nama_proyek || 'N/A'
         },
         {
-          title: 'Kategori',
+          title: '<span class="fw-bold">Kategori</span>',
           data: null,
-          width: '15%',
+          className: 'align-middle',
           render: (data, type, row) => {
-            if (row.service_category_id) {
-              return row.service_category?.nama_kategori || 'N/A';
-            }
-            return row.category?.nama_kategori || 'N/A';
-          }
+    // Cek jika expense berasal dari purchase material (jasa)
+    if (row.purchase_material && row.purchase_material.service_category) {
+      return `<span class="badge bg-info text-dark me-1">Jasa</span>${row.purchase_material.service_category.nama_kategori}`;
+    }
+    // Pengecekan sebelumnya untuk service dan material
+    if (row.is_service && row.service_category) {
+      return `<span class="badge bg-info text-dark me-1">Jasa</span>${row.service_category.nama_kategori}`;
+    }
+    if (row.category_id || row.category) {
+      return `<span class="badge bg-primary me-1">Material</span>${row.category?.nama_kategori || 'Material'}`;
+    }
+    return '<span class="text-muted">Unknown Category</span>';
+  }
+
         },
         {
-          title: 'Jumlah',
+          title: '<span class="fw-bold">Jumlah</span>',
           data: 'amount',
-          width: '15%',
-          className: 'text-end',
-          render: (data) => `Rp ${formatCurrency(data || 0)}`
+          className: 'text-end align-middle',
+          render: (data) => `Rp ${formatCurrency(Number(data) || 0)}`
         },
         {
-          title: 'Status',
+          title: '<span class="fw-bold">Status</span>',
           data: 'status',
-          width: '10%',
-          className: 'text-center',
+          className: 'text-center align-middle',
           render: (data) => {
             const statusClass = {
-              'Pending': 'badge bg-warning',
-              'Approved': 'badge bg-success',
-              'Rejected': 'badge bg-danger'
-            }[data] || 'badge bg-secondary';
-            return `<span class="${statusClass}">${data}</span>`;
+              'Pending': 'badge bg-secondary text-capitalize',
+              'Approved': 'badge bg-success text-capitalize',
+              'Rejected': 'badge bg-danger text-capitalize',
+              'Lunas': 'badge bg-primary text-capitalize',
+              'Partial': 'badge bg-warning text-dark text-capitalize'
+            }[data] || 'badge bg-light text-dark';
+            return `<span class="${statusClass}">${data ? data.charAt(0).toUpperCase() + data.slice(1).toLowerCase() : '-'}</span>`;
           }
         },
         {
-          title: 'Aksi',
+          title: '<span class="fw-bold">Aksi</span>',
           data: null,
-          width: '15%',
-          className: 'text-center',
+          className: 'text-center align-middle',
           orderable: false,
           render: (data, type, row) => {
             if (row.source_type) {
-              return '<button class="btn btn-sm btn-info view-btn" data-id="' + row.id + '">Detail</button>';
+              return '<button class="btn btn-sm btn-info view-btn me-1" data-bs-toggle="tooltip" title="Detail" data-id="' + row.id + '"><i class="bi bi-eye"></i> Detail</button>';
             }
             return `
-              <div class="btn-group">
-                <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
-                <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+              <div class="btn-group" role="group">
+                <button class="btn btn-sm btn-warning edit-btn me-1" data-bs-toggle="tooltip" title="Edit" data-id="${row.id}"><i class="bi bi-pencil"></i> Edit</button>
+                <button class="btn btn-sm btn-info status-btn me-1" data-bs-toggle="tooltip" title="Update Status" data-id="${row.id}"><i class="bi bi-arrow-repeat"></i> Status</button>
+                <button class="btn btn-sm btn-danger delete-btn" data-bs-toggle="tooltip" title="Hapus" data-id="${row.id}"><i class="bi bi-trash"></i> Hapus</button>
               </div>
             `;
           }
         },
       ],
-      order: [[1, 'desc']], // Sort by date descending
+      order: [[1, 'desc']],
       responsive: true,
-      scrollX: true,
+      // scrollX: true, // Hapus agar tabel tidak melar
+      autoWidth: false,
       language: {
         "emptyTable": "Tidak ada data yang tersedia",
         "info": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
@@ -514,31 +667,57 @@
         "processing": "Memproses...",
         "search": "Cari:",
         "zeroRecords": "Tidak ditemukan data yang sesuai",
-        "paginate": {
-          "first": "Pertama",
-          "last": "Terakhir",
-          "next": "Selanjutnya",
-          "previous": "Sebelumnya"
+        // "paginate": {
+        //   "first": "Pertama",
+        //   "last": "Terakhir",
+        //   "next": "Selanjutnya",
+        //   "previous": "Sebelumnya"
+        // }
+      },
+    //   dom: '<"d-flex justify-content-between align-items-center mb-3"<"d-flex align-items-center"l><"d-flex"f>>rtip',
+      drawCallback: function() {
+        // Attach event listeners for action buttons
+        $(dataTableRef.value).off('click', '.edit-btn');
+        $(dataTableRef.value).off('click', '.delete-btn');
+        $(dataTableRef.value).off('click', '.view-btn');
+        $(dataTableRef.value).off('click', '.status-btn');
+
+        $(dataTableRef.value).on('click', '.edit-btn', async function () {
+          const id = $(this).data('id');
+          try {
+            const token = sessionStorage.getItem('token');
+            const res = await axios.get(`/api/expenses/${id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            openModal('edit', res.data.data);
+          } catch (err) {
+            Swal.fire('Error', 'Gagal mengambil data pengeluaran', 'error');
+          }
+        });
+
+        $(dataTableRef.value).on('click', '.delete-btn', function () {
+          const id = $(this).data('id');
+          handleDelete(id);
+        });
+
+        $(dataTableRef.value).on('click', '.view-btn', function () {
+          const id = $(this).data('id');
+          router.push(`/base/pengeluaran/${id}`);
+        });
+
+        $(dataTableRef.value).on('click', '.status-btn', function () {
+          const id = $(this).data('id');
+          openStatusModal(id);
+        });
+
+        // Enable Bootstrap tooltip if available
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+          $(dataTableRef.value).find('[data-bs-toggle="tooltip"]').each(function() {
+            new window.bootstrap.Tooltip(this);
+          });
         }
       },
-      dom: '<"d-flex justify-content-between align-items-center mb-3"<"d-flex align-items-center"l><"d-flex"f>>rtip',
-    });
-
-    // Update event listeners
-    $(dataTableRef.value).on('click', '.edit-btn', function () {
-      const id = $(this).data('id');
-      const expense = expenses.value.find(e => e.id === id);
-      if (expense) openModal('edit', expense);
-    });
-
-    $(dataTableRef.value).on('click', '.delete-btn', function () {
-      const id = $(this).data('id');
-      handleDelete(id);
-    });
-
-    $(dataTableRef.value).on('click', '.view-btn', function () {
-      const id = $(this).data('id');
-      router.push(`/base/pengeluaran/${id}`);
+      stripeClasses: ["table-striped", "table-hover"]
     });
   }
 
@@ -557,8 +736,6 @@
       form.value = {
         proyek_id: expense.proyek_id,
         category_type: expense.service_category_id ? 'service' : 'material',
-        category_id: expense.category_id || '',
-        service_category_id: expense.service_category_id || '',
         amount: expense.amount,
         displayAmount: formatCurrency(expense.amount),
         description: expense.description,
@@ -568,7 +745,10 @@
         prepared_fund: expense.prepared_fund || 0,
         displayPreparedFund: formatCurrency(expense.prepared_fund || 0),
         kode_transaksi: expense.kode_transaksi || '',
-        isManualKode: !!expense.kode_transaksi
+        isManualKode: !!expense.kode_transaksi,
+        bukti: null,
+        buktiName: '',
+        buktiUrl: expense.bukti ? `/storage/${expense.bukti}` : ''
       };
       editingId.value = expense.id;
       modalTitle.value = 'Edit Pengeluaran';
@@ -577,8 +757,6 @@
       form.value = {
         proyek_id: selectedProject.value,
         category_type: '',
-        category_id: '',
-        service_category_id: '',
         amount: 0,
         displayAmount: '',
         description: '',
@@ -588,7 +766,10 @@
         prepared_fund: 0,
         displayPreparedFund: '',
         kode_transaksi: '',
-        isManualKode: false
+        isManualKode: false,
+        bukti: null,
+        buktiName: '',
+        buktiUrl: ''
       };
       editingId.value = null;
       modalTitle.value = 'Tambah Pengeluaran';
@@ -596,59 +777,74 @@
     }
     showModal.value = true;
   }
-
+// --- Status Modal Handlers (deduped) ---
+// (already declared above, do not redeclare)
   const closeModal = () => {
     showModal.value = false;
   }
 
+// --- Status Modal close handler (deduped) ---
+// (already declared above, do not redeclare)
+
   const handleSubmit = async () => {
     try {
-      if (form.value.isManualKode && !form.value.kode_transaksi.trim()) {
-        return Swal.fire('Peringatan', 'Kode transaksi harus diisi jika menggunakan kode manual', 'warning');
-      }
+        if (form.value.isManualKode && !form.value.kode_transaksi.trim()) {
+            return Swal.fire('Peringatan', 'Kode transaksi harus diisi jika menggunakan kode manual', 'warning');
+        }
 
-      // Validasi anggaran sebelum submit
-      const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
-      if (form.value.amount > sisaAnggaran) {
-        await Swal.fire({
-          icon: 'warning',
-          title: 'Anggaran Melebihi Batas!',
-          text: 'Jumlah pengeluaran melebihi sisa anggaran proyek. Silakan cek kembali nilai pengeluaran.',
-        });
-        return;
-      }
+        // Validasi anggaran sebelum submit
+        const sisaAnggaran = selectedProjectDetails.value?.anggaran_kontrak - (selectedProjectDetails.value?.total_expenses || 0);
+        if (form.value.amount > sisaAnggaran) {
+            await Swal.fire({
+                icon: 'warning',
+                title: 'Anggaran Melebihi Batas!',
+                text: 'Jumlah pengeluaran melebihi sisa anggaran proyek. Silakan cek kembali nilai pengeluaran.',
+            });
+            return;
+        }
 
-      const token = sessionStorage.getItem('token');
-      const payload = {
-        proyek_id: form.value.proyek_id,
-        category_id: form.value.category_type === 'material' ? form.value.category_id : null,
-        service_category_id: form.value.category_type === 'service' ? form.value.service_category_id : null,
-        amount: form.value.amount,
-        description: form.value.description,
-        transaction_date: form.value.transaction_date,
-        status: form.value.status,
-        payment_method: form.value.payment_method,
-        prepared_fund: form.value.prepared_fund,
-        kode_transaksi: form.value.isManualKode ? form.value.kode_transaksi : null
-      };
+        // Validasi wajib bukti jika status Lunas/Partial
+        if (["Lunas", "Partial"].includes(form.value.status)) {
+            if (!form.value.bukti && !form.value.buktiUrl) {
+                return Swal.fire('Peringatan', 'Bukti pembayaran wajib diupload jika status Lunas/Partial', 'warning');
+            }
+        }
 
-      if (modalMode.value === 'edit') {
-        await axios.put(`/api/expenses/${editingId.value}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire('Berhasil', 'Data pengeluaran berhasil diperbarui', 'success');
-      } else {
-        await axios.post('/api/expenses', payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        Swal.fire('Berhasil', 'Data pengeluaran berhasil ditambahkan', 'success');
-      }
+        const token = sessionStorage.getItem('token');
+        const payload = {
+            proyek_id: form.value.proyek_id,
+            amount: form.value.amount,
+            description: form.value.description,
+            transaction_date: form.value.transaction_date,
+            status: form.value.status,
+            payment_method: form.value.payment_method,
+            prepared_fund: form.value.prepared_fund,
+            kode_transaksi: form.value.isManualKode ? form.value.kode_transaksi : null
+        };
 
-      showModal.value = false;
-      await fetchData();
+        if (modalMode.value === 'edit') {
+            const fd = new FormData();
+            Object.entries(payload).forEach(([k, v]) => {
+                if (v !== null && v !== undefined) fd.append(k, v);
+            });
+            if (form.value.bukti) {
+                fd.append('bukti', form.value.bukti);
+            }
+            await axios.post(`/api/expenses/${editingId.value}?_method=PUT`, fd, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            Swal.fire('Berhasil', 'Data pengeluaran berhasil diperbarui', 'success');
+        } else {
+            await axios.post('/api/expenses', payload, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            Swal.fire('Berhasil', 'Data pengeluaran berhasil ditambahkan', 'success');
+        }
+
+        showModal.value = false;
+        await fetchData();
     } catch (err) {
-    //   console.error('Error submitting form:', err);
-      Swal.fire('Error', 'Terjadi kesalahan saat menyimpan data', 'error');
+        Swal.fire('Error', 'Terjadi kesalahan saat menyimpan data', 'error');
     }
   }
 
@@ -685,12 +881,42 @@
     filterByProject();
   };
 +
-  onMounted(() => {
-    console.log('Component mounted');
-    console.log('jQuery loaded:', typeof $);
-    console.log('DataTables plugin:', typeof $.fn.DataTable);
+onMounted(() => {
+  if (typeof $ === 'function' && typeof $.fn.DataTable === 'function') {
     fetchData();
-  })
+  } else {
+    error.value = 'jQuery/DataTables belum ter-load';
+  }
+})
+
+// Tambahkan fungsi untuk mengambil data purchase material dengan service category
+const fetchPurchaseMaterialWithServiceCategory = async (id) => {
+  try {
+    const token = sessionStorage.getItem('token'); // Ambil token dari sessionStorage
+    if (!token) {
+      throw new Error('Token tidak ditemukan di sessionStorage');
+    }
+
+    const response = await axios.get(`/api/purchase-materials/${id}/service-category`, {
+      headers: { Authorization: `Bearer ${token}` } // Tambahkan header Authorization
+    });
+
+    console.log('Respons API:', response.data); // Tambahkan log untuk memeriksa data
+    return response.data;
+  } catch (error) {
+    console.error('Error saat mengambil data service category:', error);
+    return null;
+  }
+};
+
+// Contoh penggunaan fungsi di mounted atau event handler
+onMounted(async () => {
+  const purchaseMaterialId = 1; // Ganti dengan ID yang sesuai
+  const data = await fetchPurchaseMaterialWithServiceCategory(purchaseMaterialId);
+  if (data) {
+    form.value.service_category_id = data.service_category_id;
+  }
+});
   </script>
 
   <style scoped>
@@ -704,4 +930,6 @@
   table.display {
     width: 100% !important;
   }
+  /* Membatasi lebar kolom agar tabel tetap ramping */
+  /* .badge, .btn { font-size: 0.75rem; padding: 0.25em 0.5em; } */
   </style>

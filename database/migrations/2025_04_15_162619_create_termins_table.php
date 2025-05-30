@@ -16,7 +16,7 @@ class CreateTerminsTable extends Migration
 
             $table->foreignId('proyek_id')->constrained('proyeks')->onDelete('cascade');
             $table->foreignId('invoice_id')->nullable()->constrained('invoices')->onDelete('set null');
-            $table->foreignId('expense_id')->nullable()->constrained('expenses')->onDelete('set null');
+           $table->unsignedBigInteger('expense_id')->nullable();
 
             $table->string('nama_termin');
             $table->enum('jenis_termin', ['DP', 'Pelunasan', 'Termin Bertahap'])->default('Termin Bertahap')->index();
