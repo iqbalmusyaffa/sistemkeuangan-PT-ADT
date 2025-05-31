@@ -136,11 +136,25 @@ class IncomeController extends Controller
                 $income->bukti_pembayaran = $path;
             }
 
+
             $income->save();
 
             // Update termin status if income is accepted
             if ($income->status === 'Diterima' && $income->termin) {
                 $income->termin->updateStatusFromPayments();
+            }
+
+            // Update invoice status & amount_paid if income is accepted and linked to invoice
+            if ($income->status === 'Diterima' && $income->invoice_id) {
+                $invoice = $income->invoice;
+                if ($invoice) {
+                    $totalPaid = Income::where('invoice_id', $invoice->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    $invoice->amount_paid = $totalPaid;
+                    $invoice->status = $invoice->determineStatus();
+                    $invoice->save();
+                }
             }
 
             DB::commit();
@@ -244,11 +258,25 @@ class IncomeController extends Controller
                 $income->bukti_pembayaran = $path;
             }
 
+
             $income->save();
 
             // Update termin status if income is accepted
             if ($income->status === 'Diterima' && $income->termin) {
                 $income->termin->updateStatusFromPayments();
+            }
+
+            // Update invoice status & amount_paid if income is accepted and linked to invoice
+            if ($income->status === 'Diterima' && $income->invoice_id) {
+                $invoice = $income->invoice;
+                if ($invoice) {
+                    $totalPaid = Income::where('invoice_id', $invoice->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    $invoice->amount_paid = $totalPaid;
+                    $invoice->status = $invoice->determineStatus();
+                    $invoice->save();
+                }
             }
 
             DB::commit();
@@ -288,11 +316,25 @@ class IncomeController extends Controller
                 Storage::disk('public')->delete($income->bukti_pembayaran);
             }
 
+
             $income->delete();
 
             // Update termin status if income was related to a termin
             if ($income->termin) {
                 $income->termin->updateStatusFromPayments();
+            }
+
+            // Update invoice status & amount_paid jika income terkait invoice
+            if ($income->invoice_id) {
+                $invoice = $income->invoice;
+                if ($invoice) {
+                    $totalPaid = Income::where('invoice_id', $invoice->id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    $invoice->amount_paid = $totalPaid;
+                    $invoice->status = $invoice->determineStatus();
+                    $invoice->save();
+                }
             }
 
             DB::commit();
