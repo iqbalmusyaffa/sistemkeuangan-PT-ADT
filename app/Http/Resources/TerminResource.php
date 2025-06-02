@@ -15,6 +15,31 @@ class TerminResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Summary global (ambil dari invoice/proyek jika ada, fallback ke termin jika single)
+        $invoice = $this->whenLoaded('invoice', function() { return $this->invoice; });
+        $proyek = $this->whenLoaded('proyek', function() { return $this->proyek; });
+
+        // Only use $invoice->termins if $invoice is a valid Invoice model
+        $hasValidInvoice = $invoice && $invoice instanceof \App\Models\Invoice;
+        $summary = [
+            'total_termin' => $hasValidInvoice ? (float) $invoice->termins->sum('nilai_termin') : (float) $this->nilai_termin,
+            'total_dp' => $hasValidInvoice ? (float) $invoice->termins->sum('nilai_dp') : (float) $this->nilai_dp,
+            'total_pelunasan' => $hasValidInvoice ? (float) $invoice->termins->sum('nilai_pelunasan') : (float) $this->nilai_pelunasan,
+            'total_dp_paid' => $hasValidInvoice ? (float) $invoice->termins->sum('total_dp_paid') : (float) $this->total_dp_paid,
+            'total_pelunasan_paid' => $hasValidInvoice ? (float) $invoice->termins->sum('total_pelunasan_paid') : (float) $this->total_pelunasan_paid,
+            'total_paid' => $hasValidInvoice ? (float) $invoice->termins->sum('total_paid') : (float) $this->total_paid,
+            'remaining_dp' => $hasValidInvoice ? (float) $invoice->termins->sum('remaining_dp') : (float) $this->remaining_dp,
+            'remaining_pelunasan' => $hasValidInvoice ? (float) $invoice->termins->sum('remaining_pelunasan') : (float) $this->remaining_pelunasan,
+            'remaining_total' => $hasValidInvoice ? (float) $invoice->termins->sum('remaining_total') : (float) $this->remaining_total,
+        ];
+
+        // Tambahkan summary proyek jika ada dan valid
+        if ($proyek && $proyek instanceof \App\Models\Proyek) {
+            $summary['total_income'] = (float) $proyek->incomes()->where('status', 'Diterima')->sum('jumlah');
+            $summary['total_expense'] = (float) $proyek->expenses()->where('status', 'Lunas')->sum('amount');
+            $summary['profit_loss'] = $summary['total_income'] - $summary['total_expense'];
+        }
+
         return [
             'id' => $this->id,
             'proyek_id' => $this->proyek_id,
@@ -66,6 +91,14 @@ class TerminResource extends JsonResource
                 return $this->invoice ? new \App\Http\Resources\InvoiceResource($this->invoice) : null;
             }),
             'incomes' => \App\Http\Resources\IncomeResource::collection($this->whenLoaded('incomes')),
+
+            // Tambahan summary global
+            'financial_summary' => $summary,
+
+            // Add status fields
+            'invoice_status' => $this->invoice ? $this->invoice->status : null,
+            'expense_status' => $this->expense ? $this->expense->status : null,
+            'income_status' => $this->incomes->isNotEmpty() ? $this->incomes->pluck('status')->unique()->join(', ') : null,
         ];
     }
 }

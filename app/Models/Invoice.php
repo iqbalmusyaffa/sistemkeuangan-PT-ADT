@@ -142,6 +142,21 @@ class Invoice extends Model
                 }
             }
 
+            // Guard: Only allow valid status values
+            $allowedStatuses = [
+                self::STATUS_UNPAID,
+                self::STATUS_PARTIALLY_PAID,
+                self::STATUS_PAID,
+                self::STATUS_CANCELLED
+            ];
+            if (!in_array($newStatus, $allowedStatuses, true)) {
+                Log::error('Attempted to set invalid invoice status', [
+                    'invoice_id' => $this->id,
+                    'invalid_status' => $newStatus
+                ]);
+                $newStatus = self::STATUS_UNPAID;
+            }
+
             if ($oldStatus !== $newStatus) {
                 $this->status = $newStatus;
                 $this->save();

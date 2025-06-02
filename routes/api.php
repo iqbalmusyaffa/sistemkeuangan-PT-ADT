@@ -149,6 +149,7 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     Route::post('/invoices/{id}/payment', [InvoiceController::class, 'recordPayment']);
     Route::get('/invoices/{id}/payment-status', [InvoiceController::class, 'getPaymentStatus']);
     Route::get('/projects/{projectId}/financial-summary', [InvoiceController::class, 'getProjectFinancialSummary']);
+    Route::post('/termins/{termin}/record-payment', [TerminController::class, 'recordPayment']);
 
     // Purchase Material Routes
     Route::get('/purchase-materials', [PurchaseMaterialController::class, 'index']);
@@ -163,6 +164,10 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
 Route::get('/invoice/{id}/pdf', [InvoiceController::class, 'cetakPdf'])->name('invoice.cetakPdf');
     // Kategori routes
     Route::apiResource('kategori', KategoriTransaksiController::class);
+     // Approval admin untuk income termin
+    Route::post('/termins/{termin}/approve-income/{income}', [TerminController::class, 'approveIncome']);
+    // Approval admin untuk expense termin
+    Route::post('/termins/{termin}/approve-expense/{expense}', [TerminController::class, 'approveExpense']);
 });
 Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);
 Route::get('/test-log', function() {

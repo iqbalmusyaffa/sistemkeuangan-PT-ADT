@@ -117,7 +117,8 @@ class Termin extends Model
         return Cache::remember("termin_{$this->id}_total_dp_paid", 3600, function () {
             return $this->incomes()
                 ->where('type', 'dp')
-                ->where('status', 'Diterima')
+                ->where('status_approval', 'approved')
+                ->whereIn('status', ['DP Dibayar', 'Lunas', 'Diterima'])
                 ->sum('jumlah') ?? 0;
         });
     }
@@ -127,7 +128,8 @@ class Termin extends Model
         return Cache::remember("termin_{$this->id}_total_pelunasan_paid", 3600, function () {
             return $this->incomes()
                 ->where('type', 'pelunasan')
-                ->where('status', 'Diterima')
+                ->where('status_approval', 'approved')
+                ->whereIn('status', ['Lunas', 'Diterima'])
                 ->sum('jumlah') ?? 0;
         });
     }
@@ -136,23 +138,67 @@ class Termin extends Model
     {
         return Cache::remember("termin_{$this->id}_total_paid", 3600, function () {
             return $this->incomes()
-                ->where('status', 'Diterima')
+                ->where('status_approval', 'approved')
+                ->whereIn('status', ['DP Dibayar', 'Lunas', 'Diterima'])
                 ->sum('jumlah') ?? 0;
         });
     }
 
     public function getRemainingDpAttribute()
     {
+        // Jika DP tidak ada, sisa DP = 0
+        if (($this->nilai_dp ?? 0) == 0) {
+            return 0;
+        }
+        // Jika sudah lunas, sisa DP = 0
+        if ($this->status_termin === 'Lunas') {
+            return 0;
+        }
+        // Jika DP sudah dibayar penuh, sisa DP = 0
+        if ($this->total_dp_paid >= $this->nilai_dp) {
+            return 0;
+        }
+        // Jika belum dibayar sama sekali, sisa DP = nilai DP
+        if (($this->total_dp_paid ?? 0) == 0) {
+            return $this->nilai_dp ?? 0;
+        }
+        // Jika dibayar sebagian, sisa DP = nilai DP - total DP paid
         return max(0, ($this->nilai_dp ?? 0) - ($this->total_dp_paid ?? 0));
     }
 
     public function getRemainingPelunasanAttribute()
     {
+        // Jika pelunasan tidak ada, sisa pelunasan = 0
+        if (($this->nilai_pelunasan ?? 0) == 0) {
+            return 0;
+        }
+        // Jika sudah lunas, sisa pelunasan = 0
+        if ($this->status_termin === 'Lunas') {
+            return 0;
+        }
+        // Jika pelunasan sudah dibayar penuh, sisa pelunasan = 0
+        if ($this->total_pelunasan_paid >= $this->nilai_pelunasan) {
+            return 0;
+        }
+        // Jika belum dibayar sama sekali, sisa pelunasan = nilai pelunasan
+        if (($this->total_pelunasan_paid ?? 0) == 0) {
+            return $this->nilai_pelunasan ?? 0;
+        }
+        // Jika dibayar sebagian, sisa pelunasan = nilai pelunasan - total pelunasan paid
         return max(0, ($this->nilai_pelunasan ?? 0) - ($this->total_pelunasan_paid ?? 0));
     }
 
     public function getRemainingTotalAttribute()
     {
+        // Jika sudah lunas, sisa termin = 0
+        if ($this->status_termin === 'Lunas') {
+            return 0;
+        }
+        // Jika belum dibayar sama sekali, sisa termin = nilai termin
+        if (($this->total_paid ?? 0) == 0) {
+            return $this->nilai_termin ?? 0;
+        }
+        // Jika dibayar sebagian, sisa termin = nilai termin - total paid
         return max(0, ($this->nilai_termin ?? 0) - ($this->total_paid ?? 0));
     }
 
@@ -177,61 +223,110 @@ class Termin extends Model
     }
 
     // UPDATE STATUS BERDASARKAN PEMBAYARAN
-    public function updateStatusFromPayments()
+    public function updateStatusFromPayments($force = false)
     {
         Log::info('[Termin] updateStatusFromPayments START', ['termin_id' => $this->id, 'status_termin' => $this->status_termin]);
-        $totalDpPaid = $this->total_dp_paid;
-        $totalPelunasanPaid = $this->total_pelunasan_paid;
+        DB::transaction(function () use ($force) {
+            $totalDpPaid = $this->total_dp_paid;
+            $totalPelunasanPaid = $this->total_pelunasan_paid;
 
-        $newStatus = $this->status_termin; // Keep current status if no changes
+            $oldStatus = $this->status_termin;
+            $newStatus = $this->status_termin;
 
-        if ($totalDpPaid >= $this->nilai_dp && $totalPelunasanPaid >= $this->nilai_pelunasan) {
-            $newStatus = 'Lunas';
-        } elseif ($totalDpPaid >= $this->nilai_dp) {
-            $newStatus = 'DP Dibayar';
-        } else {
-            $newStatus = 'Belum Dibayar';
-        }
-
-        $statusChanged = false;
-        if ($this->status_termin !== $newStatus) {
-            Log::info('[Termin] Status termin berubah', ['termin_id' => $this->id, 'old' => $this->status_termin, 'new' => $newStatus]);
-            $this->status_termin = $newStatus;
-            $this->clearCache();
-            $this->saveQuietly(); // Use saveQuietly to prevent re-triggering hooks
-            $statusChanged = true;
-        }
-
-        // Selalu update invoice, income, dan expense setelah status termin dihitung
-        if ($this->invoice) {
-            $this->invoice->refresh();
-            $this->invoice->updateStatusFromTermins();
-        }
-        // Update semua income terkait termin ini agar status income sesuai status termin
-        foreach ($this->incomes as $income) {
-            if ($income->status !== 'Diterima' && in_array($this->status_termin, ['DP Dibayar', 'Lunas'])) {
-                Log::info('[Termin] Update income status to Diterima', ['income_id' => $income->id, 'termin_id' => $this->id]);
-                $income->status = 'Diterima';
-                $income->save();
+            // PATCH: Jika nilai_termin == 0, status selalu Belum Dibayar
+            if ($this->nilai_termin == 0) {
+                $newStatus = 'Belum Dibayar';
+            } else if ($totalDpPaid >= $this->nilai_dp && $totalPelunasanPaid >= $this->nilai_pelunasan && $this->nilai_pelunasan > 0) {
+                $newStatus = 'Lunas';
+            } elseif ($totalDpPaid >= $this->nilai_dp && $this->nilai_dp > 0 && $this->nilai_pelunasan == 0) {
+                $newStatus = 'DP Dibayar';
+            } else {
+                $newStatus = 'Belum Dibayar';
             }
-            if ($income->status === 'Diterima' && $this->status_termin === 'Belum Dibayar') {
-                Log::info('[Termin] Update income status to Pending', ['income_id' => $income->id, 'termin_id' => $this->id]);
-                $income->status = 'Pending';
-                $income->save();
+
+            $statusChanged = $this->status_termin !== $newStatus;
+            if ($statusChanged || $force) {
+                Log::info('[Termin] Status termin changed', [
+                    'termin_id' => $this->id,
+                    'old' => $this->status_termin,
+                    'new' => $newStatus
+                ]);
+                $this->status_termin = $newStatus;
+                $this->clearCache();
+                $this->isUpdatingStatus = true;
+                $this->save();
+                $this->isUpdatingStatus = false;
             }
-        }
-        // Update expense termin
-        if ($this->expense) {
-            $newExpenseStatus = $this->status_termin === 'Lunas' ? 'Lunas' : 'pending';
-            if ($this->expense->status !== $newExpenseStatus) {
-                Log::info('[Termin] Update expense status', ['expense_id' => $this->expense->id, 'old' => $this->expense->status, 'new' => $newExpenseStatus]);
-                $this->expense->status = $newExpenseStatus;
-                $this->expense->save();
+
+            // Update related records (income, expense)
+            $this->updateRelatedRecordsAfterStatusChange();
+
+            // Update invoice status
+            if ($this->invoice) {
+                $expectedInvoiceStatus = 'unpaid';
+                if ($this->status_termin === 'DP Dibayar') {
+                    $expectedInvoiceStatus = 'partially_paid';
+                } elseif ($this->status_termin === 'Lunas') {
+                    $expectedInvoiceStatus = 'paid';
+                }
+
+                if ($this->invoice->status !== $expectedInvoiceStatus) {
+                    Log::info('[Termin] Updating associated invoice status', ['invoice_id' => $this->invoice->id, 'old' => $this->invoice->status, 'new' => $expectedInvoiceStatus]);
+                    $this->invoice->status = $expectedInvoiceStatus;
+                    $this->invoice->saveQuietly();
+                }
             }
-        }
+        });
         Log::info('[Termin] updateStatusFromPayments END', ['termin_id' => $this->id, 'status_termin' => $this->status_termin]);
     }
 
+    // New helper method to consolidate updates
+    protected function updateRelatedRecordsAfterStatusChange()
+    {
+        // Update all income related to this termin
+        foreach ($this->incomes as $income) {
+            $expectedIncomeStatus = 'Pending';
+            if ($this->status_termin === 'DP Dibayar' || $this->status_termin === 'Lunas') {
+                $expectedIncomeStatus = 'Diterima';
+            }
+
+            if ($income->status !== $expectedIncomeStatus) {
+                Log::info('[Termin] Updating associated income status', ['income_id' => $income->id, 'old' => $income->status, 'new' => $expectedIncomeStatus]);
+                $income->status = $expectedIncomeStatus;
+                $income->saveQuietly();
+            }
+        }
+
+        // Update or create expense, status & approval ikut status termin
+        $expense = \App\Models\Expense::where('source_type', 'termin')->where('source_id', $this->id)->first();
+        $expenseData = [
+            'user_id' => auth()->id() ?? $this->created_by,
+            'proyek_id' => $this->proyek_id,
+            'category_id' => null,
+            'service_category_id' => null,
+            'amount' => $this->nilai_termin,
+            'description' => "Pengeluaran Termin {$this->nama_termin} untuk proyek " . optional($this->proyek)->nama_proyek,
+            'transaction_date' => $this->tanggal_pelunasan_dibayar
+                ?? $this->tanggal_dp_dibayar
+                ?? $this->tanggal_pelunasan
+                ?? $this->tanggal_dp
+                ?? now(),
+            'status' => $this->status_termin === 'Lunas' || $this->status_termin === 'DP Dibayar' ? 'Lunas' : 'pending',
+            'status_approval' => ($this->status_termin === 'Lunas' || $this->status_termin === 'DP Dibayar') ? 'Approved' : 'Pending',
+            'source_type' => 'termin',
+            'source_id' => $this->id,
+            'prepared_fund' => $this->nilai_termin,
+            'payment_method_id' => $this->invoice ? $this->invoice->payment_method_id : null,
+            'invoice_id' => $this->invoice_id
+        ];
+        if ($expense) {
+            $expense->update($expenseData);
+        } else {
+            $expense = \App\Models\Expense::create($expenseData);
+            $this->expense_id = $expense->id;
+            $this->saveQuietly();
+        }
+    }
     // VALIDASI RULES UNTUK REQUEST
     public static function getValidationRules($id = null)
     {
@@ -257,7 +352,7 @@ class Termin extends Model
     }
 
     // LIFECYCLE HOOKS
-    protected static function boot()
+ protected static function boot()
     {
         parent::boot();
 
@@ -265,46 +360,35 @@ class Termin extends Model
             try {
                 Log::info('Creating new termin:', $termin->toArray());
 
-                // Set nilai DP dan pelunasan jika belum diset
-                if (!$termin->nilai_dp && $termin->persentase_dp) {
+                // Set nilai DP and pelunasan if not set
+                if (is_null($termin->nilai_dp) && $termin->persentase_dp) {
                     $termin->nilai_dp = round($termin->nilai_termin * ($termin->persentase_dp / 100), 2);
                 }
-                if (!$termin->nilai_pelunasan) {
-                    $termin->nilai_pelunasan = round($termin->nilai_termin - $termin->nilai_dp, 2);
+                if (is_null($termin->nilai_pelunasan)) {
+                    $termin->nilai_pelunasan = round($termin->nilai_termin - ($termin->nilai_dp ?? 0), 2);
                 }
 
                 // Handle bukti pembayaran if it's an UploadedFile
                 if ($termin->bukti_pembayaran instanceof \Illuminate\Http\UploadedFile) {
                     $file = $termin->bukti_pembayaran;
-
-                    // Validate file size
                     if ($file->getSize() > 2048 * 1024) { // 2MB in bytes
                         throw new \Exception('File size exceeds 2MB limit');
                     }
-
-                    // Validate file type
                     $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
                     if (!in_array($file->getMimeType(), $allowedTypes)) {
                         throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
                     }
-
                     $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
                     $path = 'uploads/bukti_pembayaran/' . $filename;
-
-                    // Ensure directory exists
                     if (!Storage::exists('uploads/bukti_pembayaran')) {
                         Storage::makeDirectory('uploads/bukti_pembayaran');
                     }
-
-                    // Upload file
                     if (!$file->storeAs('uploads/bukti_pembayaran', $filename)) {
                         throw new \Exception('Failed to store file');
                     }
-
                     $termin->bukti_pembayaran = $path;
                     Log::info('Bukti pembayaran uploaded:', ['path' => $path]);
                 }
-
                 Log::info('Termin creation validation passed');
             } catch (\Exception $e) {
                 Log::error('Error in Termin model creating: ' . $e->getMessage());
@@ -312,99 +396,65 @@ class Termin extends Model
             }
         });
 
-        static::saving(function ($termin) {
-            // Prevent infinite loop if already updating status
-            if ($termin->isUpdatingStatus) {
-                return;
-            }
-
-            try {
-                // The status_termin might be updated by user input or payment logic.
-                // We let the updateStatusFromPayments method in the updated hook handle it,
-                // unless explicitly setting status in this request is desired to override.
-                // For now, let the updated hook handle the side effects.
-            } catch (\Exception $e) {
-                Log::error('Error in Termin model saving: ' . $e->getMessage());
-                throw $e;
-            }
-        });
-
         static::created(function ($termin) {
             try {
                 $termin->clearCache();
-                // Ensure expense and income are created/updated after initial creation
-                $termin->createExpense();
+                $termin->createExpense(); // Create expense immediately
 
-                if ($termin->status_termin === 'DP Dibayar' || $termin->status_termin === 'Lunas') {
-                    // Record DP income if applicable (pakai tanggal_dp_dibayar jika ada, fallback ke tanggal_dp)
-                    $tanggalDp = $termin->tanggal_dp_dibayar ?: $termin->tanggal_dp;
-                    if ($termin->nilai_dp > 0 && $tanggalDp) {
-                        $dpIncomeExists = $termin->incomes()->where('type', 'dp')->exists();
-                        if (!$dpIncomeExists) {
-                            try {
-                                $termin->recordIncome('dp', $termin->nilai_dp, $tanggalDp);
-                            } catch (\Exception $e) {
-                                Log::error('[Termin] Gagal create income DP (created hook)', ['termin_id' => $termin->id, 'error' => $e->getMessage()]);
-                            }
-                        }
-                    }
-                    // Record Pelunasan income if status is Lunas (pakai tanggal_pelunasan_dibayar jika ada, fallback ke tanggal_pelunasan)
-                    $tanggalPelunasan = $termin->tanggal_pelunasan_dibayar ?: $termin->tanggal_pelunasan;
-                    if ($termin->status_termin === 'Lunas' && $termin->nilai_pelunasan > 0 && $tanggalPelunasan) {
-                        try {
-                            $termin->recordIncome('pelunasan', $termin->nilai_pelunasan, $tanggalPelunasan);
-                        } catch (\Exception $e) {
-                            Log::error('[Termin] Gagal create income pelunasan (created hook)', ['termin_id' => $termin->id, 'error' => $e->getMessage()]);
-                        }
-                    }
-                }
+                // Call updateStatusFromPayments after creation
+                $termin->isUpdatingStatus = true;
+                $termin->updateStatusFromPayments();
+                $termin->isUpdatingStatus = false;
 
-                if ($termin->invoice) {
-                    $termin->invoice->updateStatusFromTermins();
-                }
+                // The updateStatusFromPayments method will handle income creation/update
+                // if the status dictates it. No need to duplicate here.
+
             } catch (\Exception $e) {
                 Log::error('Error in Termin model created: ' . $e->getMessage());
             }
         });
 
         static::updated(function ($termin) {
-            // Prevent infinite loop if already updating status
             if ($termin->isUpdatingStatus) {
                 return;
             }
 
             try {
                 $termin->clearCache();
+                // Tidak lagi memanggil updateStatusFromPayments() otomatis di sini.
+                // Sinkronisasi status hanya terjadi saat approval (approveIncome/approveExpense).
 
-                // If the status_termin was directly changed, update related records
-                // This ensures consistency even if updateStatusFromPayments didn't run in `saving`
-                if ($termin->isDirty('status_termin') || $termin->isDirty('status_approval')) {
-                    $termin->createExpense(); // This will create or update the associated expense
-
-                    // Record or update income based on the new status
-                    if ($termin->status_termin === 'DP Dibayar') {
-                        $termin->recordIncome('dp', $termin->nilai_dp, $termin->tanggal_dp_dibayar ?? now());
-                        // If it was Lunas before and changed to DP Dibayar, you might need to adjust Pelunasan income
-                    } elseif ($termin->status_termin === 'Lunas') {
-                        // Ensure DP income is recorded if it wasn't before
-                        if ($termin->nilai_dp > 0 && !$termin->incomes()->where('type', 'dp')->exists()) {
-                             $termin->recordIncome('dp', $termin->nilai_dp, $termin->tanggal_dp_dibayar ?? now());
-                        }
-                        $termin->recordIncome('pelunasan', $termin->nilai_pelunasan, $termin->tanggal_pelunasan_dibayar ?? now());
-                    } else { // Belum Dibayar or Rejected
-                        // If status goes back to unpaid, remove incomes (if they exist)
-                        $termin->incomes()->delete(); // DANGER: this will delete all incomes for this termin!
-                                                     // Consider soft deleting or only deleting if status changes back
-                                                     // from DP Dibayar or Lunas to Belum Dibayar.
-                    }
-                }
-
-                // Always update invoice status and project status (cascading updates)
+                // Update status invoice otomatis (jika memang ingin invoice tetap update saat termin berubah)
                 if ($termin->invoice) {
-                    $termin->invoice->updateStatusFromTermins();
-                    if ($termin->invoice->proyek) {
-                        $termin->invoice->proyek->updateStatusFromInvoices();
+                    $invoice = $termin->invoice;
+                    $termins = $invoice->termins()->where('nilai_termin', '>', 0)->get();
+                    $total = $termins->count();
+                    $lunas = $termins->where('status_termin', 'Lunas')->count();
+                    $dpdibayar = $termins->where('status_termin', 'DP Dibayar')->count();
+                    $totalNilaiPelunasan = $termins->sum('nilai_pelunasan');
+                    $totalPaid = $termins->sum(function($t) {
+                        // Total uang yang benar-benar diterima (DP + pelunasan)
+                        return ($t->total_dp_paid ?? 0) + ($t->total_pelunasan_paid ?? 0);
+                    });
+
+                    if ($totalPaid >= $invoice->total_amount && $invoice->total_amount > 0) {
+                        // Sudah terima uang 100% dari seluruh termin
+                        $invoice->status = 'paid';
+                        $invoice->amount_paid = $invoice->total_amount;
+                    } else if ($dpdibayar > 0 || $lunas > 0) {
+                        // Ada termin sudah DP atau Lunas, tapi belum semua uang diterima
+                        $invoice->status = 'partially_paid';
+                        $invoice->amount_paid = $totalPaid;
+                    } else {
+                        $invoice->status = 'unpaid';
+                        $invoice->amount_paid = 0;
                     }
+                    $invoice->save();
+                    Log::info('[Termin] Update status invoice otomatis', [
+                        'invoice_id' => $invoice->id,
+                        'status' => $invoice->status,
+                        'amount_paid' => $invoice->amount_paid,
+                    ]);
                 }
             } catch (\Exception $e) {
                 Log::error('Error in Termin model updated: ' . $e->getMessage());
@@ -483,9 +533,13 @@ class Termin extends Model
                 'category_id' => null, // Assuming general expense or category might be handled by invoice
                 'amount' => $this->nilai_termin, // Total nilai termin as initial expense
                 'description' => "Pengeluaran Termin {$this->nama_termin}",
-                'transaction_date' => $this->tanggal_dp ?? now(), // Use tanggal_dp or current date
-                // Status expense akan Lunas jika termin DP Dibayar atau Lunas
-                'status' => in_array($this->status_termin, ['DP Dibayar', 'Lunas']) ? 'Lunas' : 'pending',
+                'transaction_date' => $this->tanggal_pelunasan_dibayar
+                    ?? $this->tanggal_dp_dibayar
+                    ?? $this->tanggal_pelunasan
+                    ?? $this->tanggal_dp
+                    ?? now(),
+                // Status expense hanya 'pending' atau 'Lunas'
+                'status' => ($this->status_termin === 'Lunas' || $this->status_termin === 'DP Dibayar') ? 'Lunas' : 'pending',
                 'payment_method_id' => $this->invoice->payment_method_id ?? null, // Get from invoice or default
                 'prepared_fund' => $this->nilai_termin, // Total value of termin as prepared fund
                 'source_type' => 'termin',
@@ -493,24 +547,57 @@ class Termin extends Model
                 'invoice_id' => $this->invoice_id
             ];
 
+            Log::info('[Termin] createExpense called', [
+                'termin_id' => $this->id,
+                'status_termin' => $this->status_termin,
+                'existing_expense_id' => $expense ? $expense->id : null,
+                'expense_status_to_set' => $expenseData['status'],
+                'expenseData' => $expenseData,
+            ]);
+
             if (!$expense) {
                 // Create new expense
                 $expense = Expense::create($expenseData);
                 $this->expense_id = $expense->id;
                 $this->saveQuietly(); // Save expense_id without re-triggering hooks
+                Log::info('[Termin] createExpense created new expense', [
+                    'termin_id' => $this->id,
+                    'expense_id' => $expense->id,
+                    'expense_status' => $expense->status,
+                ]);
             } else {
                 // Update existing expense
+                $oldStatus = $expense->status;
                 $expense->update($expenseData);
+                Log::info('[Termin] createExpense updated existing expense', [
+                    'termin_id' => $this->id,
+                    'expense_id' => $expense->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $expense->status,
+                ]);
+            }
+
+            // Extra error logging if status is not as expected
+            if (!in_array($expense->status, ['Lunas', 'pending'])) {
+                Log::error('[Termin] createExpense: Unexpected expense status after save', [
+                    'termin_id' => $this->id,
+                    'expense_id' => $expense->id,
+                    'expense_status' => $expense->status,
+                ]);
             }
 
             return $expense;
         });
     }
 
-    // Method untuk mencatat income saat pembayaran diterima
-    public function recordIncome($type, $amount, $tanggal)
+    // Method untuk mencatat income SETIAP pembayaran diterima (selalu buat baris baru, mendukung upload bukti & approval admin)
+    public function recordIncome($type, $amount, $tanggal, $keterangan = null, $buktiFile = null)
     {
-        return DB::transaction(function () use ($type, $amount, $tanggal) {
+        return DB::transaction(function () use ($type, $amount, $tanggal, $keterangan, $buktiFile) {
+            // Cegah pembayaran jika termin sudah lunas
+            if ($this->status_termin === 'Lunas') {
+                throw new \Exception('Termin sudah Lunas, tidak bisa menerima pembayaran baru.');
+            }
             // Helper to get default income category
             $getDefaultKategoriId = function() {
                 $kategori = \App\Models\Kategori::where('jenis', 'pemasukan')->orderBy('id')->first();
@@ -523,13 +610,23 @@ class Termin extends Model
                 return $pm ? $pm->id : null;
             };
 
-            $kategoriId = $this->invoice && $this->invoice->kategori_id
-                ? $this->invoice->kategori_id
+            // Pastikan invoice sudah di-load (eager load lebih baik di controller/service)
+            $invoice = $this->invoice ?? $this->invoice()->first();
+            $kategoriId = $invoice && $invoice->kategori_id
+                ? $invoice->kategori_id
                 : $getDefaultKategoriId();
 
-            $paymentMethodId = $this->invoice && $this->invoice->payment_method_id
-                ? $this->invoice->payment_method_id
+            $paymentMethodId = $invoice && $invoice->payment_method_id
+                ? $invoice->payment_method_id
                 : $getDefaultPaymentMethodId();
+
+            // Validasi amount tidak boleh melebihi sisa DP/pelunasan
+            if ($type === 'dp' && $amount > $this->remaining_dp) {
+                throw new \Exception('Jumlah DP melebihi sisa DP termin');
+            }
+            if ($type === 'pelunasan' && $amount > $this->remaining_pelunasan) {
+                throw new \Exception('Jumlah pelunasan melebihi sisa pelunasan termin');
+            }
 
             if (!$kategoriId || !$paymentMethodId) {
                 Log::error('[Termin] Gagal create income: kategori atau payment method tidak ditemukan', [
@@ -541,19 +638,41 @@ class Termin extends Model
                 throw new \Exception('Kategori pemasukan atau metode pembayaran tidak ditemukan');
             }
 
-            // Check if income of this type for this termin already exists
-            $existingIncome = \App\Models\Income::where('termin_id', $this->id)
-                ->where('type', $type)
-                ->where('status', 'Diterima') // Only consider received incomes
-                ->first();
+
+            // Status income dan approval: selalu pending setelah upload bukti
+            $incomeStatus = 'pending';
+            $incomeApproval = 'pending';
+            $buktiPath = null;
+
+            // Handle upload file bukti jika ada
+            if ($buktiFile instanceof \Illuminate\Http\UploadedFile) {
+                if ($buktiFile->getSize() > 2048 * 1024) {
+                    throw new \Exception('File size exceeds 2MB limit');
+                }
+                $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                if (!in_array($buktiFile->getMimeType(), $allowedTypes)) {
+                    throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
+                }
+                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $buktiFile->getClientOriginalName());
+                $path = 'uploads/bukti_pembayaran/' . $filename;
+                if (!Storage::exists('uploads/bukti_pembayaran')) {
+                    Storage::makeDirectory('uploads/bukti_pembayaran');
+                }
+                if (!$buktiFile->storeAs('uploads/bukti_pembayaran', $filename)) {
+                    throw new \Exception('Failed to store file');
+                }
+                $buktiPath = $path;
+            }
 
             $incomeData = [
                 'jumlah' => $amount,
-                'status' => 'Diterima',
+                'status' => $incomeStatus,
+                'status_approval' => $incomeApproval,
+                'bukti' => $buktiPath,
                 'type' => $type,
                 'termin_id' => $this->id,
                 'proyek_id' => $this->proyek_id,
-                'deskripsi' => "Pembayaran {$type} Termin {$this->nama_termin}",
+                'deskripsi' => $keterangan ?? "Pembayaran {$type} Termin {$this->nama_termin}",
                 'created_by' => auth()->id(),
                 'updated_by' => auth()->id(),
                 'invoice_id' => $this->invoice_id,
@@ -562,34 +681,140 @@ class Termin extends Model
                 'tanggal' => $tanggal
             ];
 
-            if (!$existingIncome) {
-                try {
-                    return \App\Models\Income::create($incomeData);
-                } catch (\Exception $e) {
-                    Log::error('[Termin] Gagal create income (recordIncome)', [
-                        'termin_id' => $this->id,
-                        'type' => $type,
-                        'error' => $e->getMessage(),
-                        'data' => $incomeData
-                    ]);
-                    throw $e;
+            try {
+                $income = \App\Models\Income::create($incomeData);
+                Log::info('[Termin] recordIncome: Income created', [
+                    'termin_id' => $this->id,
+                    'income_id' => $income->id,
+                    'type' => $type,
+                    'amount' => $amount,
+                    'tanggal' => $tanggal
+                ]);
+                return $income;
+            } catch (\Exception $e) {
+                Log::error('[Termin] Gagal create income (recordIncome)', [
+                    'termin_id' => $this->id,
+                    'type' => $type,
+                    'error' => $e->getMessage(),
+                    'data' => $incomeData
+                ]);
+                throw $e;
+            }
+        });
+    }
+
+    // Method untuk mencatat expense SETIAP pencairan dana termin (selalu buat baris baru, mendukung upload bukti & approval admin)
+    public function recordExpense($type, $amount, $tanggal, $keterangan = null, $buktiFile = null)
+    {
+        return DB::transaction(function () use ($type, $amount, $tanggal, $keterangan, $buktiFile) {
+            $expenseStatus = 'pending';
+            $expenseApproval = 'pending';
+            $buktiPath = null;
+
+            // Handle upload file bukti jika ada
+            if ($buktiFile instanceof \Illuminate\Http\UploadedFile) {
+                if ($buktiFile->getSize() > 2048 * 1024) {
+                    throw new \Exception('File size exceeds 2MB limit');
                 }
-            } else {
-                // If it exists, update it to ensure amount and date are current
-                try {
-                    $existingIncome->update($incomeData);
-                } catch (\Exception $e) {
-                    Log::error('[Termin] Gagal update income (recordIncome)', [
-                        'termin_id' => $this->id,
-                        'type' => $type,
-                        'error' => $e->getMessage(),
-                        'data' => $incomeData
-                    ]);
-                    throw $e;
+                $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                if (!in_array($buktiFile->getMimeType(), $allowedTypes)) {
+                    throw new \Exception('Invalid file type. Only JPG, PNG, and PDF files are allowed');
                 }
+                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $buktiFile->getClientOriginalName());
+                $path = 'uploads/bukti_pembayaran/' . $filename;
+                if (!Storage::exists('uploads/bukti_pembayaran')) {
+                    Storage::makeDirectory('uploads/bukti_pembayaran');
+                }
+                if (!$buktiFile->storeAs('uploads/bukti_pembayaran', $filename)) {
+                    throw new \Exception('Failed to store file');
+                }
+                $buktiPath = $path;
             }
 
-            return $existingIncome;
+            $expenseData = [
+                'user_id' => auth()->id() ?? $this->created_by,
+                'proyek_id' => $this->proyek_id,
+                'category_id' => null,
+                'service_category_id' => null,
+                'amount' => $amount,
+                'description' => $keterangan ?? "Pengeluaran {$type} Termin {$this->nama_termin}",
+                'transaction_date' => $tanggal,
+                'status' => $expenseStatus,
+                'status_approval' => $expenseApproval,
+                'bukti' => $buktiPath,
+                'payment_method_id' => $this->invoice ? $this->invoice->payment_method_id : null,
+                'prepared_fund' => $amount,
+                'source_type' => 'termin',
+                'source_id' => $this->id,
+                'invoice_id' => $this->invoice_id
+            ];
+            try {
+                $expense = \App\Models\Expense::create($expenseData);
+                Log::info('[Termin] recordExpense: Expense created', [
+                    'termin_id' => $this->id,
+                    'expense_id' => $expense->id,
+                    'type' => $type,
+                    'amount' => $amount,
+                    'tanggal' => $tanggal
+                ]);
+                return $expense;
+            } catch (\Exception $e) {
+                Log::error('[Termin] Gagal create expense (recordExpense)', [
+                    'termin_id' => $this->id,
+                    'type' => $type,
+                    'error' => $e->getMessage(),
+                    'data' => $expenseData
+                ]);
+                throw $e;
+            }
         });
+    }
+
+    // Method untuk approval admin pada income (setelah admin cek bukti)
+    public function approveIncome($incomeId)
+    {
+        $income = \App\Models\Income::findOrFail($incomeId);
+        if ($income->status_approval !== 'pending') {
+            throw new \Exception('Income sudah di-approve atau ditolak');
+        }
+        $income->status_approval = 'approved';
+        $income->approved_by = auth()->id(); // Catat siapa yang approve
+        $income->approved_at = now();        // Catat waktu approval
+        // Ubah status sesuai jenis pembayaran termin
+        if ($income->type === 'dp') {
+            $income->status = 'DP Dibayar';
+        } elseif ($income->type === 'pelunasan') {
+            $income->status = 'Lunas';
+        } else {
+            $income->status = 'Diterima';
+        }
+        $income->save();
+        // Setelah approval, update status termin dan sinkronisasi
+        $this->updateStatusFromPayments();
+        return $income;
+    }
+
+    // Method untuk approval admin pada expense (setelah admin cek bukti)
+    public function approveExpense($expenseId)
+    {
+        $expense = \App\Models\Expense::findOrFail($expenseId);
+        if ($expense->status_approval !== 'pending') {
+            throw new \Exception('Expense sudah di-approve atau ditolak');
+        }
+        $expense->status_approval = 'approved';
+        $expense->approved_by = auth()->id(); // Catat siapa yang approve
+        $expense->approved_at = now();        // Catat waktu approval
+        // Ubah status sesuai jenis pembayaran termin
+        if ($expense->type === 'dp') {
+            $expense->status = 'DP Dibayar';
+        } elseif ($expense->type === 'pelunasan') {
+            $expense->status = 'Lunas';
+        } else {
+            $expense->status = 'Lunas';
+        }
+        $expense->save();
+        // Setelah approval, update status termin dan sinkronisasi
+        $this->updateStatusFromPayments();
+        return $expense;
     }
 }

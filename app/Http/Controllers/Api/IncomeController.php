@@ -8,6 +8,7 @@ use App\Models\Income;
 use App\Models\PaymentMethod;
 use App\Models\Termin;
 use App\Models\Proyek;
+use App\Models\Expense;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -65,112 +66,64 @@ class IncomeController extends Controller
      */
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
+        // Validasi input
+        $validated = $request->validate([
+            'termin_id' => 'required|exists:termins,id',
+            'type' => 'required|in:dp,pelunasan',
+            'jumlah' => 'required|numeric|min:0',
+            'tanggal' => 'required|date',
+            'deskripsi' => 'nullable|string',
+            'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
+        ]);
+
         try {
-            DB::beginTransaction();
-            Log::info('Income store request: ' . json_encode($request->all()));
+            $termin = Termin::findOrFail($validated['termin_id']);
+            $proyek = $termin->proyek;
+            $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Hitung total income diterima untuk proyek ini
+            $totalIncome = \App\Models\Income::where('proyek_id', $proyek->id)
+                ->where('status', 'Diterima')
+                ->sum('jumlah');
+            // Hitung total pengeluaran
+            $existingExpenses = Expense::where('proyek_id', $proyek->id)->sum('amount');
+            // Sisa anggaran = budget - pengeluaran - income yang sudah diterima
+            $availableBudget = $currentBudget - $existingExpenses - $totalIncome;
 
-            $validated = $request->validate([
-                'kategori_id' => 'required|exists:kategoris,id',
-                'payment_method_id' => 'required|exists:payment_methods,id',
-                'proyek_id' => 'nullable|exists:proyeks,id',
-                'termin_id' => 'nullable|exists:termins,id',
-                'type' => 'required_if:termin_id,!=,null|in:dp,pelunasan',
-                'jumlah' => 'required|numeric|min:0',
-                'deskripsi' => 'nullable|string',
-                'tanggal' => 'required|date',
-                'status' => 'required|in:Pending,Diterima,Ditolak',
-                'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
-            ]);
-
-            // Validasi jumlah pembayaran jika terkait termin
-            if ($validated['termin_id']) {
-                $termin = Termin::findOrFail($validated['termin_id']);
-
-                if ($validated['type'] === 'dp') {
-                    // Validasi DP
-                    $totalDpPaid = $termin->total_dp_paid;
-                    if (($totalDpPaid + $validated['jumlah']) > $termin->nilai_dp) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Jumlah DP melebihi nilai DP yang ditentukan'
-                        ], 422);
-                    }
-                } else {
-                    // Validasi pelunasan
-                    $totalPelunasanPaid = $termin->total_pelunasan_paid;
-                    if (($totalPelunasanPaid + $validated['jumlah']) > $termin->nilai_pelunasan) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Jumlah pelunasan melebihi nilai pelunasan yang ditentukan'
-                        ], 422);
-                    }
+            if ($validated['jumlah'] > $availableBudget) {
+                if ($proyek->owner) {
+                    $proyek->owner->notify(new \App\Notifications\BudgetExceededNotification($proyek, $validated['jumlah']));
                 }
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anggaran proyek tidak mencukupi untuk jumlah income ini. Sisa anggaran: ' . number_format($availableBudget)
+                ], 422);
             }
 
-            // Validasi total income tidak melebihi budget proyek
-            if (!empty($validated['proyek_id']) && $validated['status'] === 'Diterima') {
-                $proyek = Proyek::find($validated['proyek_id']);
-                if ($proyek) {
-                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                    $totalIncome = Income::where('proyek_id', $proyek->id)
-                        ->where('status', 'Diterima')
-                        ->sum('jumlah');
-                    if (($totalIncome + $validated['jumlah']) > $currentBudget) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Total pemasukan melebihi anggaran proyek.'
-                        ], 422);
-                    }
-                }
-            }
-
-            $income = new Income();
-            $income->fill($validated);
-            $income->created_by = Auth::id();
-            $income->updated_by = Auth::id();
-
-            if ($request->hasFile('bukti_pembayaran')) {
-                $file = $request->file('bukti_pembayaran');
-                $filename = time() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
-                $income->bukti_pembayaran = $path;
-            }
-
-
-            $income->save();
-
-            // Update termin status if income is accepted
-            if ($income->status === 'Diterima' && $income->termin) {
-                $income->termin->updateStatusFromPayments();
-            }
-
-            // Update invoice status & amount_paid if income is accepted and linked to invoice
-            if ($income->status === 'Diterima' && $income->invoice_id) {
-                $invoice = $income->invoice;
-                if ($invoice) {
-                    $totalPaid = Income::where('invoice_id', $invoice->id)
-                        ->where('status', 'Diterima')
-                        ->sum('jumlah');
-                    $invoice->amount_paid = $totalPaid;
-                    $invoice->status = $invoice->determineStatus();
-                    $invoice->save();
-                }
-            }
-
-            DB::commit();
-
+            $buktiFile = $request->file('bukti_pembayaran') ?? null;
+            $income = $termin->recordIncome(
+                $validated['type'],
+                $validated['jumlah'],
+                $validated['tanggal'],
+                $validated['deskripsi'] ?? null,
+                $buktiFile
+            );
             return response()->json([
                 'success' => true,
                 'message' => 'Pemasukan berhasil ditambahkan',
                 'data' => $income->load(['kategori', 'paymentMethod', 'proyek', 'createdBy', 'updatedBy', 'termin'])
             ], 201);
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::error('Income store exception: ' . json_encode([
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]));
-
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menambahkan pemasukan',
@@ -207,6 +160,13 @@ class IncomeController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         try {
             DB::beginTransaction();
 
@@ -219,66 +179,71 @@ class IncomeController extends Controller
                 'jumlah' => 'required|numeric|min:0',
                 'deskripsi' => 'nullable|string',
                 'tanggal' => 'required|date',
-                'status' => 'required|in:Pending,Diterima,Ditolak',
-                'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
+                // status tidak boleh diupdate manual jika income terkait termin
+                'bukti' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
             ]);
 
+            // ====== Tambahan validasi anggaran & notifikasi ======
+            $proyekId = $validated['proyek_id'] ?? $income->proyek_id;
+            $proyek = Proyek::findOrFail($proyekId);
+            $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            // Hitung total income diterima selain income ini
+            $totalIncomeLain = Income::where('proyek_id', $proyek->id)
+                ->where('status', 'Diterima')
+                ->where('id', '!=', $income->id)
+                ->sum('jumlah');
+            $totalIncomeSetelahUpdate = $totalIncomeLain + $validated['jumlah'];
+            if ($totalIncomeSetelahUpdate > $currentBudget) {
+                if ($proyek->owner) {
+                    $proyek->owner->notify(new \App\Notifications\BudgetExceededNotification($proyek, $validated['jumlah']));
+                }
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Update ini akan menyebabkan total pemasukan melebihi anggaran proyek. Sisa anggaran: ' . number_format($currentBudget - $totalIncomeLain)
+                ], 422);
+            }
+            // ====== END Tambahan validasi anggaran & notifikasi ======
 
-            // Validasi total income tidak melebihi budget proyek saat update
-            if (!empty($validated['proyek_id']) && $validated['status'] === 'Diterima') {
-                $proyek = Proyek::find($validated['proyek_id']);
-                if ($proyek) {
-                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                    // Kurangi income lama jika status sebelumnya Diterima dan proyek sama
-                    $totalIncome = Income::where('proyek_id', $proyek->id)
-                        ->where('status', 'Diterima')
-                        ->where('id', '!=', $income->id)
-                        ->sum('jumlah');
-                    if (($totalIncome + $validated['jumlah']) > $currentBudget) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Total pemasukan melebihi anggaran proyek.'
-                        ], 422);
+            // Jika income terkait termin, status tidak boleh diubah manual
+            if ($income->termin_id) {
+                // Hanya update field non-status
+                $income->kategori_id = $validated['kategori_id'];
+                $income->payment_method_id = $validated['payment_method_id'];
+                $income->proyek_id = $validated['proyek_id'] ?? $income->proyek_id;
+                $income->jumlah = $validated['jumlah'];
+                $income->deskripsi = $validated['deskripsi'] ?? $income->deskripsi;
+                $income->tanggal = $validated['tanggal'];
+                $income->updated_by = Auth::id();
+
+                if ($request->hasFile('bukti')) {
+                    // Delete old file if exists
+                    if ($income->bukti) {
+                        Storage::disk('public')->delete($income->bukti);
                     }
+                    $file = $request->file('bukti');
+                    $filename = time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
+                    $income->bukti = $path;
+                    // Set status_approval dan status income ke pending setelah upload bukti
+                    $income->status_approval = 'pending';
+                    $income->status = 'Pending';
+                }
+            } else {
+                // Untuk income non-termin, status boleh diupdate manual
+                $income->fill($validated);
+                $income->updated_by = Auth::id();
+                if ($request->hasFile('bukti')) {
+                    if ($income->bukti) {
+                        Storage::disk('public')->delete($income->bukti);
+                    }
+                    $file = $request->file('bukti');
+                    $filename = time() . '_' . $file->getClientOriginalName();
+                    $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
+                    $income->bukti = $path;
                 }
             }
-
-            $income->fill($validated);
-            $income->updated_by = Auth::id();
-
-            if ($request->hasFile('bukti_pembayaran')) {
-                // Delete old file if exists
-                if ($income->bukti_pembayaran) {
-                    Storage::disk('public')->delete($income->bukti_pembayaran);
-                }
-
-                $file = $request->file('bukti_pembayaran');
-                $filename = time() . '_' . $file->getClientOriginalName();
-                $path = $file->storeAs('bukti_pembayaran', $filename, 'public');
-                $income->bukti_pembayaran = $path;
-            }
-
 
             $income->save();
-
-            // Update termin status if income is accepted
-            if ($income->status === 'Diterima' && $income->termin) {
-                $income->termin->updateStatusFromPayments();
-            }
-
-            // Update invoice status & amount_paid if income is accepted and linked to invoice
-            if ($income->status === 'Diterima' && $income->invoice_id) {
-                $invoice = $income->invoice;
-                if ($invoice) {
-                    $totalPaid = Income::where('invoice_id', $invoice->id)
-                        ->where('status', 'Diterima')
-                        ->sum('jumlah');
-                    $invoice->amount_paid = $totalPaid;
-                    $invoice->status = $invoice->determineStatus();
-                    $invoice->save();
-                }
-            }
-
             DB::commit();
 
             return response()->json([
@@ -306,6 +271,13 @@ class IncomeController extends Controller
      */
     public function destroy($id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         try {
             DB::beginTransaction();
 
@@ -522,6 +494,41 @@ class IncomeController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal mendapatkan total DP yang sudah dibayar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+        /**
+     * Admin approval for income (setujui pemasukan setelah cek bukti)
+     */
+    public function approve(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+            if (!in_array($user->role, ['admin', 'superadmin'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan approval.'
+                ], 403);
+            }
+            $income = \App\Models\Income::findOrFail($id);
+            if (!$income->termin_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Income tidak terkait termin.'
+                ], 422);
+            }
+            $termin = \App\Models\Termin::findOrFail($income->termin_id);
+            $approvedIncome = $termin->approveIncome($income->id);
+            return response()->json([
+                'success' => true,
+                'message' => 'Pemasukan berhasil di-approve',
+                'data' => $approvedIncome
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal approve pemasukan',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

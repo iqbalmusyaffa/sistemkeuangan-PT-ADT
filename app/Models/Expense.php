@@ -250,41 +250,53 @@ class Expense extends Model
 
     public static function createFromTermin($termin)
     {
-        // Add a check to prevent duplicate expenses for the same termin
-        $existingExpense = self::where('source_type', self::SOURCE_TERMIN)
-            ->where('source_id', $termin->id)
-            ->first();
+        return \DB::transaction(function () use ($termin) {
+            $existingExpense = self::where('source_type', self::SOURCE_TERMIN)
+                ->where('source_id', $termin->id)
+                ->first();
 
-        if ($existingExpense) {
-            Log::info("Expense already exists for Termin ID {$termin->id}. Returning existing expense.");
-            return $existingExpense;
-        }
+            $expenseStatus = ($termin->status_termin === 'Lunas' || $termin->status_termin === 'DP Dibayar')
+                ? self::STATUS_LUNAS
+                : self::STATUS_PENDING;
 
-        // Map Termin status to Expense status
-        $expenseStatus = self::STATUS_PENDING; // Default to pending
-        if ($termin->status_termin === 'Lunas') {
-            $expenseStatus = self::STATUS_LUNAS;
-        } else {
-            $expenseStatus = self::STATUS_PENDING;
-        }
+            $expenseData = [
+                'user_id' => auth()->id() ?? $termin->created_by,
+                'proyek_id' => $termin->proyek_id,
+                'category_id' => null,
+                'service_category_id' => null,
+                'amount' => $termin->nilai_termin,
+                'description' => "Pengeluaran Termin {$termin->nama_termin} untuk proyek " . optional($termin->proyek)->nama_proyek,
+                'transaction_date' => $termin->tanggal_pelunasan_dibayar
+                    ?? $termin->tanggal_dp_dibayar
+                    ?? $termin->tanggal_pelunasan
+                    ?? $termin->tanggal_dp
+                    ?? now(),
+                'status' => $expenseStatus,
+                'source_type' => self::SOURCE_TERMIN,
+                'source_id' => $termin->id,
+                'prepared_fund' => $termin->nilai_termin,
+                'payment_method_id' => $termin->invoice ? $termin->invoice->payment_method_id : null,
+                'invoice_id' => $termin->invoice_id
+            ];
 
-        $expense = self::create([
-            'user_id' => auth()->id(),
-            'proyek_id' => $termin->proyek_id,
-            'category_id' => $termin->category_id, // Ensure termin has a category_id if needed
-            'service_category_id' => null, // Assuming termin is not for service categories
-            'amount' => $termin->jumlah_pembayaran, // Using jumlah_pembayaran from termin
-            'description' => "Pembayaran termin {$termin->nama_termin} untuk proyek " . optional($termin->proyek)->nama_proyek,
-            'transaction_date' => $termin->tanggal_pembayaran,
-            'status' => $expenseStatus, // Use the mapped status
-            'source_type' => self::SOURCE_TERMIN,
-            'source_id' => $termin->id,
-            'prepared_fund' => $termin->jumlah_pembayaran,
-            'payment_method_id' => $termin->invoice ? $termin->invoice->payment_method_id : null, // Get payment method from invoice
-            'invoice_id' => $termin->invoice_id
-        ]);
+            if ($existingExpense) {
+                Log::info("Expense already exists for Termin ID {$termin->id}. Updating existing expense.");
+                $existingExpense->update($expenseData);
+                $expense = $existingExpense;
+            } else {
+                $expense = self::create($expenseData);
+            }
 
-        return $expense; // IMPORTANT: Return the created expense instance
+            // Otomatis update status termin & invoice setelah expense dibuat/diupdate
+            if (method_exists($termin, 'syncStatus')) {
+                $termin->syncStatus();
+            }
+            if ($termin->invoice && method_exists($termin->invoice, 'syncStatus')) {
+                $termin->invoice->syncStatus();
+            }
+
+            return $expense;
+        });
     }
 
     public function getSourceInstanceAttribute()

@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Http\Controllers\Api;
-
 use App\Http\Controllers\Controller;
 use App\Models\Termin;
 use App\Models\Proyek;
@@ -17,6 +15,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Http\Resources\TerminResource;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule; // Import Rule for validation
+use Illuminate\Support\Facades\Auth;
 
 class TerminController extends Controller
 {
@@ -82,6 +81,13 @@ class TerminController extends Controller
     // Simpan termin baru dengan validasi dan cek anggaran
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         DB::beginTransaction();
         try {
             Log::info('Creating new termin:', $request->all());
@@ -94,12 +100,13 @@ class TerminController extends Controller
                 'termin_ke' => 'nullable|integer|min:1',
                 'nilai_termin' => 'required|numeric|min:0',
                 'persentase_dp' => 'required|numeric|min:0|max:100',
-                'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
                 'tanggal_dp' => 'nullable|date',
                 'tanggal_pelunasan' => 'nullable|date|after_or_equal:tanggal_dp',
                 'keterangan' => 'nullable|string',
                 'bukti_pembayaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048'
             ]);
+            // Abaikan input status_termin dan status_approval dari request, selalu set default
+            unset($validated['status_termin'], $validated['status_approval']);
 
             // Tambahkan validasi untuk memastikan termin_ke tidak duplikat
             // Exclude current termin if editing
@@ -162,6 +169,14 @@ class TerminController extends Controller
             $availableBudget = $currentProjectBudget - $existingProjectExpenses;
 
             if ($availableBudget < $validated['nilai_termin']) {
+                // Kirim notifikasi ke owner proyek jika ada
+                if (method_exists($proyek, 'owner') && $proyek->owner) {
+                    try {
+                        $proyek->owner->notify(new \App\Notifications\BudgetExceededNotification($proyek, $validated['nilai_termin']));
+                    } catch (\Throwable $e) {
+                        \Log::warning('Gagal mengirim notifikasi budget exceeded: ' . $e->getMessage());
+                    }
+                }
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Anggaran proyek tidak mencukupi untuk nilai termin ini. Sisa anggaran: ' . number_format($availableBudget)
@@ -186,9 +201,11 @@ class TerminController extends Controller
                 'nilai_pelunasan' => $nilai_pelunasan,
                 'tanggal_dp' => $validated['tanggal_dp'] ?? null,
                 'tanggal_pelunasan' => $validated['tanggal_pelunasan'] ?? null,
-                'status_termin' => $validated['status_termin'],
+                // Status dan approval tidak bisa diisi manual, selalu default
+                'status_termin' => 'Belum Dibayar',
+                'status_approval' => 'Pending',
                 'keterangan' => $validated['keterangan'] ?? null,
-                'dibayar_oleh' => $validated['status_termin'] !== 'Belum Dibayar' ? auth()->id() : null,
+                'dibayar_oleh' => null,
                 'bukti_pembayaran' => null, // Will be set after file upload
                 'tanggal_pelunasan_dibayar' => null
             ];
@@ -269,6 +286,19 @@ class TerminController extends Controller
     // Update termin, dengan validasi dan cek batas anggaran
     public function update(Request $request, Termin $termin)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         DB::beginTransaction();
         try {
             $validated = $request->validate([
@@ -291,11 +321,12 @@ class TerminController extends Controller
                 'persentase_dp' => 'required|numeric|min:0|max:100',
                 'tanggal_dp' => 'nullable|date',
                 'tanggal_pelunasan' => 'nullable|date|after_or_equal:tanggal_dp', // deadline/jatuh tempo
-                'status_termin' => 'required|in:Belum Dibayar,DP Dibayar,Lunas',
                 'keterangan' => 'nullable|string',
                 'bukti_pembayaran' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
                 'dibayar_oleh' => 'nullable|exists:users,id'
             ]);
+            // Abaikan input status_termin dan status_approval dari request pada update
+            unset($validated['status_termin'], $validated['status_approval']);
 
             // Validate that the invoice belongs to the selected project
             $invoice = Invoice::where('id', $validated['invoice_id'])
@@ -336,6 +367,7 @@ class TerminController extends Controller
             $nilai_pelunasan = round($validated['nilai_termin'] - $nilai_dp, 2);
 
             // Handle file bukti pembayaran saat update
+            $uploadingBukti = false;
             if ($request->hasFile('bukti_pembayaran')) {
                 $file = $request->file('bukti_pembayaran');
                 $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
@@ -349,6 +381,7 @@ class TerminController extends Controller
                         Storage::delete($termin->bukti_pembayaran);
                     }
                     $validated['bukti_pembayaran'] = $path;
+                    $uploadingBukti = true;
                 } else {
                     throw new \Exception('Failed to store bukti_pembayaran file');
                 }
@@ -368,15 +401,53 @@ class TerminController extends Controller
             // Set the isUpdatingStatus flag to prevent recursion in model hooks
             $termin->isUpdatingStatus = true;
 
-            $termin->update(array_merge($validated, [
+            // PATCH: Cek perubahan nilai termin/barang/material pada termin yang sudah Lunas/Approved
+            $revertApproval = false;
+            $old_nilai_termin = $termin->nilai_termin;
+            $old_persentase_dp = $termin->persentase_dp;
+            $old_nilai_dp = $termin->nilai_dp;
+            $old_nilai_pelunasan = $termin->nilai_pelunasan;
+            $old_status_termin = $termin->status_termin;
+            $old_status_approval = $termin->status_approval;
+
+            // Deteksi perubahan nilai utama
+            $isNilaiChanged = (
+                $validated['nilai_termin'] != $old_nilai_termin ||
+                $validated['persentase_dp'] != $old_persentase_dp ||
+                $nilai_dp != $old_nilai_dp ||
+                $nilai_pelunasan != $old_nilai_pelunasan
+            );
+
+            if ($isNilaiChanged && (strtolower($old_status_termin) === 'lunas' || strtolower($old_status_approval) === 'approved')) {
+                // Otomatis revert status approval dan status termin
+                $revertApproval = true;
+            }
+
+            // Status dan approval tidak bisa diubah manual lewat update
+            $updateData = array_merge($validated, [
                 'nilai_dp' => $nilai_dp,
                 'nilai_pelunasan' => $nilai_pelunasan,
-                'dibayar_oleh' => $validated['status_termin'] !== 'Belum Dibayar' ? auth()->id() : null,
-                'tanggal_dp_dibayar' => $validated['tanggal_dp_dibayar'] ?? ($termin->tanggal_dp_dibayar ?: null), // Keep existing or set
-                'tanggal_pelunasan_dibayar' => $validated['tanggal_pelunasan_dibayar'] ?? ($termin->tanggal_pelunasan_dibayar ?: null), // Keep existing or set
-            ]));
+            ]);
 
-            // Reset the flag after saving
+            // Jika upload bukti, status_approval harus Pending dan status_termin Belum Dibayar
+            if ($uploadingBukti) {
+                $updateData['status_approval'] = 'Pending';
+                $updateData['status_termin'] = 'Belum Dibayar';
+            }
+
+            // PATCH: Jika revertApproval, set status_approval dan status_termin ke default, reset tanggal dibayar
+            if ($revertApproval) {
+                $updateData['status_approval'] = 'Pending';
+                $updateData['status_termin'] = 'Belum Dibayar';
+                $updateData['tanggal_dp_dibayar'] = null;
+                $updateData['tanggal_pelunasan_dibayar'] = null;
+            } else {
+                // Jangan izinkan update manual tanggal_dp_dibayar/tanggal_pelunasan_dibayar
+                unset($updateData['tanggal_dp_dibayar']);
+                unset($updateData['tanggal_pelunasan_dibayar']);
+            }
+
+            $termin->update($updateData);
             $termin->isUpdatingStatus = false;
 
             // Update invoice status (this will trigger cascading updates to project via Invoice observer)
@@ -385,9 +456,13 @@ class TerminController extends Controller
             }
 
             DB::commit();
+            $msg = 'Termin berhasil diperbarui';
+            if ($revertApproval) {
+                $msg .= ' (Status approval dan termin di-revert karena ada perubahan nilai pada termin yang sudah lunas/approved)';
+            }
             return response()->json([
                 'status' => 'success',
-                'message' => 'Termin berhasil diperbarui',
+                'message' => $msg,
                 'data' => new TerminResource($termin->load(['proyek', 'invoice']))
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -415,6 +490,13 @@ class TerminController extends Controller
     // Hapus termin, update status invoice
     public function destroy(Termin $termin)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         DB::beginTransaction();
         try {
             $invoice = $termin->invoice;
@@ -558,20 +640,17 @@ class TerminController extends Controller
                 $updateData['tanggal_pelunasan_dibayar'] = null;
             }
 
-            // Set the isUpdatingStatus flag to prevent recursion in model hooks
-            $termin->isUpdatingStatus = true;
 
-            // Fill and save
+            // Fill and save (allow model hooks to handle status sync)
             $termin->fill($updateData);
             $termin->save();
-
-            // Reset the flag after saving
-            $termin->isUpdatingStatus = false;
 
             // Update associated records (expense, income, invoice, project) after the termin has been saved
             // These calls are now handled in the model's `updated` hook for consistency.
             // However, if you explicitly want to call them here, ensure they are idempotent.
-
+  // Set status berdasarkan pembayaran
+        // Logic otomatis hanya dipanggil dalam konteks pembayaran, bukan update manual
+        // $termin->updateStatusFromPayments();
             DB::commit();
             $response = [
                 'message' => empty($warnings) ? 'Status termin berhasil diperbarui' : 'Status termin berhasil diperbarui dengan peringatan validasi',
@@ -725,13 +804,89 @@ class TerminController extends Controller
     // Tambahkan di dalam class TerminController
     public function datatables(Request $request)
     {
-        $query = Termin::with(['proyek', 'invoice']);
+        $query = Termin::with(['proyek', 'invoice', 'expense', 'incomes']);
         if ($request->has('proyek_id')) {
             $query->where('proyek_id', $request->proyek_id);
         }
         if ($request->has('invoice_id')) {
             $query->where('invoice_id', $request->invoice_id);
         }
-        return \Yajra\DataTables\Facades\DataTables::of($query)->toJson();
+        return \Yajra\DataTables\Facades\DataTables::of($query)
+            ->addColumn('invoice_status', function ($termin) {
+                return $termin->invoice ? $termin->invoice->status : null;
+            })
+            ->addColumn('expense_status', function ($termin) {
+                return $termin->expense ? $termin->expense->status : null;
+            })
+            ->addColumn('income_status', function ($termin) {
+                return $termin->incomes->isNotEmpty() ? $termin->incomes->pluck('status')->unique()->join(', ') : null;
+            })
+            ->toJson();
+    }
+
+    public function calculateTerminValues(Request $request)
+    {
+        $validated = $request->validate([
+            'nilai_termin' => 'required|numeric|min:0',
+            'persentase_dp' => 'required|numeric|min:0|max:100',
+            'input_manual_dp' => 'required|boolean',
+            'input_user_dp' => 'nullable|numeric|min:0',
+            'total_dp_terbayar' => 'required|numeric|min:0',
+            'total_pelunasan_terbayar' => 'required|numeric|min:0',
+        ]);
+
+        $result = Termin::calculateTerminValues(
+            $validated['nilai_termin'],
+            $validated['persentase_dp'],
+            $validated['input_manual_dp'],
+            $validated['input_user_dp'],
+            $validated['total_dp_terbayar'],
+            $validated['total_pelunasan_terbayar']
+        );
+
+        return response()->json($result);
+    }
+        // ENDPOINT: Approval admin untuk income
+    public function approveIncome(Request $request, $terminId, $incomeId)
+    {
+        $user = auth()->user();
+        if (!$user || !in_array($user->role, ['admin', 'superadmin', 'keuangan'])) {
+            return response()->json(['message' => 'Akses ditolak. Hanya admin/keuangan yang dapat approve.'], 403);
+        }
+        try {
+            $termin = \App\Models\Termin::findOrFail($terminId);
+            $income = $termin->approveIncome($incomeId);
+            return response()->json([
+                'message' => 'Income berhasil di-approve',
+                'data' => $income
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal approve income',
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    // ENDPOINT: Approval admin untuk expense
+    public function approveExpense(Request $request, $terminId, $expenseId)
+    {
+        $user = auth()->user();
+        if (!$user || !in_array($user->role, ['admin', 'superadmin', 'keuangan'])) {
+            return response()->json(['message' => 'Akses ditolak. Hanya admin/keuangan yang dapat approve.'], 403);
+        }
+        try {
+            $termin = \App\Models\Termin::findOrFail($terminId);
+            $expense = $termin->approveExpense($expenseId);
+            return response()->json([
+                'message' => 'Expense berhasil di-approve',
+                'data' => $expense
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal approve expense',
+                'error' => $e->getMessage()
+            ], 422);
+        }
     }
 }
