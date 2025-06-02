@@ -66,7 +66,10 @@ class Proyek extends Model
     {
         return $this->hasMany(Invoice::class);
     }
-
+public function incomes()
+{
+    return $this->hasMany(\App\Models\Income::class, 'proyek_id');
+}
     // ===========================
     // Accessors
     // ===========================

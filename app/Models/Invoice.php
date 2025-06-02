@@ -118,35 +118,68 @@ class Invoice extends Model
 
     public function updateStatusFromTermins(): void
     {
+        Log::info('updateStatusFromTermins CALLED', ['invoice_id' => $this->id]);
         try {
             $termins = $this->termins()->get();
+            $oldStatus = $this->status;
+            $partialStatuses = ['DP Dibayar', 'Sebagian Dibayar'];
 
             if ($termins->isEmpty()) {
-                $this->status = self::STATUS_UNPAID;
+                $newStatus = self::STATUS_UNPAID;
             } else {
                 $allLunas = $termins->every(fn($t) => $t->status_termin === 'Lunas');
                 $allBelumDibayar = $termins->every(fn($t) => $t->status_termin === 'Belum Dibayar');
-                // Check if any termin is 'DP Dibayar' or other partial payment statuses
-                $hasPartialPayment = $termins->contains(fn($t) => $t->status_termin === 'DP Dibayar' || $t->status_termin === 'Sebagian Dibayar');
-
+                $hasPartialPayment = $termins->contains(fn($t) => in_array($t->status_termin, $partialStatuses));
 
                 if ($allLunas) {
-                    $this->status = self::STATUS_PAID;
+                    $newStatus = self::STATUS_PAID;
                 } elseif ($allBelumDibayar) {
-                    $this->status = self::STATUS_UNPAID;
+                    $newStatus = self::STATUS_UNPAID;
                 } elseif ($hasPartialPayment) {
-                   $this->status = self::STATUS_PARTIALLY_PAID;
+                    $newStatus = self::STATUS_PARTIALLY_PAID;
                 } else {
-                    // Fallback for mixed statuses, or other unhandled partial cases
-                    $this->status = self::STATUS_PARTIALLY_PAID;
+                    $newStatus = self::STATUS_PARTIALLY_PAID;
                 }
             }
 
-            $this->save();
+            // Guard: Only allow valid status values
+            $allowedStatuses = [
+                self::STATUS_UNPAID,
+                self::STATUS_PARTIALLY_PAID,
+                self::STATUS_PAID,
+                self::STATUS_CANCELLED
+            ];
+            if (!in_array($newStatus, $allowedStatuses, true)) {
+                Log::error('Attempted to set invalid invoice status', [
+                    'invoice_id' => $this->id,
+                    'invalid_status' => $newStatus
+                ]);
+                $newStatus = self::STATUS_UNPAID;
+            }
+
+            if ($oldStatus !== $newStatus) {
+                $this->status = $newStatus;
+                $this->save();
+                Log::info("Invoice status updated fromTermins", ['invoice_id' => $this->id, 'old' => $oldStatus, 'new' => $newStatus]);
+            }
+
+            // --- Sinkronisasi status expense & purchase material expense ---
+            $newExpenseStatus = $this->status === self::STATUS_PAID ? 'Lunas' : 'pending';
+            foreach ($this->expenses()->get() as $expense) {
+                if ($expense->status !== $newExpenseStatus) {
+                    $expense->update(['status' => $newExpenseStatus]);
+                }
+            }
+            foreach ($this->purchaseMaterials()->get() as $pm) {
+                if ($pm->expense && $pm->expense->status !== $newExpenseStatus) {
+                    $pm->expense->update(['status' => $newExpenseStatus]);
+                }
+            }
 
             if ($this->proyek) {
                 $this->proyek->updateStatusFromInvoices();
             }
+            Log::info('updateStatusFromTermins FINISHED', ['invoice_id' => $this->id, 'status' => $this->status]);
         } catch (\Exception $e) {
             Log::error('Error in updateStatusFromTermins: ' . $e->getMessage(), [
                 'invoice_id' => $this->id,

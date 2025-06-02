@@ -3,67 +3,50 @@
       <CCol>
         <CCard>
           <CCardHeader>
-            <CIcon icon="cil-dollar" class="me-2" />
+            <font-awesome-icon icon="dollar-sign" class="me-2" />
             Pemasukan
           </CCardHeader>
-          <CCardBody>
-            <!-- Filter Section -->
+           <CCardBody>
+            <div v-if="error" class="alert alert-danger">{{ error }}</div>
+            <div v-if="loading" class="alert alert-info">Loading...</div>
+
+            <!-- Project Filter -->
             <CRow class="mb-3">
-              <CCol md="3">
+              <CCol md="6">
+                <CFormLabel for="project_filter">Pilih Proyek</CFormLabel>
                 <CFormSelect
                   v-model="selectedProyekId"
-                  :options="[
-                    { label: 'Semua Proyek', value: '' },
-                    ...proyeks.map(p => ({ label: p.nama_proyek, value: p.id }))
-                  ]"
+                  id="project_filter"
                   @change="handleProyekChange"
-                />
+                >
+                  <option value="">-- Pilih Proyek --</option>
+                  <option
+                    v-for="proyek in proyeks"
+                    :key="proyek.id"
+                    :value="proyek.id"
+                  >
+                    {{ proyek.nama_proyek }}
+                  </option>
+                </CFormSelect>
               </CCol>
-              <CCol md="3">
-                <CFormSelect
-                  v-model="selectedStatus"
-                  :options="[
-                    { label: 'Semua Status', value: '' },
-                    { label: 'Pending', value: 'Pending' },
-                    { label: 'Diterima', value: 'Diterima' },
-                    { label: 'Ditolak', value: 'Ditolak' }
-                  ]"
-                  @change="handleStatusChange"
-                />
-              </CCol>
-              <CCol md="3">
-                <CFormSelect
-                  v-model="selectedType"
-                  :options="[
-                    { label: 'Semua Tipe', value: '' },
-                    { label: 'DP', value: 'dp' },
-                    { label: 'Pelunasan', value: 'pelunasan' }
-                  ]"
-                  @change="handleTypeChange"
-                />
-              </CCol>
-              <CCol md="3">
-                <CButton color="primary" @click="fetchData">
-                  <CIcon icon="cil-sync" /> Refresh
+              <CCol md="6" class="text-end">
+                <CButton
+                  color="secondary"
+                  v-if="selectedProyekId"
+                  @click="() => { selectedProyekId.value = ''; fetchData(); }"
+                  class="mt-2"
+                >
+                  Ganti Proyek
                 </CButton>
               </CCol>
             </CRow>
 
-            <!-- Error Alert -->
-            <CAlert v-if="error" color="danger" dismissible>
-              {{ error }}
-            </CAlert>
-
-            <!-- Data Table -->
-            <div class="w-100">
-              <table ref="dataTableRef" class="display nowrap"></table>
+            <div v-if="!selectedProyekId" class="alert alert-info">
+              Silakan pilih proyek terlebih dahulu untuk melihat data pemasukan
             </div>
 
-            <!-- Add Button -->
-            <div class="mt-3">
-              <CButton color="primary" @click="openModal('tambah')">
-                <CIcon icon="cil-plus" /> Tambah Pemasukan
-              </CButton>
+            <div v-if="selectedProyekId" class="w-100">
+              <table ref="dataTableRef" class="display nowrap"></table>
             </div>
           </CCardBody>
         </CCard>
@@ -171,11 +154,20 @@
   import axios from 'axios'
   import $ from 'jquery'
   import Swal from 'sweetalert2'
+  import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
+  import { faDollarSign } from '@fortawesome/free-solid-svg-icons'
+  import { library } from '@fortawesome/fontawesome-svg-core'
   import 'datatables.net-dt/css/dataTables.dataTables.min.css'
   import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css'
   import 'datatables.net-responsive-dt'
 
+  library.add(faDollarSign)
+
   const router = useRouter()
+
+  // Register FontAwesomeIcon locally (for SFC usage)
+  // (If you register globally in main.js, you can remove this)
+  // export default { components: { FontAwesomeIcon } }
   const dataTableRef = ref(null)
 
   const categories = ref([])
@@ -227,7 +219,7 @@
         axios.get('/api/payment-methods', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/proyeks', { headers: { Authorization: `Bearer ${token}` } }),
       ])
-      
+
       console.log('categoryRes.data', categoryRes.data)
       categories.value = (categoryRes.data.data || categoryRes.data).filter(cat => cat.jenis === 'pemasukan')
       paymentMethods.value = paymentMethodRes.data.data || paymentMethodRes.data
@@ -326,7 +318,7 @@
     try {
       const token = sessionStorage.getItem('token')
       const formData = new FormData()
-      
+
       formData.append('kategori_id', selectedKategoriId.value)
       formData.append('payment_method_id', selectedPaymentMethodId.value)
       formData.append('proyek_id', selectedProyekId.value)
@@ -334,14 +326,14 @@
       formData.append('deskripsi', deskripsi.value)
       formData.append('tanggal', tanggal.value)
       formData.append('status', status.value)
-      
+
       if (buktiPembayaran.value) {
         formData.append('bukti_pembayaran', buktiPembayaran.value)
       }
 
       if (modalMode.value === 'edit') {
         await axios.put(`/api/incomes/${editingId.value}`, formData, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
@@ -349,7 +341,7 @@
         Swal.fire('Berhasil', 'Data diperbarui', 'success')
       } else {
         await axios.post('/api/incomes', formData, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }

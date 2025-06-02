@@ -20,7 +20,7 @@ return new class extends Migration
         $table->decimal('amount', 15, 2);
         $table->text('description')->nullable();
         $table->date('transaction_date')->index();
-        $table->enum('status', ['pending', 'approved', 'rejected', 'Lunas'])->default('pending')->index();
+        $table->enum('status', ['pending', 'DP Dibayar', 'Belum Dibayar', 'Lunas','approved', 'rejected'])->default('pending')->index();
         $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete(); // instead of string
         $table->decimal('prepared_fund', 15, 2)->default(0);
         $table->string('kode_transaksi')->nullable();
@@ -41,10 +41,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('expenses');
-        Schema::table('expenses', function (Blueprint $table) {
-            $table->dropForeign(['service_category_id']);
-            $table->dropForeign(['purchase_material_id']);
-            $table->dropColumn('purchase_material_id');
-        });
+        // Removed dropForeign and dropColumn for purchase_material_id because it does not exist in the up() migration
+        // If you add new foreign keys/columns in the future, handle their removal here.
     }
 };

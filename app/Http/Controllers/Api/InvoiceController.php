@@ -13,7 +13,8 @@ use App\Http\Resources\InvoiceResource;
 use App\Models\Proyek;
 use App\Models\Income;
 use App\Models\PaymentMethod; // Added PaymentMethod import
-
+use App\Notifications\BudgetExceededNotification;
+use Illuminate\Support\Facades\Auth;
 class InvoiceController extends Controller
 {
     // Menampilkan daftar invoice
@@ -56,6 +57,13 @@ class InvoiceController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         try {
             \Log::info('Incoming request data for creating invoice:', $request->all());
 
@@ -104,6 +112,8 @@ class InvoiceController extends Controller
             $lastInvoice = Invoice::latest()->first();
             $invoiceNumber = 'INV-' . date('Ymd') . '-' . str_pad(($lastInvoice ? $lastInvoice->id + 1 : 1), 4, '0', STR_PAD_LEFT);
 
+            // Abaikan input status dari request, selalu set default 'unpaid' di backend
+            unset($validated['status']);
             $invoice = Invoice::create([
                 'proyek_id' => $validated['proyek_id'],
                 'payment_method_id' => $validated['payment_method_id'],
@@ -114,7 +124,7 @@ class InvoiceController extends Controller
                 'use_pph_non_final' => $validated['use_pph_non_final'] ?? false,
                 'use_pph_final' => $validated['use_pph_final'] ?? false,
                 'notes' => $validated['notes'] ?? null,
-                'status' => 'unpaid',
+                'status' => 'unpaid', // Tidak bisa diisi manual
                 'amount_paid' => 0,
                 'profit_margin_percentage' => 30.00, // Default profit margin
             ]);
@@ -219,10 +229,17 @@ class InvoiceController extends Controller
     // Mengupdate invoice (status dan pembayaran)
     public function update(Request $request, $id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         $validator = Validator::make($request->all(), [
-            'status' => 'required|in:unpaid,partially_paid,paid,cancelled',
+            // 'status' diabaikan, status invoice tidak boleh diubah manual
             'amount_paid' => 'required|numeric|min:0',
-            'payment_method_id' => 'nullable|exists:payment_methods,id', // Make payment_method_id nullable for updates if it's not always provided
+            'payment_method_id' => 'nullable|exists:payment_methods,id',
         ]);
 
         if ($validator->fails()) {
@@ -233,13 +250,19 @@ class InvoiceController extends Controller
             DB::beginTransaction();
             $invoice = Invoice::findOrFail($id);
 
-            // Update invoice payment and status
+            // Update only allowed fields
             $invoice->amount_paid = $request->amount_paid;
-            $invoice->status = $invoice->determineStatus(); // Re-determine status based on new amount paid
             if ($request->has('payment_method_id')) {
                 $invoice->payment_method_id = $request->payment_method_id;
             }
-            $invoice->save();
+            // Status invoice harus otomatis, tidak boleh diubah manual
+            // Panggil updateStatusFromTermins atau determineStatus sesuai logic model
+            if (method_exists($invoice, 'updateStatusFromTermins')) {
+                $invoice->updateStatusFromTermins();
+            } else {
+                $invoice->status = $invoice->determineStatus();
+                $invoice->save();
+            }
 
             // After updating the payment, recalculate all financial values
             $invoice->calculateAllFinancialValues();
@@ -254,13 +277,12 @@ class InvoiceController extends Controller
                 $newExpenseStatus = Expense::STATUS_PENDING;
             }
 
-
             // Update expenses linked via purchase materials
             $invoice->purchaseMaterials->each(function ($purchaseMaterial) use ($newExpenseStatus, $invoice) {
                 if ($purchaseMaterial->expense) {
                     $purchaseMaterial->expense->update([
                         'status' => $newExpenseStatus,
-                        'payment_method_id' => $invoice->payment_method_id // Update expense payment_method_id from invoice
+                        'payment_method_id' => $invoice->payment_method_id
                     ]);
                 }
             });
@@ -269,13 +291,13 @@ class InvoiceController extends Controller
             $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $invoice) {
                 $expense->update([
                     'status' => $newExpenseStatus,
-                    'payment_method_id' => $invoice->payment_method_id // Update expense payment_method_id from invoice
+                    'payment_method_id' => $invoice->payment_method_id
                 ]);
             });
 
             DB::commit();
 
-            return new InvoiceResource($invoice->fresh()); // Return fresh instance to include updated relationships
+            return new InvoiceResource($invoice->fresh());
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Error updating invoice: ' . $e->getMessage(), [
@@ -292,6 +314,13 @@ class InvoiceController extends Controller
     // Menghapus invoice
     public function destroy($id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         $invoice = Invoice::findOrFail($id);
 
         if ($invoice->status !== 'unpaid') {
@@ -326,7 +355,8 @@ class InvoiceController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0',
-            'payment_method_id' => 'required|exists:payment_methods,id', // payment_method_id is required for a new payment record
+            'payment_method_id' => 'required|exists:payment_methods,id',
+            'bukti' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048', // bukti wajib, max 2MB
         ]);
 
         if ($validator->fails()) {
@@ -341,53 +371,34 @@ class InvoiceController extends Controller
             DB::beginTransaction();
             $invoice = Invoice::findOrFail($id);
 
-            // Add the payment amount to the existing amount_paid
-            $newAmountPaid = $invoice->amount_paid + $request->amount;
-            $invoice->updateAmountPaid($newAmountPaid); // This method also updates status and saves
-
-            // After updating the payment, recalculate all financial values
-            $invoice->calculateAllFinancialValues();
-
-            // Update statuses of associated expenses based on the new invoice status
-            $newExpenseStatus = Expense::STATUS_PENDING;
-            if ($invoice->status === Invoice::STATUS_PAID) {
-                $newExpenseStatus = Expense::STATUS_LUNAS;
-            } else if ($invoice->status === Invoice::STATUS_PARTIALLY_PAID) {
-                $newExpenseStatus = Expense::STATUS_PENDING;
-            } else if ($invoice->status === Invoice::STATUS_UNPAID) {
-                $newExpenseStatus = Expense::STATUS_PENDING;
+            // Cegah pembayaran jika invoice sudah lunas
+            if ($invoice->status === Invoice::STATUS_PAID || $invoice->status === 'paid' || $invoice->status === 'Lunas') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invoice sudah Lunas, tidak bisa menerima pembayaran baru.'
+                ], 400);
             }
 
-            // Update expenses linked via purchase materials
-            $invoice->purchaseMaterials->each(function ($purchaseMaterial) use ($newExpenseStatus, $request) {
-                if ($purchaseMaterial->expense) {
-                    $purchaseMaterial->expense->update([
-                        'status' => $newExpenseStatus,
-                        'payment_method_id' => $request->payment_method_id // Update expense payment_method_id from payment record
-                    ]);
-                }
-            });
+            // Simpan file bukti pembayaran
+            $buktiPath = null;
+            if ($request->hasFile('bukti')) {
+                $buktiPath = $request->file('bukti')->store('bukti_pembayaran', 'public');
+            }
 
-            // Update direct expenses linked to this invoice
-            $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $request) {
-                $expense->update([
-                    'status' => $newExpenseStatus,
-                    'payment_method_id' => $request->payment_method_id // Update expense payment_method_id from payment record
-                ]);
-            });
-
-
-            // Create an income record for this payment
+            // Income dicatat tanpa termin_id, status pending, status_approval pending
             $income = Income::create([
-                'user_id' => auth()->id(), // Assuming authenticated user
+                'user_id' => auth()->id(),
                 'proyek_id' => $invoice->proyek_id,
                 'invoice_id' => $invoice->id,
+                'termin_id' => null,
                 'jumlah' => $request->amount,
                 'tanggal_diterima' => now()->toDateString(),
                 'metode_pembayaran_id' => $request->payment_method_id,
-                'deskripsi' => "Pembayaran invoice #{$invoice->invoice_number}",
-                'status' => 'Diterima',
-                'type' => 'invoice_payment', // Custom type for invoice payments
+                'deskripsi' => "Pembayaran invoice #{$invoice->invoice_number} (tanpa termin)",
+                'status' => Income::STATUS_PENDING,
+                'status_approval' => Income::APPROVAL_PENDING,
+                'bukti' => $buktiPath,
+                'type' => 'invoice_payment',
             ]);
 
             DB::commit();
@@ -407,7 +418,7 @@ class InvoiceController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Payment recorded successfully',
+                'message' => 'Pembayaran berhasil dicatat, menunggu approval admin.',
                 'data' => [
                     'invoice' => new InvoiceResource($invoice),
                     'income' => $income

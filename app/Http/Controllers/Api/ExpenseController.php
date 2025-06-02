@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Auth;
 class ExpenseController extends Controller
 {
     public function index(Request $request)
@@ -101,103 +101,56 @@ class ExpenseController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
+        // Validasi input
+        $validated = $request->validate([
+            'termin_id' => 'required|exists:termins,id',
+            'type' => 'required|in:dp,pelunasan',
+            'amount' => 'required|numeric|min:0',
+            'transaction_date' => 'required|date',
+            'description' => 'nullable|string',
+            'bukti_pembayaran' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:2048',
+        ]);
+
         try {
-            $validated = $request->validate([
-                'proyek_id' => 'required|exists:proyeks,id',
-                'category_id' => 'required_without:service_category_id|exists:kategoris,id',
-                'service_category_id' => 'required_without:category_id|exists:service_categories,id',
-                'amount' => 'required|numeric|min:0',
-                'description' => 'required|string',
-                'transaction_date' => 'required|date',
-                'status' => 'required|in:pending,approved,rejected,Lunas',
-                'payment_method_id' => 'required|exists:payment_methods,id',
-                'prepared_fund' => 'boolean',
-                'source_type' => 'nullable|in:termin,purchase',
-                'source_id' => 'nullable|integer'
-            ]);
+            $termin = Termin::findOrFail($validated['termin_id']);
+            $proyek = $termin->proyek;
+            $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
+            $existingExpenses = Expense::where('proyek_id', $proyek->id)->sum('amount');
+            $availableBudget = $currentBudget - $existingExpenses;
 
-            DB::beginTransaction();
-
-            // Validasi khusus jika source_type diisi
-            if (!empty($validated['source_type']) && !empty($validated['source_id'])) {
-                if ($validated['source_type'] === 'termin') {
-                    $termin = \App\Models\Termin::find($validated['source_id']);
-                    if (!$termin) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Termin tidak ditemukan'
-                        ], 422);
-                    }
-                    if ($validated['amount'] > $termin->nilai_termin) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Jumlah pengeluaran tidak boleh melebihi nilai termin'
-                        ], 422);
-                    }
-                } elseif ($validated['source_type'] === 'purchase') {
-                    $purchase = \App\Models\Purchasematerial::find($validated['source_id']);
-                    if (!$purchase) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Purchase material tidak ditemukan'
-                        ], 422);
-                    }
-                    if ($validated['amount'] > $purchase->total_harga) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Jumlah pengeluaran tidak boleh melebihi total harga pembelian material'
-                        ], 422);
-                    }
-                    // This check is good to prevent manual duplicate expense entries
-                    $existingExpense = \App\Models\Expense::where('source_type', 'purchase')
-                        ->where('source_id', $validated['source_id'])
-                        ->first();
-
-                    if ($existingExpense) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Pengeluaran untuk pembelian ini sudah tercatat.'
-                        ], 422);
-                    }
+            if ($validated['amount'] > $availableBudget) {
+                if ($proyek->owner) {
+                    $proyek->owner->notify(new \App\Notifications\BudgetExceededNotification($proyek, $validated['amount']));
                 }
-            } else {
-                // Validasi anggaran proyek (gunakan budget_adjusted jika ada)
-                $proyek = \App\Models\Proyek::find($validated['proyek_id']);
-                if ($proyek) {
-                    $currentBudget = $proyek->budget_adjusted ?? $proyek->anggaran_kontrak;
-                    $totalExpenses = $proyek->expenses()->sum('amount');
-                    $sisaAnggaran = $currentBudget - $totalExpenses;
-                    if ($validated['amount'] > $sisaAnggaran) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Jumlah pengeluaran melebihi sisa anggaran proyek'
-                        ], 422);
-                    }
-                }
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anggaran proyek tidak mencukupi untuk pengeluaran ini. Sisa anggaran: ' . number_format($availableBudget)
+                ], 422);
             }
 
-            $expense = Expense::create($validated);
-
-            // Load necessary relations
-            $expense->load(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
+            $buktiFile = $request->file('bukti_pembayaran') ?? null;
+            $expense = $termin->recordExpense(
+                $validated['type'],
+                $validated['amount'],
+                $validated['transaction_date'],
+                $validated['description'] ?? null,
+                $buktiFile
+            );
+            $expense->load(['proyek', 'category', 'serviceCategory', 'paymentMethod']);
             $expense->category_name = $expense->category_name;
-
-            DB::commit();
-
             return response()->json([
                 'status' => 'success',
                 'message' => 'Pengeluaran berhasil ditambahkan',
                 'data' => $expense
             ], 201);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Validasi gagal',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             Log::error("Error in ExpenseController@store: " . $e->getMessage());
             return response()->json([
                 'status' => 'error',
@@ -265,6 +218,13 @@ class ExpenseController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         try {
             $expense = Expense::findOrFail($id);
 
@@ -371,6 +331,13 @@ class ExpenseController extends Controller
 
     public function destroy($id)
     {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+            ], 403);
+        }
         try {
             $expense = Expense::findOrFail($id);
 
@@ -530,6 +497,34 @@ class ExpenseController extends Controller
             DB::rollBack();
             Log::error('Error creating expense from invoice: ' . $e->getMessage());
             throw $e;
+        }
+    }
+        /**
+     * Admin approval for expense (setujui pengeluaran setelah cek bukti)
+     */
+    public function approve(Request $request, $id)
+    {
+        try {
+            $expense = \App\Models\Expense::findOrFail($id);
+            if (!$expense->source_type || $expense->source_type !== 'termin' || !$expense->source_id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Expense tidak terkait termin.'
+                ], 422);
+            }
+            $termin = \App\Models\Termin::findOrFail($expense->source_id);
+            $approvedExpense = $termin->approveExpense($expense->id);
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pengeluaran berhasil di-approve',
+                'data' => $approvedExpense
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal approve pengeluaran',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

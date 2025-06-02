@@ -138,10 +138,28 @@ class Income extends Model
         });
 
         static::saved(function ($income) {
+            // Update status termin jika ada
             if ($income->termin_id) {
                 $termin = $income->termin;
                 if ($termin) {
+                    $termin->clearCache();
                     $termin->updateStatusFromPayments();
+                    $termin->refresh(); // Pastikan status_termin terbaru
+                }
+            }
+            // Update status invoice jika ada
+            if ($income->invoice_id) {
+                $invoice = $income->invoice;
+                if ($invoice) {
+                    // Hitung ulang total paid
+                    $totalPaid = \App\Models\Income::where('invoice_id', $income->invoice_id)
+                        ->where('status', 'Diterima')
+                        ->sum('jumlah');
+                    $invoice->amount_paid = $totalPaid;
+                    $invoice->status = $invoice->determineStatus();
+                    $invoice->save();
+                    $invoice->refresh(); // Pastikan status terbaru
+                    $invoice->updateStatusFromTermins();
                 }
             }
         });
