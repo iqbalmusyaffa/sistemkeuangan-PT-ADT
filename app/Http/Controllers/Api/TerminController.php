@@ -628,17 +628,36 @@ class TerminController extends Controller
             ];
 
             // Set specific dates based on status
-            if ($newStatus === 'DP Dibayar') {
-                $updateData['tanggal_dp_dibayar'] = array_key_exists('tanggal_dp_dibayar', $validated) ? $validated['tanggal_dp_dibayar'] : ($termin->tanggal_dp_dibayar ?: now());
-                $updateData['tanggal_pelunasan_dibayar'] = null; // Clear pelunasan date if only DP is paid
-            } elseif ($newStatus === 'Lunas') {
-                $updateData['tanggal_pelunasan_dibayar'] = array_key_exists('tanggal_pelunasan_dibayar', $validated) ? $validated['tanggal_pelunasan_dibayar'] : ($termin->tanggal_pelunasan_dibayar ?: now());
-                // Ensure tanggal_dp_dibayar is set if transitioning directly to Lunas and not already set
-                $updateData['tanggal_dp_dibayar'] = $termin->tanggal_dp_dibayar ?: $termin->tanggal_dp ?: now();
-            } else { // Belum Dibayar
-                $updateData['tanggal_dp_dibayar'] = null;
-                $updateData['tanggal_pelunasan_dibayar'] = null;
-            }
+if ($newStatus === 'DP Dibayar') {
+    $date = array_key_exists('tanggal_dp_dibayar', $validated)
+        ? $validated['tanggal_dp_dibayar']
+        : ($termin->tanggal_dp_dibayar ?: now());
+
+    $updateData['tanggal_dp_dibayar'] = $date;
+    $updateData['tanggal_pelunasan_dibayar'] = null; // Clear pelunasan date if only DP is paid
+
+    // Ambil nilai DP dari termin
+    $amount = $termin->nilai_dp;
+    $termin->recordIncome('dp', $amount, $date);
+
+} elseif ($newStatus === 'Lunas') {
+    $tanggalPelunasan = array_key_exists('tanggal_pelunasan_dibayar', $validated)
+        ? $validated['tanggal_pelunasan_dibayar']
+        : ($termin->tanggal_pelunasan_dibayar ?: now());
+
+    $tanggalDp = $termin->tanggal_dp_dibayar ?: $termin->tanggal_dp ?: now();
+
+    $updateData['tanggal_dp_dibayar'] = $tanggalDp;
+    $updateData['tanggal_pelunasan_dibayar'] = $tanggalPelunasan;
+
+    // Ambil nilai pelunasan dari termin
+    $amount = $termin->nilai_pelunasan;
+    $termin->recordIncome('pelunasan', $amount, $tanggalPelunasan);
+
+} else { // Belum Dibayar
+    $updateData['tanggal_dp_dibayar'] = null;
+    $updateData['tanggal_pelunasan_dibayar'] = null;
+}
 
 
             // Fill and save (allow model hooks to handle status sync)
