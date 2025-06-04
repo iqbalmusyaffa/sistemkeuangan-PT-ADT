@@ -225,59 +225,41 @@ class Termin extends Model
     // UPDATE STATUS BERDASARKAN PEMBAYARAN
     public function updateStatusFromPayments($force = false)
     {
-        Log::info('[Termin] updateStatusFromPayments START', ['termin_id' => $this->id, 'status_termin' => $this->status_termin]);
-        DB::transaction(function () use ($force) {
-            $totalDpPaid = $this->total_dp_paid;
-            $totalPelunasanPaid = $this->total_pelunasan_paid;
+        // Hitung total pembayaran DP dan pelunasan
+        $totalDpPaid = $this->total_dp_paid;
+        $totalPelunasanPaid = $this->total_pelunasan_paid;
 
-            $oldStatus = $this->status_termin;
-            $newStatus = $this->status_termin;
+        $newStatus = 'Belum Dibayar';
 
-            // PATCH: Jika nilai_termin == 0, status selalu Belum Dibayar
-            if ($this->nilai_termin == 0) {
-                $newStatus = 'Belum Dibayar';
-            } else if ($totalDpPaid >= $this->nilai_dp && $totalPelunasanPaid >= $this->nilai_pelunasan && $this->nilai_pelunasan > 0) {
-                $newStatus = 'Lunas';
-            } elseif ($totalDpPaid >= $this->nilai_dp && $this->nilai_dp > 0 && $this->nilai_pelunasan == 0) {
-                $newStatus = 'DP Dibayar';
-            } else {
-                $newStatus = 'Belum Dibayar';
-            }
+        if ($this->nilai_termin == 0) {
+            $newStatus = 'Belum Dibayar';
+        } elseif (
+            $totalDpPaid >= $this->nilai_dp &&
+            $totalPelunasanPaid >= $this->nilai_pelunasan &&
+            $this->nilai_pelunasan > 0
+        ) {
+            $newStatus = 'Lunas';
+        } elseif (
+            $totalDpPaid > 0 && $totalDpPaid < $this->nilai_dp
+        ) {
+            $newStatus = 'DP Sebagian';
+        } elseif (
+            $totalDpPaid >= $this->nilai_dp &&
+            $this->nilai_dp > 0 &&
+            $this->nilai_pelunasan == 0
+        ) {
+            $newStatus = 'DP Dibayar';
+        } elseif (
+            $totalPelunasanPaid > 0 && $totalPelunasanPaid < $this->nilai_pelunasan
+        ) {
+            $newStatus = 'Pelunasan Sebagian';
+        }
 
-            $statusChanged = $this->status_termin !== $newStatus;
-            if ($statusChanged || $force) {
-                Log::info('[Termin] Status termin changed', [
-                    'termin_id' => $this->id,
-                    'old' => $this->status_termin,
-                    'new' => $newStatus
-                ]);
-                $this->status_termin = $newStatus;
-                $this->clearCache();
-                $this->isUpdatingStatus = true;
-                $this->save();
-                $this->isUpdatingStatus = false;
-            }
-
-            // Update related records (income, expense)
-            $this->updateRelatedRecordsAfterStatusChange();
-
-            // Update invoice status
-            if ($this->invoice) {
-                $expectedInvoiceStatus = 'unpaid';
-                if ($this->status_termin === 'DP Dibayar') {
-                    $expectedInvoiceStatus = 'partially_paid';
-                } elseif ($this->status_termin === 'Lunas') {
-                    $expectedInvoiceStatus = 'paid';
-                }
-
-                if ($this->invoice->status !== $expectedInvoiceStatus) {
-                    Log::info('[Termin] Updating associated invoice status', ['invoice_id' => $this->invoice->id, 'old' => $this->invoice->status, 'new' => $expectedInvoiceStatus]);
-                    $this->invoice->status = $expectedInvoiceStatus;
-                    $this->invoice->saveQuietly();
-                }
-            }
-        });
-        Log::info('[Termin] updateStatusFromPayments END', ['termin_id' => $this->id, 'status_termin' => $this->status_termin]);
+        // Update status jika berubah
+        if ($this->status_termin !== $newStatus || $force) {
+            $this->status_termin = $newStatus;
+            $this->saveQuietly();
+        }
     }
 
     // New helper method to consolidate updates

@@ -402,11 +402,13 @@
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="status_termin">Status Termin</CFormLabel>
-              <CFormSelect v-model="form.status_termin" id="status_termin" required>
-                <option value="Belum Dibayar">Belum Dibayar</option>
-                <option value="DP Dibayar">DP Dibayar</option>
-                <option value="Lunas">Lunas</option>
-              </CFormSelect>
+            <CFormSelect v-model="form.status_termin" id="status_termin" required>
+            <option value="Belum Dibayar">Belum Dibayar</option>
+            <option value="DP Sebagian">DP Sebagian</option>
+            <option value="DP Dibayar">DP Dibayar</option>
+            <option value="Pelunasan Sebagian">Pelunasan Sebagian</option>
+            <option value="Lunas">Lunas</option>
+            </CFormSelect>
             </CCol>
           </CRow>
           <CRow class="mb-3">
