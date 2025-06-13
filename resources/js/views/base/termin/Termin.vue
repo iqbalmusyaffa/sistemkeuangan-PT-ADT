@@ -126,6 +126,8 @@
                   <th>Status Invoice</th>
                   <th>Status Expense</th>
                   <th>Status Income</th>
+                  <th>Progress Pekerjaan</th>
+                  <th>Target Progress</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -275,28 +277,37 @@
               </small>
             </CCol>
             <CCol md="6">
-              <CFormLabel for="sisa_termin">Sisa Termin (setelah pembayaran di-approve)</CFormLabel>
-              <div class="input-group align-items-center">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  type="text"
-                  :value="formatCurrency(form.remaining_total || 0)"
-                  id="sisa_termin"
-                  readonly
-                />
-              </div>
-              <small class="text-muted">
-                Sisa termin otomatis berkurang hanya oleh pembayaran yang sudah di-approve admin.
-              </small>
-            </CCol>
-            <CCol md="6">
               <CFormLabel for="dp_percentage">Persentase DP (%)</CFormLabel>
               <CFormInput type="number" v-model.number="form.persentase_dp" id="dp_percentage" required @input="calculateValues" min="0" max="100" />
             </CCol>
           </CRow>
+
+          <!-- Summary Card Pembayaran (Atas Saja, Style sesuai permintaan) -->
           <CRow class="mb-3">
-            <CCol md="12">
-              <CFormLabel for="remaining_total">Sisa Termin (setelah pembayaran di-approve)</CFormLabel>
+            <CCol md="6">
+              <div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
+                <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
+                  Nilai DP ({{ form.persentase_dp }}%)
+                </div>
+                <div>Nilai DP: <span style="font-weight:600">{{ formatCurrency(form.nilai_dp) }}</span></div>
+                <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_dp_paid || 0) }}</span></div>
+                <div>Sisa DP: <span style="font-weight:600">{{ formatCurrency(form.remaining_dp || 0) }}</span></div>
+              </div>
+            </CCol>
+            <CCol md="6">
+              <div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
+                <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
+                  Nilai Termin ({{ 100 - Number(form.persentase_dp) }}%)
+                </div>
+                <div>Nilai Termin: <span style="font-weight:600">{{ formatCurrency(form.nilai_pelunasan) }}</span></div>
+                <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_pelunasan_paid || 0) }}</span></div>
+                <div>Sisa Termin: <span style="font-weight:600">{{ formatCurrency(form.remaining_pelunasan || 0) }}</span></div>
+              </div>
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
               <div class="input-group align-items-center">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
@@ -311,83 +322,6 @@
               </small>
             </CCol>
           </CRow>
-          <CCol md="6">
-  <CFormLabel for="nilai_pelunasan">Nilai Pelunasan</CFormLabel>
-  <div class="input-group">
-    <span class="input-group-text">Rp</span>
-    <CFormInput
-      type="text"
-      :value="displayNilaiPelunasan"
-      id="nilai_pelunasan"
-      readonly
-    />
-  </div>
-</CCol>
-          <CCol md="6">
-  <CFormLabel for="sisa_termin_belum_dibayar">Sisa Termin Belum Dibayar</CFormLabel>
-  <div class="input-group">
-    <span class="input-group-text">Rp</span>
-    <CFormInput
-      type="text"
-      :value="displaySisaTerminBelumDibayar"
-      id="sisa_termin_belum_dibayar"
-      readonly
-    />
-  </div>
-</CCol>
-          <CRow class="mb-3">
-            <CCol md="6">
-              <CFormLabel for="nilai_dp">Nilai DP</CFormLabel>
-              <div class="input-group align-items-center">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  type="text"
-                  :value="form.displayNilaiDP"
-                  @input="handleNilaiDPInput"
-                  id="nilai_dp"
-                  :readonly="!manualNilaiDP"
-                />
-                <CFormCheck v-model="manualNilaiDP" class="ms-2" label="Input manual" />
-              </div>
-            </CCol>
-            <CCol md="6">
-              <CFormLabel for="remaining_dp">Sisa DP (Remaining DP)</CFormLabel>
-              <div class="input-group">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  readonly
-                  :value="formatCurrency(form.remaining_dp)"
-                />
-              </div>
-            </CCol>
-            <CCol md="6">
-
-            </CCol>
-          <CCol md="6">
-              <CFormLabel for="remaining_pelunasan">Sisa Pelunasan</CFormLabel>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <CFormInput
-                type="text"
-                :value="formatCurrency(form.remaining_pelunasan)"
-                id="remaining_pelunasan"
-                readonly
-              />
-            </div>
-          </CCol>
-          <CCol md="6">
-              <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <CFormInput
-                type="text"
-                :value="formatCurrency(form.remaining_total || 0)"
-                id="remaining_total"
-                readonly
-              />
-            </div>
-          </CCol>
-          </CRow>
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="tanggal_dp">Tanggal DP</CFormLabel>
@@ -399,18 +333,17 @@
               <small class="text-muted">Tanggal jatuh tempo pembayaran termin ini.</small>
             </CCol>
           </CRow>
+          <!-- Status Termin: readonly, hanya tampilkan status, tidak bisa diubah manual -->
+          <!-- Status Termin: readonly, hanya tampilkan status, tidak bisa diubah manual -->
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="status_termin">Status Termin</CFormLabel>
-            <CFormSelect v-model="form.status_termin" id="status_termin" required>
-            <option value="Belum Dibayar">Belum Dibayar</option>
-            <option value="DP Sebagian">DP Sebagian</option>
-            <option value="DP Dibayar">DP Dibayar</option>
-            <option value="Pelunasan Sebagian">Pelunasan Sebagian</option>
-            <option value="Lunas">Lunas</option>
-            </CFormSelect>
+              <CFormInput id="status_termin" :value="form.status_termin" readonly />
+              <small class="text-muted">Status termin akan otomatis berubah sesuai pembayaran yang di-approve admin.</small>
             </CCol>
           </CRow>
+
+
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="keterangan">Keterangan</CFormLabel>
@@ -438,6 +371,22 @@
                 </option>
               </CFormSelect>
               <small v-if="modalMode === 'edit'" class="text-muted">Invoice terkunci. Hanya bisa diganti jika invoice dihapus/hilang.</small>
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="target_progress">Target Progress (%)</CFormLabel>
+              <CFormInput
+                type="number"
+                v-model.number="form.target_progress"
+                id="target_progress"
+                min="0"
+                max="100"
+                required
+              />
+              <small class="text-muted">
+                Masukkan target progress fisik (%) agar termin ini bisa dicairkan.
+              </small>
             </CCol>
           </CRow>
           <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
@@ -544,7 +493,18 @@ import 'datatables.net';
 const selectedProject = ref("");
 const selectedInvoice = ref("");
 let dataTableInstance = null;
-
+const validateProgressBeforeApproval = (termin) => {
+  const projectProgress = termin?.proyek?.progress || 0;
+  if (projectProgress < termin.target_progress) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Progress Belum Mencapai Target',
+      text: `Progress proyek saat ini (${projectProgress}%) belum mencapai target termin (${termin.target_progress}%)`
+    });
+    return false;
+  }
+  return true;
+};
 // --- DataTable initialization function ---
 function initDataTable() {
   // Destroy previous instance if exists
@@ -631,7 +591,9 @@ function initDataTable() {
         { data: 'status_termin', title: 'Status Termin' },
         { data: 'invoice_status', title: 'Status Invoice' },
         { data: 'expense_status', title: 'Status Expense' },
-        { data: 'income_status', title: 'Status Income' }
+        { data: 'income_status', title: 'Status Income' },
+        { data: 'proyek.progress', title: 'Progress Pekerjaan' }, // Kolom baru untuk Progress Pekerjaan
+        { data: 'target_progress', title: 'Target Progress' } // Kolom baru untuk Target Progress
       ],
       language: {
         processing: "Memproses...",
@@ -730,7 +692,9 @@ const form = ref({
   remaining_total: 0,
   displayNilaiDP: '',
   displayNilaiPelunasan: '',
-  displayNilaiTermin: ''
+  displayNilaiTermin: '',
+  target_progress: 0,
+
 });
 
 const statusForm = ref({
@@ -803,7 +767,7 @@ const filteredTermins = computed(() => {
 });
 
 // Ambil summary dari API (field sudah diisi oleh backend, bukan hitung manual di frontend)
-const totalNilaiTermin = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_termin) || 0), 0));
+const totalNilaiTerminFiltered = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_termin) || 0), 0));
 const totalDP = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_dp) || 0), 0));
 const totalPelunasan = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_pelunasan) || 0), 0));
 const totalDpPaid = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.total_dp_paid) || 0), 0));
@@ -1386,6 +1350,7 @@ const pelunasanValue = computed(() => {
       invoice_id: Number(form.value.invoice_id),
       nama_termin: form.value.nama_termin.trim(),
       jenis_termin: form.value.jenis_termin,
+      target_progress: form.value.target_progress || 0,
       termin_ke: form.value.termin_ke ? Number(form.value.termin_ke) : null,
       nilai_termin: Number(form.value.nilai_termin),
       persentase_dp: Number(form.value.persentase_dp),

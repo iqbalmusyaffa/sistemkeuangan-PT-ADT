@@ -51,11 +51,15 @@ class Expense extends Model
 
     protected $with = ['proyek', 'category', 'serviceCategory'];
 
-    // Tambahkan constant status dan source_type
+    // Status yang diizinkan untuk income/expense/termin
     const STATUS_PENDING = 'pending';
+    const STATUS_DP_SEBAGIAN = 'DP Sebagian';
+    const STATUS_DP_DIBAYAR = 'DP Dibayar';
+    const STATUS_PELUNASAN_SEBAGIAN = 'Pelunasan Sebagian';
+    const STATUS_BELUM_DIBAYAR = 'Belum Dibayar';
+    const STATUS_LUNAS = 'Lunas';
     const STATUS_APPROVED = 'approved';
     const STATUS_REJECTED = 'rejected';
-    const STATUS_LUNAS = 'Lunas';
 
     const SOURCE_TERMIN = 'termin';
     const SOURCE_PURCHASE = 'purchase';

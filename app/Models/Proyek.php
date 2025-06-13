@@ -18,6 +18,7 @@ class Proyek extends Model
         'user_id',
         'nama_customer',
         'nama_proyek',
+        'progress', // <--- Tambahkan ini
         'nama_perusahaan',
         'alamat',
         'no_telp',
@@ -32,6 +33,7 @@ class Proyek extends Model
     ];
 
     protected $casts = [
+        'progress' => 'decimal:2',
         'tanggal_mulai' => 'date',
         'tanggal_selesai' => 'date',
         'anggaran_kontrak' => 'decimal:2',
@@ -199,6 +201,13 @@ public function incomes()
         }
         return $this->save();
     }
+public function updateProgressFromTermins()
+{
+    $approvedTermins = $this->termins()->where('status_approval', 'approved')->get();
+    $totalProgress = $approvedTermins->sum('target_progress');
+    $this->progress = $totalProgress;
+    $this->saveQuietly(); // agar tidak trigger hook lainnya
+}
 
     /**
      * Scope to filter projects above 100 million.
@@ -214,5 +223,21 @@ public function incomes()
     public function scopeBelow100Million($query)
     {
         return $query->where('anggaran_kontrak', '<=', 100000000);
+    }
+
+    /**
+     * Get all target_progress values from related termins.
+     */
+    public function getTargetProgressListAttribute()
+    {
+        return $this->termins()->pluck('target_progress');
+    }
+
+    /**
+     * Get all termin details including target_progress and status.
+     */
+    public function getTerminDetailsAttribute()
+    {
+        return $this->termins()->get(['id', 'target_progress', 'status']);
     }
 }

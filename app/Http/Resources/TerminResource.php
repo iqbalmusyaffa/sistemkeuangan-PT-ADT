@@ -45,6 +45,8 @@ class TerminResource extends JsonResource
             'proyek_id' => $this->proyek_id,
             'invoice_id' => $this->invoice_id,
             'nama_termin' => $this->nama_termin,
+        'project_progress' => (float) $this->project_progress, // <-- Data dari accessor baru
+            'target_progress' => (float) $this->target_progress, // <--- expose target_progress
             'jenis_termin' => $this->jenis_termin,
             'termin_ke' => $this->termin_ke,
             'nilai_termin' => (float) $this->nilai_termin,

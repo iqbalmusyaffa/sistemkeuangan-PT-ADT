@@ -253,4 +253,30 @@ public function reduceBudget(Request $request, $id)
 
     return response()->json(['message' => 'Insufficient budget'], 400);
 }
+
+/**
+ * Update progress proyek dan update status termin otomatis.
+ */
+  public function updateProgress(Request $request, $id)
+    {
+        $proyek = \App\Models\Proyek::with('termins')->findOrFail($id);
+        $request->validate(['progress' => 'required|numeric|min:0|max:100']);
+
+        $proyek->progress = $request->progress;
+        $proyek->save();
+
+        // Update status termin otomatis
+        foreach ($proyek->termins as $termin) {
+            if (
+                $termin->status_termin === 'Belum Dibayar' &&
+                $proyek->progress >= $termin->target_progress
+            ) {
+                // Ganti status menjadi 'Siap Bayar' atau sesuai alur kerja Anda
+                $termin->status_termin = 'Siap Bayar';
+                $termin->save();
+            }
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Progress proyek & status termin berhasil diupdate.']);
+    }
 }

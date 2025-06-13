@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\Log;
 use App\Models\{Proyek, PurchaseMaterial, Termin, Expense, Income, PaymentMethod};
-
 class Invoice extends Model
 {
     use HasFactory;
@@ -116,78 +115,7 @@ class Invoice extends Model
     }
 
 
-    public function updateStatusFromTermins(): void
-    {
-        Log::info('updateStatusFromTermins CALLED', ['invoice_id' => $this->id]);
-        try {
-            $termins = $this->termins()->get();
-            $oldStatus = $this->status;
-            $partialStatuses = ['DP Dibayar', 'Sebagian Dibayar'];
-
-            if ($termins->isEmpty()) {
-                $newStatus = self::STATUS_UNPAID;
-            } else {
-                $allLunas = $termins->every(fn($t) => $t->status_termin === 'Lunas');
-                $allBelumDibayar = $termins->every(fn($t) => $t->status_termin === 'Belum Dibayar');
-                $hasPartialPayment = $termins->contains(fn($t) => in_array($t->status_termin, $partialStatuses));
-
-                if ($allLunas) {
-                    $newStatus = self::STATUS_PAID;
-                } elseif ($allBelumDibayar) {
-                    $newStatus = self::STATUS_UNPAID;
-                } elseif ($hasPartialPayment) {
-                    $newStatus = self::STATUS_PARTIALLY_PAID;
-                } else {
-                    $newStatus = self::STATUS_PARTIALLY_PAID;
-                }
-            }
-
-            // Guard: Only allow valid status values
-            $allowedStatuses = [
-                self::STATUS_UNPAID,
-                self::STATUS_PARTIALLY_PAID,
-                self::STATUS_PAID,
-                self::STATUS_CANCELLED
-            ];
-            if (!in_array($newStatus, $allowedStatuses, true)) {
-                Log::error('Attempted to set invalid invoice status', [
-                    'invoice_id' => $this->id,
-                    'invalid_status' => $newStatus
-                ]);
-                $newStatus = self::STATUS_UNPAID;
-            }
-
-            if ($oldStatus !== $newStatus) {
-                $this->status = $newStatus;
-                $this->save();
-                Log::info("Invoice status updated fromTermins", ['invoice_id' => $this->id, 'old' => $oldStatus, 'new' => $newStatus]);
-            }
-
-            // --- Sinkronisasi status expense & purchase material expense ---
-            $newExpenseStatus = $this->status === self::STATUS_PAID ? 'Lunas' : 'pending';
-            foreach ($this->expenses()->get() as $expense) {
-                if ($expense->status !== $newExpenseStatus) {
-                    $expense->update(['status' => $newExpenseStatus]);
-                }
-            }
-            foreach ($this->purchaseMaterials()->get() as $pm) {
-                if ($pm->expense && $pm->expense->status !== $newExpenseStatus) {
-                    $pm->expense->update(['status' => $newExpenseStatus]);
-                }
-            }
-
-            if ($this->proyek) {
-                $this->proyek->updateStatusFromInvoices();
-            }
-            Log::info('updateStatusFromTermins FINISHED', ['invoice_id' => $this->id, 'status' => $this->status]);
-        } catch (\Exception $e) {
-            Log::error('Error in updateStatusFromTermins: ' . $e->getMessage(), [
-                'invoice_id' => $this->id,
-                'trace' => $e->getTraceAsString()
-            ]);
-            throw $e;
-        }
-    }
+    // Removed duplicate updateStatusFromTermins() to fix redeclaration error.
 
     // Scopes
     public function scopeUnpaid($query)
@@ -424,5 +352,33 @@ class Invoice extends Model
             $proyek->anggaran_kontrak -= $terminValue;
         }
         return $proyek->save();
+    }
+        // Hindari circular update status
+    public $isUpdatingStatus = false;
+
+    public function updateStatusFromTermins()
+    {
+        if ($this->isUpdatingStatus) {
+            return;
+        }
+        $this->isUpdatingStatus = true;
+
+        // Hitung status berdasarkan termin
+        $termins = $this->termins()->where('nilai_termin', '>', 0)->get();
+        $totalPaid = $termins->sum(function($t) {
+            return ($t->total_dp_paid ?? 0) + ($t->total_pelunasan_paid ?? 0);
+        });
+
+        if ($totalPaid >= $this->total_amount && $this->total_amount > 0) {
+            $this->status = 'paid';
+        } elseif ($termins->whereIn('status_termin', ['DP Dibayar', 'Lunas'])->count() > 0) {
+            $this->status = 'partially_paid';
+        } else {
+            $this->status = 'unpaid';
+        }
+
+        $this->amount_paid = $totalPaid;
+        $this->saveQuietly();
+        $this->isUpdatingStatus = false;
     }
 }

@@ -194,7 +194,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <CRow class="mb-4">
+    <!-- <CRow class="mb-4">
       <CCol :sm="4">
         <CCard class="mb-2 bg-danger text-white">
           <CCardBody>
@@ -240,7 +240,7 @@ onMounted(async () => {
           </CCardBody>
         </CCard>
       </CCol>
-    </CRow>
+    </CRow> -->
     <WidgetsStatsA class="mb-4" />
     <CRow>
       <CCol :md="12">
