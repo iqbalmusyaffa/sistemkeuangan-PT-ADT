@@ -111,6 +111,23 @@
       </CModalBody>
     </CModal>
   </CRow>
+
+  <div>
+    <h2>Laporan Laba Rugi</h2>
+    <label for="start-date">Tanggal Mulai</label>
+    <input type="date" id="start-date" v-model="startDate" />
+
+    <label for="end-date">Tanggal Akhir</label>
+    <input type="date" id="end-date" v-model="endDate" />
+
+    <button @click="fetchProfitLoss">Tampilkan Laporan</button>
+
+    <div v-if="profitLossData">
+      <p>Total Pendapatan: {{ profitLossData.total_income }}</p>
+      <p>Total Pengeluaran: {{ profitLossData.total_expense }}</p>
+      <p>Laba/Rugi Bersih: {{ profitLossData.profit_loss }}</p>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -160,6 +177,9 @@ const form = ref({
   start_date: '',
   end_date: ''
 })
+const profitLossData = ref(null)
+const startDate = ref('')
+const endDate = ref('')
 
 const fetchReports = async () => {
   loading.value = true
@@ -303,6 +323,21 @@ const generateReport = async () => {
 
 const viewDetails = (report) => {
   selectedReport.value = report
+}
+
+const fetchProfitLoss = () => {
+  axios.get('/api/profit-loss', {
+    params: {
+      start_date: startDate.value,
+      end_date: endDate.value,
+    }
+  })
+  .then(response => {
+    profitLossData.value = response.data;
+  })
+  .catch(error => {
+    console.error('Error fetching profit-loss data:', error);
+  });
 }
 
 const formatCurrency = (value) => {
