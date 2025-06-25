@@ -279,4 +279,21 @@ public function reduceBudget(Request $request, $id)
 
         return response()->json(['status' => 'success', 'message' => 'Progress proyek & status termin berhasil diupdate.']);
     }
+    public function getInvoices($id)
+{
+    try {
+        $invoices = \App\Models\Invoice::where('proyek_id', $id)->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $invoices
+        ], 200);
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal mengambil data invoice.',
+            'details' => $e->getMessage()
+        ], 500);
+    }
+}
 }

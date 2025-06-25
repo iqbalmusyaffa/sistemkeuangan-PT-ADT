@@ -7,6 +7,8 @@ use App\Models\Proyek;
 use App\Models\ProfitLossReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ProfitLossReportController extends Controller
 {
@@ -27,11 +29,10 @@ class ProfitLossReportController extends Controller
         }
 
         $reports = $query->paginate(10);
-        $proyeks = Proyek::all();
 
         return response()->json([
-            'reports' => $reports,
-            'proyeks' => $proyeks
+            'status' => 'success',
+            'data' => $reports
         ]);
     }
 
@@ -47,43 +48,41 @@ class ProfitLossReportController extends Controller
         try {
             DB::beginTransaction();
 
-            // Get transactions for the period
-            $query = DB::table('transactions')
+            // Ambil pendapatan dari tabel `incomes`
+            $incomeQuery = DB::table('incomes')
+                ->whereBetween('tanggal', [$request->start_date, $request->end_date]);
+
+            // Ambil pengeluaran dari tabel `expenses`
+            $expenseQuery = DB::table('expenses')
                 ->whereBetween('transaction_date', [$request->start_date, $request->end_date]);
 
             if ($request->proyek_id) {
-                $query->where('proyek_id', $request->proyek_id);
+                $incomeQuery->where('proyek_id', $request->proyek_id);
+                $expenseQuery->where('proyek_id', $request->proyek_id);
             }
 
-            $transactions = $query->get();
+            $incomes = $incomeQuery->get();
+            $expenses = $expenseQuery->get();
 
-            // Calculate totals
-            $totalIncome = $transactions->where('type', 'income')->sum('amount');
-            $totalExpense = $transactions->where('type', 'expense')->sum('amount');
+            $totalIncome = $incomes->sum('jumlah');
+            $totalExpense = $expenses->sum('amount');
             $netProfit = $totalIncome - $totalExpense;
 
-            // Get transaction details
-            $incomeDetails = $transactions->where('type', 'income')
-                ->map(function ($transaction) {
-                    return [
-                        'id' => $transaction->id,
-                        'description' => $transaction->description,
-                        'amount' => $transaction->amount,
-                        'date' => $transaction->transaction_date
-                    ];
-                })->values();
+            $incomeDetails = $incomes->map(fn($i) => [
+                'id' => $i->id,
+                'description' => $i->deskripsi ?? '',
+                'amount' => $i->jumlah,
+                'date' => $i->tanggal
+            ])->values();
 
-            $expenseDetails = $transactions->where('type', 'expense')
-                ->map(function ($transaction) {
-                    return [
-                        'id' => $transaction->id,
-                        'description' => $transaction->description,
-                        'amount' => $transaction->amount,
-                        'date' => $transaction->transaction_date
-                    ];
-                })->values();
+            $expenseDetails = $expenses->map(fn($e) => [
+                'id' => $e->id,
+                'description' => $e->description ?? '',
+                'amount' => $e->amount,
+                'date' => $e->transaction_date
+            ])->values();
 
-            // Create report
+            // Simpan ke tabel profit_loss_reports
             $report = ProfitLossReport::create([
                 'proyek_id' => $request->proyek_id,
                 'period_type' => $request->period_type,
@@ -99,56 +98,66 @@ class ProfitLossReportController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => 'Report generated successfully',
+                'message' => 'Laporan berhasil dibuat',
                 'report' => $report
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Failed to generate report'], 500);
+            \Log::error('Error generating profit-loss report: ' . $e->getMessage(), [
+                'stack' => $e->getTraceAsString()
+            ]);
+            return response()->json(['message' => 'Gagal membuat laporan'], 500);
         }
     }
+
 
     public function show(ProfitLossReport $report)
     {
         return response()->json($report->load('proyek'));
     }
 
-    // Laba Rugi summary untuk periode tertentu
     public function summary(Request $request)
     {
         $start = $request->input('start_date', now()->startOfMonth()->toDateString());
         $end = $request->input('end_date', now()->endOfMonth()->toDateString());
 
-        $totalIncome = \DB::table('incomes')->whereBetween('transaction_date', [$start, $end])->sum('amount');
-        $totalExpense = \DB::table('expenses')->whereBetween('transaction_date', [$start, $end])->sum('amount');
-        $profit = $totalIncome - $totalExpense;
+        $totalIncome = DB::table('transactions')
+            ->where('type', 'income')
+            ->whereBetween('transaction_date', [$start, $end])
+            ->sum('amount');
+
+        $totalExpense = DB::table('transactions')
+            ->where('type', 'expense')
+            ->whereBetween('transaction_date', [$start, $end])
+            ->sum('amount');
 
         return response()->json([
             'start_date' => $start,
             'end_date' => $end,
             'total_income' => $totalIncome,
             'total_expense' => $totalExpense,
-            'profit' => $profit,
+            'profit' => $totalIncome - $totalExpense,
         ]);
     }
 
-    // Rekap per bulan/tahun
     public function recap(Request $request)
     {
-        $type = $request->input('type', 'monthly'); // 'monthly' atau 'yearly'
+        $type = $request->input('type', 'monthly');
         $year = $request->input('year', now()->year);
 
         if ($type === 'monthly') {
-            $income = \DB::table('incomes')
+            $income = DB::table('transactions')
                 ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total_income')
+                ->where('type', 'income')
                 ->whereYear('transaction_date', $year)
-                ->groupBy(\DB::raw('MONTH(transaction_date)'))
+                ->groupBy(DB::raw('MONTH(transaction_date)'))
                 ->pluck('total_income', 'month');
 
-            $expense = \DB::table('expenses')
+            $expense = DB::table('transactions')
                 ->selectRaw('MONTH(transaction_date) as month, SUM(amount) as total_expense')
+                ->where('type', 'expense')
                 ->whereYear('transaction_date', $year)
-                ->groupBy(\DB::raw('MONTH(transaction_date)'))
+                ->groupBy(DB::raw('MONTH(transaction_date)'))
                 ->pluck('total_expense', 'month');
 
             $result = [];
@@ -163,15 +172,17 @@ class ProfitLossReportController extends Controller
                 ];
             }
             return response()->json($result);
-        } else { // yearly
-            $income = \DB::table('incomes')
+        } else {
+            $income = DB::table('transactions')
                 ->selectRaw('YEAR(transaction_date) as year, SUM(amount) as total_income')
-                ->groupBy(\DB::raw('YEAR(transaction_date)'))
+                ->where('type', 'income')
+                ->groupBy(DB::raw('YEAR(transaction_date)'))
                 ->pluck('total_income', 'year');
 
-            $expense = \DB::table('expenses')
+            $expense = DB::table('transactions')
                 ->selectRaw('YEAR(transaction_date) as year, SUM(amount) as total_expense')
-                ->groupBy(\DB::raw('YEAR(transaction_date)'))
+                ->where('type', 'expense')
+                ->groupBy(DB::raw('YEAR(transaction_date)'))
                 ->pluck('total_expense', 'year');
 
             $years = array_unique(array_merge(array_keys($income->toArray()), array_keys($expense->toArray())));
@@ -191,4 +202,73 @@ class ProfitLossReportController extends Controller
             return response()->json($result);
         }
     }
-} 
+
+  public function export(Request $request, $format)
+{
+    $request->validate([
+        'proyek_id' => 'nullable|exists:proyeks,id',
+        'start_date' => 'required|date',
+        'end_date' => 'required|date|after:start_date'
+    ]);
+
+    $filters = $request->only(['proyek_id', 'start_date', 'end_date']);
+
+    if ($format === 'excel') {
+        return $this->exportToExcel($filters);
+    } elseif ($format === 'pdf') {
+        return $this->exportToPDF($filters);
+    } else {
+        return response()->json(['message' => 'Format tidak dikenali'], 400);
+    }
+}
+
+ public function exportToPDF(array $filters)
+{
+    $incomeQuery = DB::table('incomes')
+        ->whereBetween('tanggal', [$filters['start_date'], $filters['end_date']]);
+
+    $expenseQuery = DB::table('expenses')
+        ->whereBetween('transaction_date', [$filters['start_date'], $filters['end_date']]);
+
+    if (!empty($filters['proyek_id'])) {
+        $incomeQuery->where('proyek_id', $filters['proyek_id']);
+        $expenseQuery->where('proyek_id', $filters['proyek_id']);
+    }
+
+    $incomes = $incomeQuery->get()->map(function ($i) {
+        return (object)[
+            'tanggal' => $i->tanggal,
+            'deskripsi' => $i->deskripsi ?? '',
+            'jenis' => 'income',
+            'jumlah' => $i->jumlah,
+        ];
+    });
+
+    $expenses = $expenseQuery->get()->map(function ($e) {
+        return (object)[
+            'tanggal' => $e->transaction_date,
+            'deskripsi' => $e->description ?? '',
+            'jenis' => 'expense',
+            'jumlah' => $e->amount,
+        ];
+    });
+
+    $transactions = $incomes->concat($expenses)->sortBy('tanggal')->values();
+    $totalIncome = $incomes->sum('jumlah');
+    $totalExpense = $expenses->sum('jumlah');
+    $netProfit = $totalIncome - $totalExpense;
+
+    $pdf = PDF::loadView('labarugi.profit_loss_report', [
+        'transactions' => $transactions,
+        'totalIncome' => $totalIncome,
+        'totalExpense' => $totalExpense,
+        'netProfit' => $netProfit,
+        'startDate' => $filters['start_date'],
+        'endDate' => $filters['end_date']
+    ]);
+
+    return response()->streamDownload(function () use ($pdf) {
+        echo $pdf->output();
+    }, 'laporan_laba_rugi.pdf');
+}
+}

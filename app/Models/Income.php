@@ -52,6 +52,10 @@ class Income extends Model
     const STATUS_LUNAS = 'Lunas';
     const STATUS_APPROVED = 'approved';
     const STATUS_REJECTED = 'rejected';
+// Tambahkan di bagian atas dalam class Income
+const APPROVAL_PENDING = 'pending';
+const APPROVAL_APPROVED = 'approved';
+const APPROVAL_REJECTED = 'rejected';
 
     /**
      * Relasi ke kategori pemasukan.
@@ -181,4 +185,13 @@ class Income extends Model
             }
         });
     }
+public function createdBy()
+{
+    return $this->belongsTo(User::class, 'created_by');
+}
+
+public function updatedBy(): BelongsTo
+{
+    return $this->updater();
+}
 }

@@ -4,432 +4,249 @@
       <CCard>
         <CCardHeader>
           <CIcon icon="cil-chart-line" /> Laporan Laba Rugi
-          <CButton color="primary" @click="showGenerateModal = true" class="float-end">
-            Generate Laporan
-          </CButton>
+          <div class="float-end">
+            <CButton color="success" @click="exportReport('excel')">Export Excel</CButton>
+            <CButton color="danger" @click="exportReport('pdf')">Export PDF</CButton>
+            <CButton color="primary" @click="showGenerateModal = true">Generate</CButton>
+          </div>
         </CCardHeader>
         <CCardBody>
+<CForm class="mb-4 row" @submit.prevent="fetchReports">
+  <CCol :md="3">
+    <CFormSelect v-model="filter.proyek_id" label="Proyek">
+      <option value="">Semua</option>
+      <option v-for="p in proyeks" :key="p.id" :value="p.id">{{ p.nama_proyek }}</option>
+    </CFormSelect>
+  </CCol>
+  <CCol :md="3">
+    <CFormInput v-model="filter.start_date" type="date" label="Dari Tanggal" />
+  </CCol>
+  <CCol :md="3">
+    <CFormInput v-model="filter.end_date" type="date" label="Sampai Tanggal" />
+  </CCol>
+  <CCol :md="3">
+    <CFormSelect v-model="filter.period_type" label="Jenis Periode">
+      <option disabled value="">Pilih Periode</option>
+      <option value="weekly">Mingguan</option>
+      <option value="monthly">Bulanan</option>
+      <option value="yearly">Tahunan</option>
+    </CFormSelect>
+  </CCol>
+  <CCol :md="12" class="d-flex justify-content-end mt-2">
+    <CButton type="submit" color="info" class="me-2">Filter</CButton>
+    <CButton color="primary" @click="generateReport">Generate</CButton>
+  </CCol>
+</CForm>
+
+
           <div v-if="error" class="alert alert-danger">{{ error }}</div>
-          <div v-if="loading" class="alert alert-info">Loading...</div>
           <div class="w-100">
             <table ref="profitTableRef" class="display nowrap"></table>
+          </div>
+
+          <div class="text-end mt-3">
+            <strong>Total Laba/Rugi: {{ formatCurrency(totalProfit) }}</strong>
           </div>
         </CCardBody>
       </CCard>
     </CCol>
-
-    <!-- Generate Report Modal -->
-    <CModal :visible="showGenerateModal" @close="showGenerateModal = false">
-      <CModalHeader>
-        <CModalTitle>Generate Laporan Laba Rugi</CModalTitle>
-      </CModalHeader>
-      <CModalBody>
-        <CForm @submit.prevent="generateReport">
-          <CFormSelect v-model="form.proyek_id" label="Proyek" class="mb-3">
-            <option value="">Semua Proyek</option>
-            <option v-for="proyek in proyeks" :key="proyek.id" :value="proyek.id">
-              {{ proyek.name }}
-            </option>
-          </CFormSelect>
-
-          <CFormSelect
-            v-model="form.period_type"
-            label="Jenis Periode"
-            :options="[
-              { value: 'weekly', label: 'Mingguan' },
-              { value: 'monthly', label: 'Bulanan' },
-              { value: 'yearly', label: 'Tahunan' }
-            ]"
-            required
-            class="mb-3"
-          />
-
-          <CFormInput
-            v-model="form.start_date"
-            type="date"
-            label="Tanggal Mulai"
-            required
-            class="mb-3"
-          />
-
-          <CFormInput
-            v-model="form.end_date"
-            type="date"
-            label="Tanggal Selesai"
-            required
-            class="mb-3"
-          />
-        </CForm>
-      </CModalBody>
-      <CModalFooter>
-        <CButton color="secondary" @click="showGenerateModal = false">Batal</CButton>
-        <CButton color="primary" @click="generateReport">Generate</CButton>
-      </CModalFooter>
-    </CModal>
-
-    <!-- Report Details Modal -->
-    <CModal :visible="!!selectedReport" @close="selectedReport = null" size="lg">
-      <CModalHeader>
-        <CModalTitle>Detail Laporan Laba Rugi</CModalTitle>
-      </CModalHeader>
-      <CModalBody v-if="selectedReport">
-        <h6>Pendapatan</h6>
-        <CTable hover responsive>
-          <CTableHead>
-            <CTableRow>
-              <CTableHeaderCell>Deskripsi</CTableHeaderCell>
-              <CTableHeaderCell>Jumlah</CTableHeaderCell>
-              <CTableHeaderCell>Tanggal</CTableHeaderCell>
-            </CTableRow>
-          </CTableHead>
-          <CTableBody>
-            <CTableRow v-for="income in selectedReport.income_details" :key="income.id">
-              <CTableDataCell>{{ income.description }}</CTableDataCell>
-              <CTableDataCell>{{ formatCurrency(income.amount) }}</CTableDataCell>
-              <CTableDataCell>{{ formatDate(income.date) }}</CTableDataCell>
-            </CTableRow>
-          </CTableBody>
-        </CTable>
-
-        <h6 class="mt-4">Pengeluaran</h6>
-        <CTable hover responsive>
-          <CTableHead>
-            <CTableRow>
-              <CTableHeaderCell>Deskripsi</CTableHeaderCell>
-              <CTableHeaderCell>Jumlah</CTableHeaderCell>
-              <CTableHeaderCell>Tanggal</CTableHeaderCell>
-            </CTableRow>
-          </CTableHead>
-          <CTableBody>
-            <CTableRow v-for="expense in selectedReport.expense_details" :key="expense.id">
-              <CTableDataCell>{{ expense.description }}</CTableDataCell>
-              <CTableDataCell>{{ formatCurrency(expense.amount) }}</CTableDataCell>
-              <CTableDataCell>{{ formatDate(expense.date) }}</CTableDataCell>
-            </CTableRow>
-          </CTableBody>
-        </CTable>
-      </CModalBody>
-    </CModal>
   </CRow>
-
-  <div>
-    <h2>Laporan Laba Rugi</h2>
-    <label for="start-date">Tanggal Mulai</label>
-    <input type="date" id="start-date" v-model="startDate" />
-
-    <label for="end-date">Tanggal Akhir</label>
-    <input type="date" id="end-date" v-model="endDate" />
-
-    <button @click="fetchProfitLoss">Tampilkan Laporan</button>
-
-    <div v-if="profitLossData">
-      <p>Total Pendapatan: {{ profitLossData.total_income }}</p>
-      <p>Total Pengeluaran: {{ profitLossData.total_expense }}</p>
-      <p>Laba/Rugi Bersih: {{ profitLossData.profit_loss }}</p>
-    </div>
-  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import axios from 'axios'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import axios from 'axios';
 import $ from 'jquery'
 import Swal from 'sweetalert2'
 import 'datatables.net-dt/css/dataTables.dataTables.min.css'
 import 'datatables.net-responsive-dt/css/responsive.dataTables.min.css'
 import 'datatables.net'
 import 'datatables.net-responsive'
-import { useRouter } from 'vue-router'
-import {
-  CCard,
-  CCardHeader,
-  CCardBody,
-  CButton,
-  CForm,
-  CFormInput,
-  CFormSelect,
-  CTable,
-  CTableHead,
-  CTableBody,
-  CTableRow,
-  CTableHeaderCell,
-  CTableDataCell,
-  CModal,
-  CModalHeader,
-  CModalTitle,
-  CModalBody,
-  CModalFooter,
-  CRow,
-  CCol,
-  CIcon
-} from '@coreui/vue'
 
-const profitTableRef = ref(null)
 const reports = ref([])
 const proyeks = ref([])
-const selectedReport = ref(null)
-const showGenerateModal = ref(false)
+const profitTableRef = ref(null)
 const error = ref('')
-const loading = ref(false)
-const form = ref({
-  proyek_id: '',
-  period_type: 'monthly',
-  start_date: '',
-  end_date: ''
+const loading = ref(false);
+const filter = ref({
+  proyek_id: sessionStorage.getItem('profit_proyek_id') || '',
+  start_date: sessionStorage.getItem('profit_start_date') || '',
+  end_date: sessionStorage.getItem('profit_end_date') || '',
+  period_type: sessionStorage.getItem('profit_period_type') || '',
 })
-const profitLossData = ref(null)
-const startDate = ref('')
-const endDate = ref('')
+
+watch(filter, (newVal) => {
+  sessionStorage.setItem('profit_proyek_id', newVal.proyek_id)
+  sessionStorage.setItem('profit_start_date', newVal.start_date)
+  sessionStorage.setItem('profit_end_date', newVal.end_date)
+  sessionStorage.setItem('profit_period_type', newVal.period_type)
+}, { deep: true })
+
+
+const totalProfit = computed(() => {
+  return reports.value.reduce((sum, r) => sum + parseFloat(r.net_profit), 0)
+})
 
 const fetchReports = async () => {
-  loading.value = true
   error.value = ''
-
   try {
-    const response = await axios.get('/api/profit-loss-reports')
-    if (response.data && response.data.status === 'success') {
-      reports.value = response.data.data
-    } else {
-      reports.value = []
-      error.value = 'Data tidak valid'
+    const token = sessionStorage.getItem('token');
+    const { data } = await axios.get('/api/profit-loss-reports', {
+      params: filter.value,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (data.status === 'success') {
+      reports.value = data.data.data
+      nextTick(() => initDataTable())
     }
-
-    nextTick(() => {
-      initDataTable()
-    })
   } catch (err) {
-    console.error('Error fetching reports:', err)
-    error.value = 'Gagal memuat data laporan: ' + (err.response?.data?.message || err.message)
-    Swal.fire({
-      icon: 'error',
-      title: 'Oops...',
-      text: error.value
-    })
-  } finally {
-    loading.value = false
+    error.value = err.response?.data?.message || 'Gagal memuat data laporan'
   }
 }
 
 const fetchProyeks = async () => {
+  loading.value = true;
+  error.value = "";
+
   try {
-    const response = await axios.get('/api/proyeks')
-    proyeks.value = response.data
-  } catch (error) {
-    console.error('Error fetching proyeks:', error)
+    const token = sessionStorage.getItem("token");
+    const response = await axios.get("/api/proyeks", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (response.data && response.data.status === 'success') {
+      proyeks.value = response.data.data;
+    } else {
+      proyeks.value = [];
+      error.value = "Data tidak valid";
+    }
+  } catch (err) {
+    console.error('Error fetching projects:', err);
+    error.value = "Gagal memuat data proyek: " + (err.response?.data?.message || err.message);
+    Swal.fire({
+      icon: "error",
+      title: "Oops...",
+      text: error.value
+    });
+  } finally {
+    loading.value = false;
   }
-}
+};
 
 const initDataTable = () => {
   if ($.fn.DataTable.isDataTable(profitTableRef.value)) {
     $(profitTableRef.value).DataTable().destroy()
   }
 
-  if (!reports.value || reports.value.length === 0) {
-    return
-  }
-
   $(profitTableRef.value).DataTable({
     data: reports.value,
     columns: [
+      { title: 'No', data: null, render: (d, t, r, m) => m.row + 1 },
+      { title: 'Proyek', data: null, render: (data, type, row) => row.proyek?.nama_proyek || 'N/A' },
+      { title: 'Periode', data: 'period_type' },
+      { title: 'Mulai', data: 'start_date' },
+      { title: 'Selesai', data: 'end_date' },
       {
-        title: 'No',
-        data: null,
-        render: (data, type, row, meta) => meta.row + 1
-      },
-      {
-        title: 'Proyek',
-        data: 'project.name'
-      },
-      {
-        title: 'Periode',
-        data: 'period_type',
-        render: (data) => formatPeriodType(data)
-      },
-      {
-        title: 'Tanggal Mulai',
-        data: 'start_date',
-        render: (data) => formatDate(data)
-      },
-      {
-        title: 'Tanggal Selesai',
-        data: 'end_date',
-        render: (data) => formatDate(data)
-      },
-      {
-        title: 'Total Pendapatan',
+        title: 'Pendapatan',
         data: 'total_income',
-        render: (data) => formatCurrency(data)
+        render: d => formatCurrency(d)
       },
       {
-        title: 'Total Pengeluaran',
+        title: 'Pengeluaran',
         data: 'total_expense',
-        render: (data) => formatCurrency(data)
+        render: d => formatCurrency(d)
       },
       {
         title: 'Laba/Rugi',
         data: 'net_profit',
-        render: (data) => {
-          const formatted = formatCurrency(data)
-          return `<span class="${data > 0 ? 'text-success' : 'text-danger'}">${formatted}</span>`
-        }
-      },
-      {
-        title: 'Aksi',
-        data: null,
-        render: (data, type, row) => `
-          <button class="btn btn-sm btn-info detail-btn" data-id="${row.id}">
-            <i class="cil-list"></i> Detail
-          </button>
-        `
+        render: d => `<span class="${d >= 0 ? 'text-success' : 'text-danger'}">${formatCurrency(d)}</span>`
       }
     ],
     scrollX: true,
-    scrollCollapse: true,
-    fixedColumns: {
-      left: 1,
-      right: 1
-    },
-    dom: '<"top"lf>rt<"bottom"ip><"clear">',
-    pageLength: 10,
-    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, 'Semua']]
-  })
-
-  $(profitTableRef.value).off('click', '.detail-btn').on('click', '.detail-btn', function () {
-    const id = $(this).data('id')
-    const report = reports.value.find((r) => r.id == id)
-    if (report) viewDetails(report)
+    pageLength: 10
   })
 }
+const exportReport = async (format) => {
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get(`/api/profit-loss-reports/export/${format}`, {
+      params: {
+        proyek_id: filter.value.proyek_id,
+        start_date: filter.value.start_date,
+        end_date: filter.value.end_date
+      },
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      responseType: 'blob'
+    });
+
+    const blob = new Blob([response.data], {
+      type: format === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `laporan_laba_rugi.${format}`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+  } catch (err) {
+    console.error('Export error:', err);
+    Swal.fire('Gagal', `Gagal mengekspor laporan ke ${format.toUpperCase()}`, 'error');
+  }
+};
 
 const generateReport = async () => {
+  if (!filter.value.period_type || !filter.value.start_date || !filter.value.end_date) {
+    Swal.fire('Gagal', 'Silakan lengkapi Jenis Periode dan Tanggal terlebih dahulu.', 'warning');
+    return;
+  }
+
   try {
-    await axios.post('/api/profit-loss-reports/generate', form.value)
-    showGenerateModal.value = false
-    fetchReports()
-    Swal.fire({
-      icon: 'success',
-      title: 'Sukses',
-      text: 'Laporan berhasil digenerate'
-    })
-  } catch (error) {
-    console.error('Error generating report:', error)
-    Swal.fire({
-      icon: 'error',
-      title: 'Error',
-      text: 'Gagal generate laporan'
-    })
-  }
-}
+    const token = sessionStorage.getItem('token');
+    const response = await axios.post('/api/profit-loss-reports/generate', filter.value, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-const viewDetails = (report) => {
-  selectedReport.value = report
-}
-
-const fetchProfitLoss = () => {
-  axios.get('/api/profit-loss', {
-    params: {
-      start_date: startDate.value,
-      end_date: endDate.value,
+    if (response.data.status === 'success' || response.data.report) {
+      Swal.fire('Berhasil', 'Laporan berhasil dibuat.', 'success');
+      fetchReports(); // refresh setelah generate
+    } else {
+      Swal.fire('Gagal', response.data.message || 'Gagal membuat laporan.', 'error');
     }
-  })
-  .then(response => {
-    profitLossData.value = response.data;
-  })
-  .catch(error => {
-    console.error('Error fetching profit-loss data:', error);
-  });
-}
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR'
-  }).format(value)
-}
-
-const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
-}
-
-const formatPeriodType = (type) => {
-  const types = {
-    weekly: 'Mingguan',
-    monthly: 'Bulanan',
-    yearly: 'Tahunan'
+  } catch (err) {
+    console.error('Error generating report:', err);
+    Swal.fire('Gagal', err.response?.data?.message || 'Terjadi kesalahan saat membuat laporan.', 'error');
   }
-  return types[type] || type
+};
+
+
+const formatCurrency = (val) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency', currency: 'IDR'
+  }).format(val)
 }
 
 onMounted(() => {
-  fetchReports()
-  fetchProyeks()
-})
+  const token = sessionStorage.getItem('token');
+  if (token) {
+    fetchProyeks();
+    fetchReports();
+  } else {
+    Swal.fire('Perhatian', 'Silakan login untuk mengakses data laporan.', 'warning');
+  }
+});
 </script>
 
 <style scoped>
 .w-100 {
   width: 100%;
   overflow-x: auto;
-}
-
-.dataTables_wrapper {
-  overflow-x: auto;
-  position: relative;
-}
-
-table.display {
-  width: 100% !important;
-  min-width: 1000px;
-}
-
-/* Fixed columns styles */
-.dataTables_scroll {
-  position: relative;
-  clear: both;
-  width: 100%;
-}
-
-.dataTables_scrollBody {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: none;
-}
-
-/* Fixed column styles */
-.fixed-columns {
-  position: sticky;
-  background: white;
-  z-index: 1;
-}
-
-.fixed-columns-left {
-  left: 0;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-}
-
-.fixed-columns-right {
-  right: 0;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-}
-
-/* Table cell styles */
-table.dataTable tbody td {
-  white-space: nowrap;
-  padding: 8px;
-}
-
-/* Button styles */
-.btn {
-  margin: 0 2px;
-}
-
-/* Status badge styles */
-.badge {
-  padding: 0.5em 0.75em;
-  font-size: 0.875em;
 }
 </style>

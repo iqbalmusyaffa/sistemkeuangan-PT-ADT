@@ -240,4 +240,9 @@ public function updateProgressFromTermins()
     {
         return $this->termins()->get(['id', 'target_progress', 'status']);
     }
+    public function customer()
+{
+    return $this->belongsTo(Customer::class);
+}
+
 }

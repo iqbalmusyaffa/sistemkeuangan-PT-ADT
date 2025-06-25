@@ -639,18 +639,25 @@ const handleStatusSubmit = async () => {
           data: null,
           className: 'text-center align-middle',
           orderable: false,
-          render: (data, type, row) => {
-            if (row.source_type) {
-              return '<button class="btn btn-sm btn-info view-btn me-1" data-bs-toggle="tooltip" title="Detail" data-id="' + row.id + '"><i class="bi bi-eye"></i> Detail</button>';
-            }
-            return `
-              <div class="btn-group" role="group">
-                <button class="btn btn-sm btn-warning edit-btn me-1" data-bs-toggle="tooltip" title="Edit" data-id="${row.id}"><i class="bi bi-pencil"></i> Edit</button>
-                <button class="btn btn-sm btn-info status-btn me-1" data-bs-toggle="tooltip" title="Update Status" data-id="${row.id}"><i class="bi bi-arrow-repeat"></i> Status</button>
-                <button class="btn btn-sm btn-danger delete-btn" data-bs-toggle="tooltip" title="Hapus" data-id="${row.id}"><i class="bi bi-trash"></i> Hapus</button>
-              </div>
-            `;
-          }
+         render: (data, type, row) => {
+  return `
+    <div class="btn-group">
+      <button class="btn btn-sm btn-warning edit-btn me-1" data-bs-toggle="tooltip" title="Edit" data-id="${row.id}">
+        <i class="bi bi-pencil"></i> Edit
+      </button>
+      <button class="btn btn-sm btn-info status-btn me-1" data-bs-toggle="tooltip" title="Update Status" data-id="${row.id}">
+        <i class="bi bi-arrow-repeat"></i> Status
+      </button>
+      <button class="btn btn-sm btn-danger delete-btn me-1" data-bs-toggle="tooltip" title="Hapus" data-id="${row.id}">
+        <i class="bi bi-trash"></i> Hapus
+      </button>
+      <button class="btn btn-sm btn-secondary view-btn" data-bs-toggle="tooltip" title="Detail" data-id="${row.id}">
+        <i class="bi bi-eye"></i> Detail
+      </button>
+    </div>
+  `;
+}
+
         },
       ],
       order: [[1, 'desc']],

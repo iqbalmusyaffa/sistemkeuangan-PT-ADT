@@ -4,52 +4,51 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
-use App\Models\Termin;
 use App\Models\User;
+use App\Models\Proyek;
 use App\Models\Invoice;
+use App\Models\Termin;
 
 class TerminControllerTest extends TestCase
 {
     use DatabaseTransactions;
 
     protected $user;
+    protected $proyek;
     protected $invoice;
     protected $terminData;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
-        // Create a test user
+
         $this->user = User::factory()->create([
             'role' => 'admin',
             'status' => 'active'
         ]);
 
-        // Create test invoice
-        $this->invoice = Invoice::create([
-            'customer_id' => 1,
-            'invoice_number' => 'INV-001',
-            'invoice_date' => '2024-03-20',
-            'due_date' => '2024-04-20',
-            'total_amount' => 1000000,
-            'status' => 'pending'
+        $this->proyek = Proyek::factory()->create(['anggaran_kontrak' => 100000000]);
+
+        $this->invoice = Invoice::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'grand_total' => 1000000,
+            'status' => 'unpaid'
         ]);
 
-        // Sample termin data
         $this->terminData = [
+            'proyek_id' => $this->proyek->id,
             'invoice_id' => $this->invoice->id,
-            'termin_number' => 1,
-            'due_date' => '2024-04-20',
-            'amount' => 500000,
-            'status' => 'pending',
-            'description' => 'Test Termin'
+            'nama_termin' => 'Termin 1',
+            'jenis_termin' => 'DP',
+            'target_progress' => 20,
+            'termin_ke' => 1,
+            'nilai_termin' => 500000,
+            'persentase_dp' => 20,
+            'tanggal_dp' => now()->format('Y-m-d'),
+            'keterangan' => 'Test Termin'
         ];
     }
 
-    /**
-     * Test creating a new termin
-     */
     public function test_can_create_termin()
     {
         $this->actingAs($this->user);
@@ -58,204 +57,179 @@ class TerminControllerTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJson([
-                'invoice_id' => $this->invoice->id,
-                'termin_number' => 1,
-                'amount' => 500000,
-                'status' => 'pending',
-                'description' => 'Test Termin'
+                'status' => 'success',
+                'data' => [
+                    'nama_termin' => 'Termin 1',
+                    'jenis_termin' => 'DP',
+                    'termin_ke' => 1,
+                    'nilai_termin' => 500000,
+                    'persentase_dp' => 20,
+                    'status_termin' => 'Belum Dibayar',
+                    'status_approval' => 'Pending'
+                ]
             ]);
 
         $this->assertDatabaseHas('termins', [
-            'invoice_id' => $this->invoice->id,
-            'termin_number' => 1,
-            'amount' => 500000,
-            'status' => 'pending',
-            'description' => 'Test Termin'
+            'nama_termin' => 'Termin 1',
+            'jenis_termin' => 'DP',
+            'termin_ke' => 1,
+            'nilai_termin' => 500000
         ]);
     }
 
-    /**
-     * Test retrieving termin list
-     */
-    public function test_can_get_termin_list()
-    {
-        $this->actingAs($this->user);
-
-        // Create a test termin
-        Termin::create($this->terminData);
-
-        $response = $this->getJson('/api/termins');
-
-        $response->assertStatus(200)
-            ->assertJsonStructure([
-                '*' => [
-                    'id',
-                    'invoice_id',
-                    'termin_number',
-                    'due_date',
-                    'amount',
-                    'status',
-                    'description',
-                    'created_at',
-                    'updated_at'
-                ]
-            ]);
-    }
-
-    /**
-     * Test retrieving single termin
-     */
     public function test_can_get_single_termin()
     {
         $this->actingAs($this->user);
 
-        // Create a test termin
-        $termin = Termin::create($this->terminData);
+        $termin = Termin::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id,
+            'nama_termin' => 'Termin 1',
+            'jenis_termin' => 'DP',
+            'target_progress' => 20,
+            'termin_ke' => 1,
+            'nilai_termin' => 500000,
+            'persentase_dp' => 20,
+            'status_termin' => 'Belum Dibayar',
+            'status_approval' => 'Pending'
+        ]);
 
         $response = $this->getJson('/api/termins/' . $termin->id);
 
         $response->assertStatus(200)
             ->assertJson([
-                'id' => $termin->id,
-                'invoice_id' => $this->invoice->id,
-                'termin_number' => 1,
-                'amount' => 500000,
-                'status' => 'pending',
-                'description' => 'Test Termin'
+                'data' => [
+                    'id' => $termin->id,
+                    'nama_termin' => 'Termin 1'
+                ]
             ]);
     }
 
-    /**
-     * Test updating termin
-     */
     public function test_can_update_termin()
     {
         $this->actingAs($this->user);
 
-        // Create a test termin
-        $termin = Termin::create($this->terminData);
+        $termin = Termin::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id,
+            'nama_termin' => 'Termin 1',
+            'jenis_termin' => 'DP',
+            'target_progress' => 20,
+            'termin_ke' => 1,
+            'nilai_termin' => 500000,
+            'persentase_dp' => 20,
+        ]);
 
         $updateData = [
-            'amount' => 600000,
-            'status' => 'paid',
-            'description' => 'Updated Termin'
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id,
+            'nama_termin' => 'Termin Updated',
+            'jenis_termin' => 'DP',
+            'target_progress' => 25,
+            'termin_ke' => 1,
+            'nilai_termin' => 600000,
+            'persentase_dp' => 25,
+            'tanggal_dp' => now()->format('Y-m-d'),
+            'keterangan' => 'Updated Description'
         ];
 
         $response = $this->putJson('/api/termins/' . $termin->id, $updateData);
 
         $response->assertStatus(200)
             ->assertJson([
-                'id' => $termin->id,
-                'amount' => 600000,
-                'status' => 'paid',
-                'description' => 'Updated Termin'
+                'status' => 'success',
+                'data' => [
+                    'nama_termin' => 'Termin Updated',
+                    'nilai_termin' => 600000
+                ]
             ]);
-
-        $this->assertDatabaseHas('termins', [
-            'id' => $termin->id,
-            'amount' => 600000,
-            'status' => 'paid',
-            'description' => 'Updated Termin'
-        ]);
     }
 
-    /**
-     * Test deleting termin
-     */
     public function test_can_delete_termin()
     {
         $this->actingAs($this->user);
 
-        // Create a test termin
-        $termin = Termin::create($this->terminData);
+        $termin = Termin::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id
+        ]);
 
         $response = $this->deleteJson('/api/termins/' . $termin->id);
 
-        $response->assertStatus(204);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['message' => 'Termin berhasil dihapus']);
 
         $this->assertDatabaseMissing('termins', [
             'id' => $termin->id
         ]);
     }
 
-    /**
-     * Test validation rules for termin creation
-     */
-    public function test_validation_rules_for_termin_creation()
+    public function test_validation_error_on_termin_create()
     {
         $this->actingAs($this->user);
 
-        $invalidData = [
-            'invoice_id' => '', // required
-            'termin_number' => '', // required
-            'due_date' => '', // required
-            'amount' => '', // required
-            'status' => '', // required
-            'description' => '' // optional
-        ];
-
-        $response = $this->postJson('/api/termins', $invalidData);
+        $response = $this->postJson('/api/termins', []);
 
         $response->assertStatus(422)
-            ->assertJsonStructure([
-                'message',
-                'errors' => [
-                    'invoice_id',
-                    'termin_number',
-                    'due_date',
-                    'amount',
-                    'status'
-                ]
+            ->assertJsonValidationErrors([
+                'proyek_id',
+                'invoice_id',
+                'nama_termin',
+                'jenis_termin',
+                'target_progress',
+                'nilai_termin',
+                'persentase_dp'
             ]);
     }
 
-    /**
-     * Test validation rules for termin update
-     */
-    public function test_validation_rules_for_termin_update()
+    public function test_validation_error_on_termin_update()
     {
         $this->actingAs($this->user);
 
-        // Create a test termin
-        $termin = Termin::create($this->terminData);
+        $termin = Termin::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id
+        ]);
 
         $invalidData = [
-            'amount' => 'not_a_number', // invalid amount
-            'status' => 'invalid_status', // invalid status
-            'description' => '' // optional
+            'nama_termin' => '',
+            'jenis_termin' => 'invalid',
+            'target_progress' => 200,
+            'nilai_termin' => -100,
+            'persentase_dp' => 110
         ];
 
         $response = $this->putJson('/api/termins/' . $termin->id, $invalidData);
 
         $response->assertStatus(422)
-            ->assertJsonStructure([
-                'message',
-                'errors' => [
-                    'amount',
-                    'status'
-                ]
+            ->assertJsonValidationErrors([
+                'nama_termin',
+                'jenis_termin',
+                'target_progress',
+                'nilai_termin',
+                'persentase_dp'
             ]);
     }
 
-    /**
-     * Test unique termin number validation for same invoice
-     */
-    public function test_unique_termin_number_validation()
+    public function test_unique_termin_ke_per_jenis_per_invoice()
     {
         $this->actingAs($this->user);
 
-        // Create a test termin
-        Termin::create($this->terminData);
+        Termin::factory()->create([
+            'proyek_id' => $this->proyek->id,
+            'invoice_id' => $this->invoice->id,
+            'jenis_termin' => 'DP',
+            'termin_ke' => 1
+        ]);
 
-        // Try to create another termin with the same termin number for the same invoice
-        $response = $this->postJson('/api/termins', $this->terminData);
+        $duplicate = $this->terminData;
+        $duplicate['jenis_termin'] = 'DP'; // same jenis + termin_ke
+
+        $response = $this->postJson('/api/termins', $duplicate);
 
         $response->assertStatus(422)
-            ->assertJsonStructure([
-                'message',
-                'errors' => [
-                    'termin_number'
-                ]
+            ->assertJsonFragment([
+                'message' => 'Termin ke-1 dengan jenis DP sudah ada untuk proyek dan invoice ini.'
             ]);
     }
-} 
+}

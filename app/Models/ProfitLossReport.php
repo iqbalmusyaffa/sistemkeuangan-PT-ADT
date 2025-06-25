@@ -36,4 +36,4 @@ class ProfitLossReport extends Model
     {
         return $this->belongsTo(Proyek::class);
     }
-} 
+}

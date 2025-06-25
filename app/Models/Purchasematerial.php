@@ -16,9 +16,10 @@ use App\Models\PaymentMethod; // Added PaymentMethod import
 use App\Traits\Trackable;
 use Illuminate\Support\Facades\Log;
 
-class PurchaseMaterial extends Model
+class Purchasematerial extends Model
 {
     use HasFactory, Trackable;
+    protected $table = 'purchase_materials'; // Ini penting
 
     protected $fillable = [
         'item',

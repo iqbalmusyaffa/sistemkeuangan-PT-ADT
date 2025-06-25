@@ -6,7 +6,6 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class UserTest extends TestCase
 {
@@ -22,7 +21,7 @@ class UserTest extends TestCase
             'role' => 'superadmin',
             'status' => 'active'
         ]);
-        
+
         $this->actingAs($superadmin);
 
         $userData = [
@@ -67,7 +66,7 @@ class UserTest extends TestCase
             'role' => 'admin',
             'status' => 'active'
         ]);
-        
+
         $this->actingAs($admin);
 
         $userData = [
@@ -134,7 +133,7 @@ class UserTest extends TestCase
             'role' => 'admin',
             'status' => 'active'
         ]);
-        
+
         $this->actingAs($user);
 
         $updateData = [
@@ -165,7 +164,7 @@ class UserTest extends TestCase
             'role' => 'admin',
             'status' => 'active'
         ]);
-        
+
         $this->actingAs($user);
 
         $response = $this->getJson('/api/profile');
