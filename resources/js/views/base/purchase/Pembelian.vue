@@ -113,9 +113,18 @@
                 <CFormLabel for="item">Nama Item</CFormLabel>
                 <CFormInput v-model="form.item" id="item" required />
               </CCol>
+              <CFormLabel for="payment_method_id">Metode Pembayaran</CFormLabel>
+<CFormSelect v-model="form.payment_method_id" id="payment_method_id">
+  <option value="">Pilih Metode Pembayaran</option>
+  <option v-for="method in paymentMethods" :key="method.id" :value="method.id">
+  {{ method.nama_metode }}
+</option>
+
+</CFormSelect>
+
               <CCol md="6">
                 <CFormLabel for="merek_id">Merek</CFormLabel>
-                <CFormSelect
+                <!-- <CFormSelect
                   v-model="form.merek_id"
                   id="merek_id"
                   :disabled="form.merek_disabled"
@@ -124,7 +133,12 @@
                   <option v-for="merek in mereks" :key="merek.id" :value="merek.id">
                     {{ merek.name }}
                   </option>
-                </CFormSelect>
+                </CFormSelect> -->
+                <CFormSelect v-model="form.merek_id" id="merek_id" :disabled="form.merek_disabled">
+  <option v-for="merek in mereks" :key="merek.id" :value="merek.id">
+    {{ merek.name }}
+  </option>
+</CFormSelect>
               </CCol>
             </CRow>
             <CRow class="mb-3">
@@ -235,37 +249,6 @@
                 <CFormTextarea v-model="form.deskripsi" id="deskripsi" rows="3" />
               </CCol>
             </CRow>
-            <!-- New fields for description, transaction date, and category -->
-            <CRow class="mb-3">
-              <CCol md="12">
-                <CFormLabel for="description">Deskripsi Material</CFormLabel>
-                <CFormInput
-                  v-model="newPurchase.description"
-                  placeholder="Masukkan deskripsi material"
-                  required
-                />
-              </CCol>
-            </CRow>
-            <CRow class="mb-3">
-              <CCol md="6">
-                <CFormLabel for="transaction_date">Tanggal Transaksi</CFormLabel>
-                <CFormInput
-                  v-model="newPurchase.transaction_date"
-                  type="date"
-                  placeholder="Pilih tanggal transaksi"
-                  required
-                />
-              </CCol>
-              <CCol md="6">
-                <CFormLabel for="category_id">Kategori Material</CFormLabel>
-                <CFormSelect
-                  v-model="newPurchase.category_id"
-                  :options="categories"
-                  placeholder="Pilih kategori material"
-                  required
-                />
-              </CCol>
-            </CRow>
             <CButton type="submit" color="primary">{{ modalButtonText }}</CButton>
           </CForm>
         </CModalBody>
@@ -317,6 +300,8 @@ const editingId = ref(null);
 const selectedProject = ref("");
 const selectedProjectDetails = ref(null);
 const serviceCategories = ref([]);
+const paymentMethods = ref([]);
+
 const normalCategories = ref([]);
 const selectedUnitType = ref(null);
 const SERVICE_UNIT_NAMES = ['jasa', 'set', 'transaksi'];
@@ -344,7 +329,13 @@ const fetchInvoices = async (proyekId) => {
     invoices.value = [];
   }
 };
-
+const fetchPaymentMethods = async () => {
+  const token = sessionStorage.getItem("token");
+  const response = await axios.get("/api/payment-methods", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  paymentMethods.value = response.data.data || [];
+};
 // Fetch Projects
 const fetchProjects = async () => {
   try {
@@ -370,7 +361,7 @@ const fetchMereks = async () => {
     const response = await axios.get("/api/mereks", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    mereks.value = response.data;
+    mereks.value = response.data.data;
   } catch (err) {
     error.value = "Gagal memuat data merek";
   }
@@ -382,7 +373,7 @@ const fetchUnits = async () => {
     const response = await axios.get("/api/units", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    units.value = response.data;
+    units.value = response.data.data;
   } catch (err) {
     error.value = "Gagal memuat data unit";
   }
@@ -394,15 +385,29 @@ const fetchCategories = async () => {
     const response = await axios.get("/api/kategori", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    // Pastikan categories.value selalu array
-    categories.value = Array.isArray(response.data)
-      ? response.data
-      : (response.data.data ? response.data.data : []);
+
+    let parsed = [];
+    if (Array.isArray(response.data)) {
+      parsed = response.data;
+    } else if (Array.isArray(response.data.data)) {
+      parsed = response.data.data;
+    }
+
+    // Hanya ambil kategori 'pengeluaran' (material)
+    categories.value = parsed.filter(cat => {
+      const jenis = (cat.jenis || '').toString().trim().toLowerCase();
+      return jenis === 'pengeluaran';
+    });
+
+    console.log("✅ Parsed categories (material):", categories.value);
   } catch (err) {
     error.value = "Gagal memuat data kategori: " + (err.response?.data?.message || err.message);
     categories.value = [];
   }
 };
+
+
+
 
 const fetchServiceCategories = async (unitId) => {
   try {
@@ -442,125 +447,139 @@ const fetchPembelians = async (proyekId) => {
 
   try {
     const token = sessionStorage.getItem("token");
-    const [purchaseResponse, proyekResponse] = await Promise.all([
-      axios.get(`/api/purchasematerials`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          proyek_id: proyekId
-        }
-      }),
-      axios.get(`/api/proyeks/${proyekId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    ]);
+    // Hanya ambil data pembelian, tidak perlu ambil detail proyek
+    const purchaseResponse = await axios.get(`/api/purchasematerials`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        proyek_id: proyekId,
+      },
+    });
 
-    if (purchaseResponse.data && proyekResponse.data) {
-      pembelians.value = Array.isArray(purchaseResponse.data.purchases)
-        ? purchaseResponse.data.purchases.map(purchase => ({
-            ...purchase,
-            nama_customer: purchase.proyek?.nama_customer || '-',
-            nama_proyek: purchase.proyek?.nama_proyek || '-',
-            item: purchase.item || '-',
-            merek: purchase.merek?.name || '-',
-            type: purchase.type || '-',
-            unit: purchase.unit?.unit_name || '-',
-            category_name: purchase.is_service
-              ? (purchase.service_category?.nama_kategori || '-')
-              : (purchase.category?.nama_kategori || '-'),
-            qty: purchase.qty ?? '-',
-            harga: purchase.harga ?? '-',
-            total_harga: purchase.total_harga ?? '-',
-            status: purchase.is_service ? 'Jasa' : 'Material'
-          }))
-        : [];
+    console.log("Purchase Response:", purchaseResponse.data);
 
-      selectedProjectDetails.value = proyekResponse.data;
-      initDataTable();
+    // Pastikan respons data array
+    let purchases = [];
+    if (Array.isArray(purchaseResponse.data)) {
+      purchases = purchaseResponse.data;
+    } else if (Array.isArray(purchaseResponse.data.data)) {
+      purchases = purchaseResponse.data.data;
+    } else if (Array.isArray(purchaseResponse.data.purchases)) {
+      purchases = purchaseResponse.data.purchases;
     }
+
+    pembelians.value = purchases.map((purchase) => ({
+      ...purchase,
+      nama_customer: purchase.proyek?.nama_customer || "-",
+      nama_proyek: purchase.proyek?.nama_proyek || "-",
+      item: purchase.item || "-",
+      merek: purchase.merek?.name || "-",
+      type: purchase.type || "-",
+      unit: purchase.unit?.unit_name || "-",
+      category_name: purchase.is_service
+        ? purchase.service_category?.nama_kategori || "-"
+        : purchase.category?.nama_kategori || "-",
+      qty: purchase.qty ?? "-",
+      harga: purchase.harga ?? "-",
+      total_harga: purchase.total_harga ?? "-",
+      status: purchase.is_service ? "Jasa" : "Material",
+    }));
+
+    console.log("Mapped Pembelians:", pembelians.value);
+    initDataTable();
   } catch (err) {
     let errorMessage = "Gagal mengambil data pembelian";
     if (err.response?.data?.message) {
       errorMessage = err.response.data.message;
     }
+    console.error("Error fetching pembelians:", err);
     Swal.fire({
       icon: "error",
       title: "Oops...",
-      text: errorMessage
+      text: errorMessage,
     });
   }
 };
 
 const initDataTable = () => {
+  if (!selectedProject.value) return;
+
   if ($.fn.DataTable.isDataTable(pembelianTableRef.value)) {
     $(pembelianTableRef.value).DataTable().destroy();
-  }
-
-  if (!pembelians.value || pembelians.value.length === 0) {
-    return;
+    $(pembelianTableRef.value).empty();
   }
 
   $(pembelianTableRef.value).DataTable({
-    data: pembelians.value,
-    columns: [
-      { title: "No", data: null, render: (data, type, row, meta) => meta.row + 1, className: "text-center" },
-      { title: "Customer", data: "nama_customer" },
-      { title: "Proyek", data: "nama_proyek" },
-      { title: "Item", data: "item" },
-      { title: "Merek", data: "merek" },
-      { title: "Tipe", data: "type" },
-      { title: "Unit", data: "unit" },
-      { title: "Kategori", data: "category_name" },
-      { title: "Jumlah", data: "qty" },
-      { title: "Harga", data: "harga", render: data => data === '-' ? '-' : `Rp ${Number(data).toLocaleString('id-ID')}` },
-      { title: "Total", data: "total_harga", render: data => data === '-' ? '-' : `Rp ${Number(data).toLocaleString('id-ID')}` },
-      { title: "Status", data: "status", render: data => data === 'Jasa' ? `<span class='badge bg-info'>Jasa</span>` : `<span class='badge bg-primary'>Material</span>` },
-      {
-        title: "Aksi",
-        data: null,
-        render: (data, type, row) => `
-          <button class="btn btn-sm btn-primary edit-btn" data-id="${row.id}">
-            <i class="cil-pencil"></i> Edit
-          </button>
-          <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">
-            <i class="cil-trash"></i> Hapus
-          </button>
-        `,
-        className: "text-center"
+    processing: true,
+    serverSide: true,
+    ajax: {
+      url: "/api/purchasematerials/datatables",
+      data: d => {
+        d.proyek_id = selectedProject.value;
       },
-    ],
-    scrollX: true,
-    scrollCollapse: true,
-    fixedColumns: {
-      left: 1,
-      right: 1
+      headers: {
+        Authorization: `Bearer ${sessionStorage.getItem("token")}`
+      },
+      error(xhr, error, thrown) {
+        let message = "Gagal memuat data tabel.";
+        if (xhr?.responseJSON?.error) {
+          message = xhr.responseJSON.error;
+        } else if (xhr?.status === 401) {
+          message = "Sesi login Anda telah habis. Silakan login ulang.";
+        } else if (xhr?.status >= 500) {
+          message = "Terjadi kesalahan server: " + (xhr.responseJSON?.error || xhr.statusText);
+        }
+        Swal.fire({ icon: "error", title: "DataTables Error", text: message });
+      }
     },
+  columns: [
+  { data: 'DT_RowIndex', name: 'DT_RowIndex', title: "No", className: "text-center", orderable: false, searchable: false },
+  { data: "nama_customer", title: "Customer" },
+  { data: "nama_proyek", title: "Proyek" },
+  { data: "item", title: "Item" },
+  { data: "merek", title: "Merek" },
+  { data: "type", title: "Tipe" },
+  { data: "unit", title: "Unit" },
+  { data: "category_name", title: "Kategori" },
+  { data: "qty", title: "Jumlah" },
+  { data: "harga", title: "Harga", render: data => `Rp ${Number(data).toLocaleString("id-ID")}` },
+  { data: "total_harga", title: "Total", render: data => `Rp ${Number(data).toLocaleString("id-ID")}` },
+  {
+    data: "status",
+    title: "Status",
+    render: data => data === "Jasa"
+      ? `<span class='badge bg-info'>Jasa</span>`
+      : `<span class='badge bg-primary'>Material</span>`
+  },
+  {
+    data: "aksi",
+    title: "Aksi",
+    orderable: false,
+    searchable: false,
+    className: "text-center"
+  }
+],
+    scrollX: true,
     dom: '<"top"lf>rt<"bottom"ip><"clear">',
     pageLength: 10,
-    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Semua"]],
     language: {
       search: "Cari:",
       lengthMenu: "Tampilkan _MENU_ data per halaman",
-      zeroRecords: "Tidak ada data yang ditemukan",
-      info: "Menampilkan halaman _PAGE_ dari _PAGES_",
+      zeroRecords: "Tidak ada data ditemukan",
+      info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
       infoEmpty: "Tidak ada data tersedia",
-      infoFiltered: "(difilter dari _MAX_ total data)",
       paginate: {
         first: "Pertama",
         last: "Terakhir",
-        next: "Selanjutnya",
+        next: "Berikutnya",
         previous: "Sebelumnya"
       }
-    },
-    rowCallback: function(row, data) {
-      // Optional: highlight row based on type if needed
     }
   });
 
-  // Add event listeners for buttons
+
   $(pembelianTableRef.value).off("click", ".edit-btn").on("click", ".edit-btn", function () {
     const id = $(this).data("id");
-    const pembelian = pembelians.value.find(p => p.id === id);
-    if (pembelian) openModal("edit", pembelian);
+    fetchSingleItem(id);
   });
 
   $(pembelianTableRef.value).off("click", ".delete-btn").on("click", ".delete-btn", function () {
@@ -596,85 +615,60 @@ watch(
   async (newValue) => {
     if (!newValue) {
       form.value.category_id = "";
+      form.value.service_category_id = "";
       serviceCategories.value = [];
       normalCategories.value = [];
+      form.value.is_service = false;
+      form.value.merek_disabled = false;
       return;
     }
 
-    const token = sessionStorage.getItem("token");
     const selectedUnit = units.value.find(u => String(u.id) === String(newValue));
-    console.log("Selected unit in watcher:", selectedUnit);
+    const isService = selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase());
 
-    // Reset form values
+    form.value.is_service = isService;
+    form.value.merek_disabled = isService;
+    form.value.merek_id = isService ? null : form.value.merek_id;
     form.value.category_id = "";
     form.value.service_category_id = "";
-    form.value.is_service = false;
-    form.value.harga = 0;
-    form.value.displayHarga = "0";
-    serviceCategories.value = [];
-    normalCategories.value = [];
 
-    if (selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase())) {
-      try {
+    try {
+      const token = sessionStorage.getItem("token");
+
+      if (isService) {
         const response = await axios.get("/api/service-categories", {
           headers: { Authorization: `Bearer ${token}` },
           params: { unit_id: newValue }
         });
 
-        const data = Array.isArray(response.data) ? response.data :
-                    (response.data.data ? response.data.data : []);
+        serviceCategories.value = Array.isArray(response.data)
+          ? response.data
+          : (response.data.data ?? []);
 
-        serviceCategories.value = data;
-        console.log("Service categories loaded:", serviceCategories.value);
-
-        // Set service mode
-        form.value.is_service = true;
-        form.value.merek_id = null;
-        form.value.merek_disabled = true;
-
-        // Disable merek field
-        if (document.getElementById('merek_id')) {
-          document.getElementById('merek_id').disabled = true;
+        if (document.getElementById("merek_id")) {
+          document.getElementById("merek_id").disabled = true;
         }
-      } catch (err) {
-        console.error("Error fetching service categories:", err);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Gagal memuat kategori jasa"
-        });
-      }
-    } else {
-      try {
-        const response = await axios.get("/api/categories", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+     } else {
+  await fetchCategories(); // ✅ ambil dari backend
+  normalCategories.value = categories.value; // ✅ isi kategori material yang dipakai di form
 
-        normalCategories.value = Array.isArray(response.data) ? response.data :
-                               (response.data.data ? response.data.data : []);
-        console.log("Normal categories loaded:", normalCategories.value);
+  console.log("✅ Loaded normalCategories:", normalCategories.value); // ✅ debug log
 
-        // Reset service mode
-        form.value.is_service = false;
-        form.value.service_category_id = null;
-        form.value.merek_disabled = false;
-
-        // Enable merek field
-        if (document.getElementById('merek_id')) {
-          document.getElementById('merek_id').disabled = false;
-        }
-      } catch (err) {
-        console.error("Error fetching categories:", err);
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Gagal memuat kategori"
-        });
-      }
+  if (document.getElementById("merek_id")) {
+    document.getElementById("merek_id").disabled = false;
+  }
+}
+    } catch (err) {
+      Swal.fire({
+        icon: "error",
+        title: "Gagal Memuat Kategori",
+        text: err.response?.data?.message || err.message
+      });
     }
   },
   { immediate: true }
 );
+
 
 // Update watch handler untuk category_id
 watch(
@@ -715,11 +709,14 @@ watch(
 );
 
 // Open Modal for Add/Edit
-const openModal = (mode, pembelian = null) => {
+const openModal = async (mode, pembelian = null) => {
   modalMode.value = mode;
+
   if (mode === "edit" && pembelian) {
     console.log('Opening modal for editing:', pembelian);
+
     const isService = pembelian.is_service;
+
     form.value = {
       proyek_id: pembelian.proyek_id,
       item: pembelian.item,
@@ -740,14 +737,26 @@ const openModal = (mode, pembelian = null) => {
       merek_disabled: isService
     };
 
-    if (isService) {
-      fetchServiceCategories(pembelian.unit_id);
+    // Pastikan kategori dimuat berdasarkan unit
+    if (form.value.unit_id) {
+      const selectedUnit = units.value.find(u => String(u.id) === String(form.value.unit_id));
+      const isServiceUnitType = selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase());
+      form.value.is_service = isServiceUnitType;
+
+      if (isServiceUnitType) {
+        await fetchServiceCategories(form.value.unit_id);
+      } else {
+        await fetchCategories();
+        normalCategories.value = categories.value;
+        console.log("✅ Loaded normalCategories (material):", normalCategories.value);
+      }
     }
 
     editingId.value = pembelian.id;
     modalTitle.value = "Edit Pembelian";
     modalButtonText.value = "Update";
   } else {
+    // Default state untuk tambah data
     form.value = {
       proyek_id: selectedProject.value,
       item: "",
@@ -767,12 +776,15 @@ const openModal = (mode, pembelian = null) => {
       invoice_id: null,
       merek_disabled: false
     };
+
     editingId.value = null;
     modalTitle.value = "Tambah Pembelian";
     modalButtonText.value = "Simpan";
   }
+
   showModal.value = true;
 };
+
 
 // Close the modal
 const closeModal = () => {
@@ -796,6 +808,15 @@ const handleSubmit = async () => {
       });
       return;
     }
+    if (!form.value.payment_method_id) {
+  Swal.fire({
+    icon: "error",
+    title: "Error",
+    text: "Metode pembayaran harus dipilih"
+  });
+  return;
+}
+
     if (!form.value.unit_id) {
       Swal.fire({
         icon: "error",
@@ -831,6 +852,8 @@ const handleSubmit = async () => {
         const invoiceResponse = await axios.post("/api/invoices", {
           proyek_id: form.value.proyek_id,
           invoice_date: new Date().toISOString().split('T')[0],
+  payment_method_id: form.value.payment_method_id, // ✅ penting!
+
           purchase_materials: [{
             item: form.value.item,
             type: form.value.type || '-',
@@ -1047,17 +1070,14 @@ const allCategories = ref([]);
 const allServiceCategories = ref([]);
 
 const fetchAllCategories = async () => {
-  try {
-    const token = sessionStorage.getItem("token");
-    const [catRes, svcRes] = await Promise.all([
-      axios.get("/api/categories", { headers: { Authorization: `Bearer ${token}` } }),
-      axios.get("/api/service-categories", { headers: { Authorization: `Bearer ${token}` } })
-    ]);
-    allCategories.value = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data ? catRes.data.data : []);
-    allServiceCategories.value = Array.isArray(svcRes.data) ? svcRes.data : (svcRes.data.data ? svcRes.data.data : []);
-  } catch (err) {
-    error.value = "Gagal memuat data kategori: " + (err.response?.data?.error || err.message);
-  }
+  const token = sessionStorage.getItem("token");
+  const [catRes, svcRes] = await Promise.all([
+    axios.get("/api/categories", { headers: { Authorization: `Bearer ${token}` } }),
+    axios.get("/api/service-categories", { headers: { Authorization: `Bearer ${token}` } })
+  ]);
+
+  allCategories.value = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data ?? []);
+  allServiceCategories.value = Array.isArray(svcRes.data) ? svcRes.data : (svcRes.data.data ?? []);
 };
 
 // Helper: get unit type by id
@@ -1100,7 +1120,134 @@ onMounted(() => {
   fetchUnits();
   fetchAllCategories();
   fetchPembelians();
+    fetchPaymentMethods(); // ✅ penting!
+
+  if (selectedProject.value) {
+    fetchPurchases(selectedProject.value);
+  }
+
+  // 🌟 Registrasi fungsi global agar tombol dalam DataTables bisa memanggilnya
+  window.editPurchase = async function (id) {
+    try {
+      const token = sessionStorage.getItem("token");
+      const response = await axios.get(`/api/purchasematerials/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const pembelian = response.data.data;
+
+      if (!pembelian) {
+        Swal.fire({
+          icon: "error",
+          title: "Tidak ditemukan",
+          text: "Data pembelian tidak ditemukan.",
+        });
+        return;
+      }
+
+      openModal("edit", pembelian);
+    } catch (err) {
+      console.error("Gagal mengambil data untuk edit:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.response?.data?.message || "Gagal mengambil data pembelian.",
+      });
+    }
+  };
+
+  window.deletePurchase = async function (id) {
+    try {
+      const confirm = await Swal.fire({
+        title: "Yakin ingin menghapus?",
+        text: "Data tidak dapat dikembalikan!",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Ya, hapus!",
+        cancelButtonText: "Batal",
+        confirmButtonColor: "#d33",
+        cancelButtonColor: "#3085d6"
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      const token = sessionStorage.getItem("token");
+      await axios.delete(`/api/purchasematerials/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Berhasil",
+        text: "Data berhasil dihapus.",
+      });
+
+      await fetchPembelians(selectedProject.value);
+    } catch (err) {
+      console.error("Gagal menghapus pembelian:", err);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: err.response?.data?.message || "Gagal menghapus data pembelian.",
+      });
+    }
+  };
 });
+const fetchPurchases = async (proyekId) => {
+  if (!proyekId) return;
+  try {
+    const token = sessionStorage.getItem('token');
+    const response = await axios.get('/api/purchasematerials', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { proyek_id: proyekId },
+    });
+
+    console.log('API Response:', response.data); // Log respons API
+
+    // Validasi struktur respons
+    if (!response.data || !Array.isArray(response.data.data)) {
+      console.error('Invalid API response structure:', response.data);
+      pembelians.value = [];
+      return;
+    }
+
+    // Mapping data ke pembelians
+    pembelians.value = response.data.data.map(purchase => ({
+      id: purchase.id,
+      proyek_id: purchase.proyek_id,
+      item: purchase.item,
+      merek_id: purchase.merek_id,
+      type: purchase.type,
+      spesifikasi: purchase.spesifikasi,
+      unit_id: purchase.unit_id,
+      category_id: purchase.category_id,
+      qty: purchase.qty,
+      harga: purchase.harga,
+      total_harga: purchase.total_harga,
+      deskripsi: purchase.deskripsi,
+      is_service: purchase.is_service,
+      service_category_id: purchase.service_category_id,
+    }));
+
+    console.log('Mapped Pembelians:', pembelians.value); // Log hasil mapping
+
+    initDataTable();
+  } catch (err) {
+    console.error('Error fetching purchases:', err);
+    error.value = 'Gagal memuat data pembelian';
+  }
+};
+
+// Fix: Add null/undefined check for description
+const handleDescription = (purchase) => {
+  return purchase?.description || "-";
+};
+
+// Update usage of description in the template
+// Example: Replace `purchase.description` with `handleDescription(purchase)`
 </script>
 
   <style scoped>

@@ -80,6 +80,14 @@
                         <CTableHeaderCell>Deskripsi</CTableHeaderCell>
                         <CTableDataCell>{{ proyek.deskripsi || '-' }}</CTableDataCell>
                       </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Target Progress</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.target_progress || '-' }}%</CTableDataCell>
+                      </CTableRow>
+                      <CTableRow>
+                        <CTableHeaderCell>Progress Aktual</CTableHeaderCell>
+                        <CTableDataCell>{{ proyek.progress || '-' }}%</CTableDataCell>
+                      </CTableRow>
                     </CTableBody>
                   </CTable>
                 </CCol>
@@ -109,8 +117,8 @@
                     </CTableRow>
                   </CTableHead>
                   <CTableBody>
-                    <CTableRow 
-                      v-for="(purchase, index) in purchases" 
+                    <CTableRow
+                      v-for="(purchase, index) in purchases"
                       :key="purchase.id"
                       :class="{
                         'service-row': purchase.is_service && purchase.unit?.unit_name?.toLowerCase() === 'jasa',
@@ -204,6 +212,47 @@
               </div>
             </CCardBody>
           </CCard>
+
+          <!-- Invoice Section -->
+          <CCard class="mb-4">
+            <CCardHeader>
+              <strong>Daftar Invoice</strong>
+            </CCardHeader>
+            <CCardBody>
+              <div class="table-responsive">
+                <CTable hover>
+                  <CTableHead>
+                    <CTableRow>
+                      <CTableHeaderCell class="text-center" style="width: 5%">No</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 20%">Nomor Invoice</CTableHeaderCell>
+                      <CTableHeaderCell style="width: 15%">Tanggal</CTableHeaderCell>
+                      <CTableHeaderCell class="text-end" style="width: 15%">Total</CTableHeaderCell>
+                      <CTableHeaderCell class="text-center" style="width: 15%">Status</CTableHeaderCell>
+                    </CTableRow>
+                  </CTableHead>
+                  <CTableBody>
+                    <CTableRow v-for="(invoice, index) in invoices" :key="invoice.id">
+                      <CTableDataCell class="text-center">{{ index + 1 }}</CTableDataCell>
+                      <CTableDataCell>{{ invoice.invoice_number }}</CTableDataCell>
+                      <CTableDataCell>{{ formatDate(invoice.invoice_date) }}</CTableDataCell>
+                      <CTableDataCell class="text-end">Rp {{ formatCurrency(invoice.total) }}</CTableDataCell>
+                      <CTableDataCell class="text-center">
+                        <CBadge :color="getInvoiceStatusColor(invoice.status)">
+                          {{ invoice.status }}
+                        </CBadge>
+                      </CTableDataCell>
+                    </CTableRow>
+                  </CTableBody>
+                  <CTableFoot>
+                    <CTableRow>
+                      <CTableDataCell colspan="3" class="text-end fw-bold">Total Invoice</CTableDataCell>
+                      <CTableDataCell class="text-end fw-bold">Rp {{ formatCurrency(totalInvoices) }}</CTableDataCell>
+                    </CTableRow>
+                  </CTableFoot>
+                </CTable>
+              </div>
+            </CCardBody>
+          </CCard>
         </CCardBody>
       </CCard>
     </CCol>
@@ -220,6 +269,7 @@ const route = useRoute();
 const proyek = ref(null);
 const purchases = ref([]);
 const termins = ref([]);
+const invoices = ref([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -249,13 +299,20 @@ const fetchProyek = async () => {
 const fetchPurchases = async () => {
   try {
     const token = sessionStorage.getItem('token');
+    console.log('Fetching purchases for project:', route.params.id);
     const response = await axios.get('/api/purchasematerials', {
       headers: { Authorization: `Bearer ${token}` },
       params: { proyek_id: route.params.id }
     });
 
-    if (response.data && response.data.purchases) {
-      purchases.value = response.data.purchases;
+    console.log('Purchases response:', response.data);
+
+    if (response.data && Array.isArray(response.data.data)) {
+      purchases.value = response.data.data;
+      console.log('Set purchases to:', purchases.value);
+    } else {
+      console.log('No purchase data found');
+      purchases.value = [];
     }
   } catch (err) {
     console.error('Error fetching purchases:', err);
@@ -272,11 +329,15 @@ const fetchTermins = async () => {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    console.log('Termins response:', response.data);
-
     if (response.data && response.data.data) {
-      termins.value = response.data.data;
-      console.log('Set termins to:', termins.value);
+      // Urutkan berdasarkan angka dalam nama termin (misal: "ini termin 1", "ini termin 2", dst)
+      termins.value = response.data.data.sort((a, b) => {
+        const numA = parseInt(a.nama_termin.match(/\d+/)) || 0;
+        const numB = parseInt(b.nama_termin.match(/\d+/)) || 0;
+        return numA - numB; // Ascending: Termin 1, Termin 2, ...
+      });
+
+      console.log('Set sorted termins to:', termins.value);
     } else {
       console.log('No termin data found');
       termins.value = [];
@@ -284,6 +345,34 @@ const fetchTermins = async () => {
   } catch (err) {
     console.error('Error fetching termins:', err);
     error.value = 'Gagal memuat data termin';
+  }
+};
+
+
+// Fetch invoices
+const fetchInvoices = async () => {
+  try {
+    const token = sessionStorage.getItem('token');
+    console.log('Fetching invoices for project:', route.params.id);
+    const response = await axios.get(`/api/proyeks/${route.params.id}/invoices`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    console.log('Invoices response:', response.data);
+
+    if (Array.isArray(response.data)) {
+      invoices.value = response.data.map(invoice => ({
+        ...invoice,
+        total: Number(invoice.total_amount) || 0 // Use total_amount for invoice total
+      }));
+      console.log('Set invoices to:', invoices.value);
+    } else {
+      console.log('No invoice data found');
+      invoices.value = [];
+    }
+  } catch (err) {
+    console.error('Error fetching invoices:', err);
+    error.value = 'Gagal memuat data invoice';
   }
 };
 
@@ -342,6 +431,10 @@ const totalPelunasan = computed(() => {
   }, 0);
 });
 
+const totalInvoices = computed(() => {
+  return invoices.value.reduce((sum, invoice) => sum + Number(invoice.total), 0);
+});
+
 // Helper functions
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('id-ID').format(value);
@@ -370,14 +463,26 @@ const getTerminStatusColor = (status) => {
   return colors[status] || 'secondary';
 };
 
+const getInvoiceStatusColor = (status) => {
+  const colors = {
+    'Belum Dibayar': 'secondary',
+    'Dibayar': 'success',
+    'Tertunda': 'warning'
+  };
+  return colors[status] || 'secondary';
+};
+
 // Initial data fetching
 onMounted(async () => {
   try {
+    console.log('Initializing data fetch for project details');
     await Promise.all([
       fetchProyek(),
       fetchPurchases(),
-      fetchTermins()
+      fetchTermins(),
+      fetchInvoices()
     ]);
+    console.log('Data fetch completed');
   } catch (err) {
     console.error('Error loading data:', err);
     error.value = 'Gagal memuat data';
@@ -385,7 +490,7 @@ onMounted(async () => {
     loading.value = false;
   }
 });
-</script> 
+</script>
 
 <style scoped>
 .table-responsive {
@@ -458,4 +563,4 @@ onMounted(async () => {
 .card-body {
   padding: 1.25rem;
 }
-</style> 
+</style>

@@ -62,14 +62,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
     Route::post('/expenses/{expense}/update-status', [ExpenseController::class, 'updateStatus']);
     // DataTables server-side endpoint for pengeluaran
+    Route::post('/api/invoices/{id}/record-payment', [InvoiceController::class, 'recordPayment']);
+
     // Merek routes
     Route::apiResource('mereks', MerekController::class);
     Route::post('/mereks/find-or-create', [MerekController::class, 'findOrCreate']);
     // Unit routes
     Route::apiResource('units', UnitsController::class);
     // Purchasematerial routes
-    Route::apiResource('purchasematerials', PurchasematerialController::class);
-    // Proyek routes
+    // Purchasematerial routes
+Route::get('/purchasematerials/datatables', [PurchasematerialController::class, 'datatables']);
+   Route::apiResource('purchasematerials', PurchasematerialController::class);
+// Proyek routes
     Route::apiResource('proyeks', ProyekController::class);
 Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     // Termin routes
@@ -102,6 +106,9 @@ Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
     // Profit Loss Report Routes
     Route::get('/profit-loss-reports', [ProfitLossReportController::class, 'index']);
     //generate report
+    // routes/api.php
+Route::get('profit-loss-reports/export/{format}', [ProfitLossReportController::class, 'export']);
+
     Route::post('/profit-loss-reports/generate', [ProfitLossReportController::class, 'generateReport']);
     //get report by id
     Route::get('/profit-loss-reports/{report}', [ProfitLossReportController::class, 'show']);

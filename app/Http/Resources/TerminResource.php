@@ -15,12 +15,15 @@ class TerminResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // Summary global (ambil dari invoice/proyek jika ada, fallback ke termin jika single)
-        $invoice = $this->whenLoaded('invoice', function() { return $this->invoice; });
-        $proyek = $this->whenLoaded('proyek', function() { return $this->proyek; });
+        $invoice = $this->whenLoaded('invoice', function () {
+            return $this->invoice;
+        });
+        $proyek = $this->whenLoaded('proyek', function () {
+            return $this->proyek;
+        });
 
-        // Only use $invoice->termins if $invoice is a valid Invoice model
         $hasValidInvoice = $invoice && $invoice instanceof \App\Models\Invoice;
+
         $summary = [
             'total_termin' => $hasValidInvoice ? (float) $invoice->termins->sum('nilai_termin') : (float) $this->nilai_termin,
             'total_dp' => $hasValidInvoice ? (float) $invoice->termins->sum('nilai_dp') : (float) $this->nilai_dp,
@@ -33,7 +36,6 @@ class TerminResource extends JsonResource
             'remaining_total' => $hasValidInvoice ? (float) $invoice->termins->sum('remaining_total') : (float) $this->remaining_total,
         ];
 
-        // Tambahkan summary proyek jika ada dan valid
         if ($proyek && $proyek instanceof \App\Models\Proyek) {
             $summary['total_income'] = (float) $proyek->incomes()->where('status', 'Diterima')->sum('jumlah');
             $summary['total_expense'] = (float) $proyek->expenses()->where('status', 'Lunas')->sum('amount');
@@ -45,6 +47,8 @@ class TerminResource extends JsonResource
             'proyek_id' => $this->proyek_id,
             'invoice_id' => $this->invoice_id,
             'nama_termin' => $this->nama_termin,
+            'project_progress' => (float) $this->project_progress,
+            'target_progress' => (float) $this->target_progress,
             'jenis_termin' => $this->jenis_termin,
             'termin_ke' => $this->termin_ke,
             'nilai_termin' => (float) $this->nilai_termin,
@@ -61,44 +65,34 @@ class TerminResource extends JsonResource
             'tanggal_pelunasan' => optional($this->tanggal_pelunasan)->toDateString(),
             'tanggal_dp_dibayar' => optional($this->tanggal_dp_dibayar)->toDateString(),
             'tanggal_pelunasan_dibayar' => optional($this->tanggal_pelunasan_dibayar)->toDateString(),
-            'status_termin' => $this->status_termin,
-            'status_approval' => $this->status_approval,
+            'status_termin' => $this->status_termin ?? 'Belum Dibayar',
+            'status_approval' => $this->status_approval ?? 'Pending',
             'approved_by' => $this->approved_by,
             'approved_by_name' => $this->approvedByUser ? $this->approvedByUser->name : null,
             'approved_at' => optional($this->approved_at)->toDateTimeString(),
             'keterangan' => $this->keterangan,
-
-            // 👇 Tambahan bukti pembayaran
             'bukti_pembayaran' => $this->bukti_pembayaran,
             'bukti_pembayaran_url' => $this->bukti_pembayaran
                 ? asset('storage/' . $this->bukti_pembayaran)
                 : null,
-
-            // Boolean helpers dari model
             'is_dp' => (bool) $this->is_dp,
             'is_pelunasan' => (bool) $this->is_pelunasan,
             'is_termin_bertahap' => (bool) $this->is_termin_bertahap,
-
-            // Waktu pembuatan dan update
             'created_at' => optional($this->created_at)->toDateTimeString(),
             'updated_at' => optional($this->updated_at)->toDateTimeString(),
-
-            // Relasi (hanya jika sudah eager loaded)
-            'proyek' => $this->whenLoaded('proyek', function() {
+            'proyek' => $this->whenLoaded('proyek', function () {
                 return $this->proyek ? new \App\Http\Resources\ProyekResource($this->proyek) : null;
             }),
-            'invoice' => $this->whenLoaded('invoice', function() {
+            'invoice' => $this->whenLoaded('invoice', function () {
                 return $this->invoice ? new \App\Http\Resources\InvoiceResource($this->invoice) : null;
             }),
             'incomes' => \App\Http\Resources\IncomeResource::collection($this->whenLoaded('incomes')),
-
-            // Tambahan summary global
             'financial_summary' => $summary,
-
-            // Add status fields
             'invoice_status' => $this->invoice ? $this->invoice->status : null,
             'expense_status' => $this->expense ? $this->expense->status : null,
-            'income_status' => $this->incomes->isNotEmpty() ? $this->incomes->pluck('status')->unique()->join(', ') : null,
+            'income_status' => $this->incomes->isNotEmpty()
+                ? $this->incomes->pluck('status')->unique()->join(', ')
+                : null,
         ];
     }
 }

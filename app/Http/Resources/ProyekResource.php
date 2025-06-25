@@ -27,6 +27,7 @@ class ProyekResource extends JsonResource
             'total_pengeluaran' => (float) $this->total_pengeluaran,
             'sisa_anggaran' => (float) $this->sisa_anggaran,
             'budget_percentage' => (float) $this->budget_percentage,
+            'progress' => (float) $this->progress, // <--- expose progress
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             // Uncomment if you want to include related data:

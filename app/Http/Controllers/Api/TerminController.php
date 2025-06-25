@@ -4,6 +4,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Termin;
 use App\Models\Proyek;
 use App\Models\Invoice;
+use App\Models\Income;
 use App\Models\Expense; // Ensure Expense model is imported
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,16 @@ class TerminController extends Controller
                 'tanggal_dp_dibayar', 'tanggal_pelunasan_dibayar', 'keterangan', 'created_at', 'updated_at'
             ];
 
-            $query = Termin::query();
+            try {
+                $query = Termin::with('proyek');
+            } catch (\Exception $e) {
+                Log::error('Error in TerminController@index query execution: ' . $e->getMessage());
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Terjadi kesalahan saat mengambil data termin',
+                    'details' => $e->getMessage()
+                ], 500);
+            }
 
             // Filter by project_id and invoice_id if provided
             if ($request->has('proyek_id')) {
@@ -97,6 +107,7 @@ class TerminController extends Controller
                 'invoice_id' => 'required|exists:invoices,id',
                 'nama_termin' => 'required|string|max:255',
                 'jenis_termin' => 'required|in:DP,Pelunasan,Termin Bertahap',
+                'target_progress' => 'required|numeric|min:0|max:100',
                 'termin_ke' => 'nullable|integer|min:1',
                 'nilai_termin' => 'required|numeric|min:0',
                 'persentase_dp' => 'required|numeric|min:0|max:100',
@@ -108,46 +119,41 @@ class TerminController extends Controller
             // Abaikan input status_termin dan status_approval dari request, selalu set default
             unset($validated['status_termin'], $validated['status_approval']);
 
-            // Tambahkan validasi untuk memastikan termin_ke tidak duplikat
-            // Exclude current termin if editing
+            // Validasi: termin_ke boleh sama asal jenis_termin berbeda (boleh DP & Pelunasan untuk termin_ke sama)
             $queryExistingTermin = Termin::where('proyek_id', $validated['proyek_id'])
                 ->where('invoice_id', $validated['invoice_id'])
-                ->where('termin_ke', $request->input('termin_ke'));
+                ->where('termin_ke', $request->input('termin_ke'))
+                ->where('jenis_termin', $validated['jenis_termin']);
 
             // If it's an update request, exclude the current termin from the check
-            if ($request->route('termin')) { // Check if 'termin' route parameter exists
+            if ($request->route('termin')) {
                 $queryExistingTermin->where('id', '!=', $request->route('termin')->id);
             }
 
             $existingTermin = $queryExistingTermin->first();
-
             if ($existingTermin) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Termin ke-' . $request->input('termin_ke') . ' sudah ada untuk proyek dan invoice ini.'
+                    'message' => 'Termin ke-' . $request->input('termin_ke') . ' dengan jenis ' . $validated['jenis_termin'] . ' sudah ada untuk proyek dan invoice ini.'
                 ], 422);
             }
+if (!empty($validated['tanggal_dp']) && $validated['jenis_termin'] === 'DP') {
+    $conflictingTermin = Termin::where('proyek_id', $validated['proyek_id'])
+        ->where('invoice_id', $validated['invoice_id'])
+        ->where('jenis_termin', 'DP')
+        ->where('tanggal_dp', $validated['tanggal_dp'])
+        ->when($request->route('termin'), function ($query) use ($request) {
+            $query->where('id', '!=', $request->route('termin')->id);
+        })
+        ->first();
 
-            // Validasi bahwa tanggal_dp dan tanggal_pelunasan tidak bertentangan dengan termin lain
-            $queryConflictingTermin = Termin::where('proyek_id', $validated['proyek_id'])
-                ->where(function ($query) use ($validated) {
-                    $query->whereBetween('tanggal_dp', [$validated['tanggal_dp'], $validated['tanggal_pelunasan']])
-                          ->orWhereBetween('tanggal_pelunasan', [$validated['tanggal_dp'], $validated['tanggal_pelunasan']]);
-                });
-
-            if ($request->route('termin')) {
-                $queryConflictingTermin->where('id', '!=', $request->route('termin')->id);
-            }
-            $conflictingTermin = $queryConflictingTermin->first();
-
-
-            if ($conflictingTermin) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Tanggal DP atau pelunasan bertentangan dengan termin lain.'
-                ], 422);
-            }
-
+    if ($conflictingTermin) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Tanggal DP ini sudah digunakan oleh termin lain dalam invoice yang sama.'
+        ], 422);
+    }
+}
             // Gunakan relasi Eloquent untuk memvalidasi invoice terkait proyek
             $invoice = Invoice::where('id', $validated['invoice_id'])
                 ->whereHas('proyek', function ($query) use ($validated) {
@@ -214,7 +220,7 @@ class TerminController extends Controller
             $allowed = (new \App\Models\Termin)->getFillable();
             $terminDataFiltered = array_intersect_key($terminData, array_flip($allowed));
 
-            $termin = Termin::create($terminDataFiltered);
+            $termin = Termin::create($validated);
 
             // Handle file upload if present
             if ($request->hasFile('bukti_pembayaran')) {
@@ -306,6 +312,7 @@ class TerminController extends Controller
                 'invoice_id' => 'required|exists:invoices,id',
                 'nama_termin' => 'required|string|max:255',
                 'jenis_termin' => 'required|in:DP,Pelunasan,Termin Bertahap',
+                'target_progress' => 'required|numeric|min:0|max:100',
                 'termin_ke' => [
                     'nullable',
                     'integer',
@@ -427,6 +434,8 @@ class TerminController extends Controller
             $updateData = array_merge($validated, [
                 'nilai_dp' => $nilai_dp,
                 'nilai_pelunasan' => $nilai_pelunasan,
+                'target_progress' => $validated['target_progress'], // <-- tambahkan ini
+
             ]);
 
             // Jika upload bukti, status_approval harus Pending dan status_termin Belum Dibayar
@@ -688,43 +697,64 @@ if ($newStatus === 'DP Dibayar') {
 
 
     // Export termin ke Excel
-    public function exportPdf(Request $request)
-    {
-        try {
-            $query = Termin::with(['proyek', 'invoice']);
+   public function exportPdf(Request $request)
+{
+    try {
+        $query = Termin::with(['proyek', 'invoice']);
 
-            if ($request->has('proyek_id')) {
-                $query->where('proyek_id', $request->proyek_id);
-            }
+        if ($request->has('proyek_id')) {
+            $query->where('proyek_id', $request->proyek_id);
+        }
 
-            if ($request->has('invoice_id')) {
-                $query->where('invoice_id', $request->invoice_id);
-            }
+        if ($request->has('invoice_id')) {
+            $query->where('invoice_id', $request->invoice_id);
+        }
 
-            $termins = $query->get();
-            $project = $termins->first()?->proyek; // Get first project from results
+        $termins = $query->get();
+        $project = $termins->first()?->proyek;
+        $invoice = $termins->first()?->invoice;
 
-            if ($termins->isEmpty()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Tidak ada data termin untuk diekspor'
-                ], 404);
-            }
-
-            $pdf = Pdf::loadView('exports.termins', [
-                'termins' => $termins,
-                'project' => $project // Pass project to view
-            ]);
-
-            return $pdf->download('termin-report.pdf');
-        } catch (\Exception $e) {
-            \Log::error('Error in TerminController@exportPdf: ' . $e->getMessage());
+        if ($termins->isEmpty() || !$invoice) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Gagal mengekspor PDF: ' . $e->getMessage()
-            ], 500);
+                'message' => 'Tidak ada data termin atau invoice tidak ditemukan.'
+            ], 404);
         }
+
+        // Hitung berdasarkan income yang sudah dibayar
+        $totalIncomeDp = Income::where('invoice_id', $invoice->id)
+            ->where('type', 'dp')
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+
+        $totalIncomePelunasan = Income::where('invoice_id', $invoice->id)
+            ->where('type', 'pelunasan')
+            ->where('status', 'Diterima')
+            ->sum('jumlah');
+
+        $totalIncomeAll = $totalIncomeDp + $totalIncomePelunasan;
+        $sisaBelumDibayar = $invoice->grand_total - $totalIncomeAll;
+
+        $pdf = Pdf::loadView('exports.termins', [
+            'termins' => $termins,
+            'project' => $project,
+            'invoice' => $invoice,
+            'total_income_dp' => $totalIncomeDp,
+            'total_income_pelunasan' => $totalIncomePelunasan,
+            'total_income_all' => $totalIncomeAll,
+            'sisa_belum_dibayar' => $sisaBelumDibayar,
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('termin-report.pdf');
+    } catch (\Exception $e) {
+        \Log::error('Error in TerminController@exportPdf: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal mengekspor PDF: ' . $e->getMessage()
+        ], 500);
     }
+}
+
 
     public function exportExcel(Request $request)
     {
@@ -865,6 +895,45 @@ if ($newStatus === 'DP Dibayar') {
 
         return response()->json($result);
     }
+   public function approveTermin(Request $request, Termin $termin)
+{
+    $user = auth()->user();
+    if (!$user || !in_array($user->role, ['admin', 'superadmin', 'keuangan'])) {
+        return response()->json(['message' => 'Akses ditolak. Hanya peran tertentu yang dapat menyetujui termin.'], 403);
+    }
+
+    DB::beginTransaction();
+    try {
+        // Panggil metode approve di model Termin
+        $termin->approve();
+
+        // ✅ Tambahkan ini: update progress proyek setelah approval
+        $proyek = $termin->proyek ?? \App\Models\Proyek::find($termin->proyek_id);
+        if ($proyek) {
+            $proyek->updateProgressFromTermins();
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Termin berhasil disetujui & progress proyek diperbarui.',
+            'data' => new TerminResource($termin->load(['proyek', 'invoice', 'expense']))
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Gagal menyetujui termin:', [
+            'termin_id' => $termin->id,
+            'error' => $e->getMessage()
+        ]);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal menyetujui termin: ' . $e->getMessage()
+        ], 422);
+    }
+}
+
         // ENDPOINT: Approval admin untuk income
     public function approveIncome(Request $request, $terminId, $incomeId)
     {
@@ -907,5 +976,25 @@ if ($newStatus === 'DP Dibayar') {
                 'error' => $e->getMessage()
             ], 422);
         }
+    }
+
+    public function getUsedDates(Request $request)
+    {
+        $validated = $request->validate([
+            'proyek_id' => 'required|integer',
+            'invoice_id' => 'required|integer',
+        ]);
+
+        $usedDates = Termin::where('proyek_id', $validated['proyek_id'])
+            ->where('invoice_id', $validated['invoice_id'])
+            ->get(['tanggal_dp', 'tanggal_pelunasan'])
+            ->flatMap(function ($termin) {
+                return [$termin->tanggal_dp, $termin->tanggal_pelunasan];
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        return response()->json($usedDates);
     }
 }

@@ -19,6 +19,7 @@ class CreateTerminsTable extends Migration
            $table->unsignedBigInteger('expense_id')->nullable();
 
             $table->string('nama_termin');
+             $table->float('target_progress')->default(0); // Target progress untuk termin ini
             $table->enum('jenis_termin', ['DP', 'Pelunasan', 'Termin Bertahap'])->default('Termin Bertahap')->index();
             $table->integer('termin_ke')->nullable(); // Untuk urutan termin bertahap
 
@@ -32,7 +33,7 @@ class CreateTerminsTable extends Migration
             $table->date('tanggal_dp_dibayar')->nullable();
             $table->date('tanggal_pelunasan_dibayar')->nullable();
 
-            $table->enum('status_termin', ['Belum Dibayar', 'DP Dibayar', 'Lunas'])->default('Belum Dibayar')->index();
+            $table->enum('status_termin', ['Belum Dibayar', 'Siap Bayar', 'DP Dibayar', 'Lunas'])->default('Belum Dibayar')->index();
 
             // Tambahan kolom approval
             $table->string('status_approval')->default('Pending');

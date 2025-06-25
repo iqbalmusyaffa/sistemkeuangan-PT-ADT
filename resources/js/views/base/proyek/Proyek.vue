@@ -362,7 +362,6 @@ function onAnggaranInput(e) {
   const closeModal = () => {
     showModal.value = false;
     showBudgetWarning.value = false;
-    resetForm();
     form.value = {
       nama_customer: "",
       nama_proyek: "",

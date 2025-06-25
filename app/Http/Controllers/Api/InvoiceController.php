@@ -71,7 +71,7 @@ class InvoiceController extends Controller
                 'proyek_id' => 'required|exists:proyeks,id',
                 'payment_method_id' => 'required|exists:payment_methods,id',
                 'invoice_date' => 'required|date',
-                'purchase_materials' => 'required|array',
+                'purchase_materials' => 'required|array|min:1',
                 'purchase_materials.*.item' => 'required|string',
                 'purchase_materials.*.type' => 'required|string',
                 'purchase_materials.*.spesifikasi' => 'nullable|string', // <-- ADDED THIS LINE
@@ -255,6 +255,8 @@ class InvoiceController extends Controller
             if ($request->has('payment_method_id')) {
                 $invoice->payment_method_id = $request->payment_method_id;
             }
+            $invoice->save(); // ← Tambahkan ini di sini
+
             // Status invoice harus otomatis, tidak boleh diubah manual
             // Panggil updateStatusFromTermins atau determineStatus sesuai logic model
             if (method_exists($invoice, 'updateStatusFromTermins')) {

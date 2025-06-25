@@ -13,7 +13,7 @@ class MerekFactory extends Factory
     {
         return [
             'name' => $this->faker->company,
-            'deskripsi' => $this->faker->sentence,
+            // 'deskripsi' => $this->faker->sentence,
         ];
     }
-} 
+}

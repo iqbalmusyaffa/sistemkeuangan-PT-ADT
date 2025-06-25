@@ -43,6 +43,20 @@ class Income extends Model
         'updated_at' => 'datetime'
     ];
 
+    // Status yang diizinkan untuk income/expense
+    const STATUS_PENDING = 'pending';
+    const STATUS_DP_SEBAGIAN = 'DP Sebagian';
+    const STATUS_DP_DIBAYAR = 'DP Dibayar';
+    const STATUS_PELUNASAN_SEBAGIAN = 'Pelunasan Sebagian';
+    const STATUS_BELUM_DIBAYAR = 'Belum Dibayar';
+    const STATUS_LUNAS = 'Lunas';
+    const STATUS_APPROVED = 'approved';
+    const STATUS_REJECTED = 'rejected';
+// Tambahkan di bagian atas dalam class Income
+const APPROVAL_PENDING = 'pending';
+const APPROVAL_APPROVED = 'approved';
+const APPROVAL_REJECTED = 'rejected';
+
     /**
      * Relasi ke kategori pemasukan.
      */
@@ -137,6 +151,13 @@ class Income extends Model
             $income->kode_transaksi = 'INV-' . strtoupper(Str::random(8));
         });
 
+        static::updated(function ($income) {
+            // Sync ke termin jika income terkait termin
+            if ($income->termin) {
+                $income->termin->updateStatusFromPayments();
+            }
+        });
+
         static::saved(function ($income) {
             // Update status termin jika ada
             if ($income->termin_id) {
@@ -164,4 +185,13 @@ class Income extends Model
             }
         });
     }
+public function createdBy()
+{
+    return $this->belongsTo(User::class, 'created_by');
+}
+
+public function updatedBy(): BelongsTo
+{
+    return $this->updater();
+}
 }

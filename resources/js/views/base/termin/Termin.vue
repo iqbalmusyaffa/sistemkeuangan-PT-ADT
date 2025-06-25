@@ -107,6 +107,8 @@
                   <th>Termin Ke</th>
                   <th>Nilai Termin</th>
                   <th>Persentase DP</th>
+                 <th>Progress Pekerjaan</th>
+                  <th>Target Progress</th>
                   <th>Nilai DP</th>
                   <th>Nilai Pelunasan</th>
                   <th>Tanggal DP</th>
@@ -251,52 +253,112 @@
               </CFormSelect>
             </CCol>
             <CCol md="6">
+              <CFormLabel for="target_progress">Target Progress (%)</CFormLabel>
+              <CFormInput
+                type="number"
+                v-model.number="form.target_progress"
+                id="target_progress"
+                min="0"
+                max="100"
+                required
+              />
+              <small class="text-muted">
+                Masukkan target progress fisik (%) agar termin ini bisa dicairkan.
+              </small>
+            </CCol>
+            <CCol md="6">
               <CFormLabel for="termin_ke">Termin Ke</CFormLabel>
               <CFormInput type="number" v-model="form.termin_ke" id="termin_ke" min="1" />
             </CCol>
           </CRow>
           <CRow class="mb-3">
-            <CCol md="6">
-              <CFormLabel for="nilai_termin">Nilai Termin</CFormLabel>
-              <div class="input-group align-items-center">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  type="text"
-                  :value="form.displayNilaiTermin"
-                  @input="handleNilaiTerminInput"
-                  id="nilai_termin"
-                  :readonly="modalMode === 'edit' && (form.total_paid > 0 || form.remaining_total < form.nilai_termin)"
-                  required
-                />
-                <CFormCheck v-if="modalMode === 'tambah'" v-model="manualNilaiTermin" class="ms-2" label="Input manual" />
-              </div>
-              <small class="text-muted">
-                Masukkan nilai termin sesuai kontrak atau invoice.
-              </small>
-            </CCol>
-            <CCol md="6">
-              <CFormLabel for="sisa_termin">Sisa Termin (setelah pembayaran di-approve)</CFormLabel>
-              <div class="input-group align-items-center">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  type="text"
-                  :value="formatCurrency(form.remaining_total || 0)"
-                  id="sisa_termin"
-                  readonly
-                />
-              </div>
-              <small class="text-muted">
-                Sisa termin otomatis berkurang hanya oleh pembayaran yang sudah di-approve admin.
-              </small>
-            </CCol>
+<CCol md="6">
+  <CFormLabel for="nilai_termin">Nilai Termin</CFormLabel>
+
+  <!-- Jika BELUM ada pembayaran -->
+  <div class="input-group align-items-center" v-if="!sudahAdaPembayaran">
+    <span class="input-group-text">Rp</span>
+    <CFormInput
+      type="text"
+       :value="formatCurrency(displayTerminValue)"
+      id="nilai_termin"
+      :readonly="modalMode === 'edit' && (form.total_paid > 0 || form.remaining_total < form.nilai_termin)"
+      required
+    />
+    <!-- <CFormCheck
+      v-if="modalMode === 'tambah'"
+      v-model="manualNilaiTermin"
+      class="ms-2"
+      label="Input manual"
+    /> -->
+  </div>
+
+  <!-- Jika SUDAH ada pembayaran -->
+  <div class="input-group align-items-center" v-else>
+    <span class="input-group-text">Rp</span>
+    <CFormInput
+      type="text"
+      :value="formatCurrency(form.remaining_total || form.nilai_pelunasan || 0)"
+      id="nilai_termin"
+      readonly
+    />
+  </div>
+
+  <small class="text-muted">
+    <span v-if="!sudahAdaPembayaran">
+      Masukkan nilai termin sesuai kontrak atau invoice.
+    </span>
+    <span v-else>
+      Nilai termin sudah termasuk DP, sekarang menampilkan pelunasan yang tersisa.
+    </span>
+  </small>
+</CCol>
+
+
             <CCol md="6">
               <CFormLabel for="dp_percentage">Persentase DP (%)</CFormLabel>
               <CFormInput type="number" v-model.number="form.persentase_dp" id="dp_percentage" required @input="calculateValues" min="0" max="100" />
             </CCol>
           </CRow>
+
+          <!-- Summary Card Pembayaran (Atas Saja, Style sesuai permintaan) -->
           <CRow class="mb-3">
-            <CCol md="12">
-              <CFormLabel for="remaining_total">Sisa Termin (setelah pembayaran di-approve)</CFormLabel>
+            <CCol md="6">
+           <!-- Nilai DP (Card) -->
+<div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
+  <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
+    Nilai DP ({{ form.persentase_dp }}%)
+  </div>
+  <template v-if="form.persentase_dp > 0">
+    <div>Nilai DP: <span style="font-weight:600">{{ formatCurrency(form.nilai_dp) }}</span></div>
+    <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_dp_paid || 0) }}</span></div>
+    <div>
+      Sisa DP:
+      <span :class="{ 'text-danger': form.remaining_dp < 0 }" style="font-weight:600">
+        {{ formatCurrency(form.remaining_dp || 0) }}
+      </span>
+    </div>
+  </template>
+  <template v-else>
+    <div class="text-muted">Tidak ada DP pada termin ini.</div>
+  </template>
+</div>
+
+            </CCol>
+            <CCol md="6">
+              <div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
+                <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
+                  Nilai Termin ({{ 100 - Number(form.persentase_dp) }}%)
+                </div>
+                <div>Nilai Termin: <span style="font-weight:600">{{ formatCurrency(form.nilai_pelunasan) }}</span></div>
+                <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_pelunasan_paid || 0) }}</span></div>
+                <div>Sisa Termin: <span style="font-weight:600">{{ formatCurrency(form.remaining_pelunasan || 0) }}</span></div>
+              </div>
+            </CCol>
+          </CRow>
+          <CRow class="mb-3">
+            <CCol md="6">
+              <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
               <div class="input-group align-items-center">
                 <span class="input-group-text">Rp</span>
                 <CFormInput
@@ -311,83 +373,6 @@
               </small>
             </CCol>
           </CRow>
-          <CCol md="6">
-  <CFormLabel for="nilai_pelunasan">Nilai Pelunasan</CFormLabel>
-  <div class="input-group">
-    <span class="input-group-text">Rp</span>
-    <CFormInput
-      type="text"
-      :value="displayNilaiPelunasan"
-      id="nilai_pelunasan"
-      readonly
-    />
-  </div>
-</CCol>
-          <CCol md="6">
-  <CFormLabel for="sisa_termin_belum_dibayar">Sisa Termin Belum Dibayar</CFormLabel>
-  <div class="input-group">
-    <span class="input-group-text">Rp</span>
-    <CFormInput
-      type="text"
-      :value="displaySisaTerminBelumDibayar"
-      id="sisa_termin_belum_dibayar"
-      readonly
-    />
-  </div>
-</CCol>
-          <CRow class="mb-3">
-            <CCol md="6">
-              <CFormLabel for="nilai_dp">Nilai DP</CFormLabel>
-              <div class="input-group align-items-center">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  type="text"
-                  :value="form.displayNilaiDP"
-                  @input="handleNilaiDPInput"
-                  id="nilai_dp"
-                  :readonly="!manualNilaiDP"
-                />
-                <CFormCheck v-model="manualNilaiDP" class="ms-2" label="Input manual" />
-              </div>
-            </CCol>
-            <CCol md="6">
-              <CFormLabel for="remaining_dp">Sisa DP (Remaining DP)</CFormLabel>
-              <div class="input-group">
-                <span class="input-group-text">Rp</span>
-                <CFormInput
-                  readonly
-                  :value="formatCurrency(form.remaining_dp)"
-                />
-              </div>
-            </CCol>
-            <CCol md="6">
-
-            </CCol>
-          <CCol md="6">
-              <CFormLabel for="remaining_pelunasan">Sisa Pelunasan</CFormLabel>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <CFormInput
-                type="text"
-                :value="formatCurrency(form.remaining_pelunasan)"
-                id="remaining_pelunasan"
-                readonly
-              />
-            </div>
-          </CCol>
-          <CCol md="6">
-              <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
-            <div class="input-group">
-              <span class="input-group-text">Rp</span>
-              <CFormInput
-                type="text"
-                :value="formatCurrency(form.remaining_total || 0)"
-                id="remaining_total"
-                readonly
-              />
-            </div>
-          </CCol>
-          </CRow>
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="tanggal_dp">Tanggal DP</CFormLabel>
@@ -395,20 +380,29 @@
             </CCol>
             <CCol md="6">
               <CFormLabel for="tanggal_pelunasan">Tanggal Deadline Pembayaran</CFormLabel>
-              <CFormInput type="date" v-model="form.tanggal_pelunasan" id="tanggal_pelunasan" />
-              <small class="text-muted">Tanggal jatuh tempo pembayaran termin ini.</small>
+<CFormInput
+  type="date"
+  v-model="form.tanggal_pelunasan"
+  id="tanggal_pelunasan"
+  :class="{ 'is-invalid': isDateDisabled(form.tanggal_pelunasan) }"
+/>
+<small v-if="isDateDisabled(form.tanggal_pelunasan)" class="text-danger">
+  Tanggal ini sudah digunakan oleh termin lain di invoice yang sama.
+</small>
+
             </CCol>
           </CRow>
+          <!-- Status Termin: readonly, hanya tampilkan status, tidak bisa diubah manual -->
+          <!-- Status Termin: readonly, hanya tampilkan status, tidak bisa diubah manual -->
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="status_termin">Status Termin</CFormLabel>
-              <CFormSelect v-model="form.status_termin" id="status_termin" required>
-                <option value="Belum Dibayar">Belum Dibayar</option>
-                <option value="DP Dibayar">DP Dibayar</option>
-                <option value="Lunas">Lunas</option>
-              </CFormSelect>
+              <CFormInput id="status_termin" :value="form.status_termin" readonly />
+              <small class="text-muted">Status termin akan otomatis berubah sesuai pembayaran yang di-approve admin.</small>
             </CCol>
           </CRow>
+
+
           <CRow class="mb-3">
             <CCol md="12">
               <CFormLabel for="keterangan">Keterangan</CFormLabel>
@@ -421,8 +415,8 @@
               <CFormLabel for="bukti_pembayaran">Bukti Pembayaran <span v-if="['DP Dibayar','Lunas'].includes(form.status_termin)" class="text-danger">*</span></CFormLabel>
               <CFormInput type="file" id="bukti_pembayaran" accept="image/*,.pdf" @change="handleBuktiPembayaranForm" :required="['DP Dibayar','Lunas'].includes(form.status_termin)" />
               <small class="text-muted">Format: JPEG, PNG, PDF (Max 2MB). <span v-if="['DP Dibayar','Lunas'].includes(form.status_termin)">Wajib diisi.</span></small>
-              <div v-if="form.bukti_pembayaran_url" class="mt-2">
-                <a :href="form.bukti_pembayaran_url" target="_blank">Lihat Bukti Pembayaran</a>
+              <div v-if="form.bukti_pembayaran" class="mt-2">
+                <a :href="form.bukti_pembayaran" target="_blank">Lihat Bukti Pembayaran</a>
               </div>
             </CCol>
           </CRow>
@@ -542,7 +536,18 @@ import 'datatables.net';
 const selectedProject = ref("");
 const selectedInvoice = ref("");
 let dataTableInstance = null;
-
+const validateProgressBeforeApproval = (termin) => {
+  const projectProgress = termin?.proyek?.progress || 0;
+  if (projectProgress < termin.target_progress) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Progress Belum Mencapai Target',
+      text: `Progress proyek saat ini (${projectProgress}%) belum mencapai target termin (${termin.target_progress}%)`
+    });
+    return false;
+  }
+  return true;
+};
 // --- DataTable initialization function ---
 function initDataTable() {
   // Destroy previous instance if exists
@@ -586,10 +591,10 @@ function initDataTable() {
         { data: 'jenis_termin', title: 'Jenis Termin' },
         { data: 'termin_ke', title: 'Termin Ke' },
         { data: 'nilai_termin', title: 'Nilai Termin', render: d => d === 0 ? '0' : new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) },
-        { data: 'persentase_dp', title: 'Persentase DP', render: d => d ? d + '%' : '-' },
+        { data: 'persentase_dp', title: 'Persentase DP', render: d => d ? d + '%' : '-' }, { data: 'proyek.progress', title: 'Progress Pekerjaan' }, // Kolom baru untuk Progress Pekerjaan
+        { data: 'target_progress', title: 'Target Progress' }, // Kolom baru untuk Target Progress
         { data: 'nilai_dp', title: 'Nilai DP', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
         { data: 'nilai_pelunasan', title: 'Nilai Pelunasan', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
-        // Tambahan kolom summary keuangan per termin:
         { data: 'total_dp_paid', title: 'Total DP Dibayar', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
         { data: 'total_pelunasan_paid', title: 'Total Pelunasan Dibayar', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
         { data: 'total_paid', title: 'Total Dibayar', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
@@ -613,23 +618,21 @@ function initDataTable() {
           title: 'Aksi',
           orderable: false,
           render: function (data, type, row) {
-            // Disable Update Status jika status_approval !== 'Approved'
             const disabled = row.status_approval !== 'Approved' ? 'disabled style="pointer-events:none;opacity:0.5;"' : '';
-            // Tombol Setujui/Tolak/Cancel SELALU muncul
             return `
-    <button class="btn btn-sm btn-info status-btn" data-id="${row.id}" ${disabled}>Update Status</button>
-    <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
-    <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
-    <button class="btn btn-sm btn-success approve-btn" data-id="${row.id}">Setujui</button>
-    <button class="btn btn-sm btn-danger reject-btn" data-id="${row.id}">Tolak</button>
-    <button class="btn btn-sm btn-secondary cancel-btn" data-id="${row.id}">Cancel</button>
-    `;
+            <button class="btn btn-sm btn-info status-btn" data-id="${row.id}" ${disabled}>Update Status</button>
+            <button class="btn btn-sm btn-warning edit-btn" data-id="${row.id}">Edit</button>
+            <button class="btn btn-sm btn-danger delete-btn" data-id="${row.id}">Hapus</button>
+            <button class="btn btn-sm btn-success approve-btn" data-id="${row.id}">Setujui</button>
+            <button class="btn btn-sm btn-danger reject-btn" data-id="${row.id}">Tolak</button>
+            <button class="btn btn-sm btn-secondary cancel-btn" data-id="${row.id}">Cancel</button>
+            `;
           }
         },
         { data: 'status_termin', title: 'Status Termin' },
         { data: 'invoice_status', title: 'Status Invoice' },
         { data: 'expense_status', title: 'Status Expense' },
-        { data: 'income_status', title: 'Status Income' }
+        { data: 'income_status', title: 'Status Income' },
       ],
       language: {
         processing: "Memproses...",
@@ -639,12 +642,12 @@ function initDataTable() {
         infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
         infoFiltered: "(difilter dari _MAX_ total data)",
         zeroRecords: "Tidak ditemukan data yang sesuai",
-        paginate: {
-          first: "Pertama",
-          last: "Terakhir",
-          next: "Selanjutnya",
-          previous: "Sebelumnya"
-        }
+        // paginate: {
+        //   first: "Pertama",
+        //   last: "Terakhir",
+        //   next: "Selanjutnya",
+        //   previous: "Sebelumnya"
+        // }
       },
       scrollX: true
     });
@@ -728,7 +731,9 @@ const form = ref({
   remaining_total: 0,
   displayNilaiDP: '',
   displayNilaiPelunasan: '',
-  displayNilaiTermin: ''
+  displayNilaiTermin: '',
+  target_progress: 0,
+
 });
 
 const statusForm = ref({
@@ -761,7 +766,7 @@ const editingId = ref(null);
 const updatingStatusId = ref(null);
 
 // Manual mode state
-const manualNilaiTermin = ref(false);
+// const manualNilaiTermin = ref(false);
 const manualNilaiDP = ref(false);
 
 const totalDpSudahDibayar = ref(0);
@@ -791,6 +796,32 @@ const groupedProjects = computed(() => {
 });
 
 // Menggunakan data dari backend untuk summary
+const displayNilaiTermin = computed(() => {
+  const dpPaid = Number(form.value.total_dp_paid) || 0;
+  const pelunasanPaid = Number(form.value.total_pelunasan_paid) || 0;
+
+  const nilaiTermin = Number(form.value.nilai_termin) || 0;
+  const nilaiDP = Number(form.value.nilai_dp) || 0;
+  const nilaiPelunasan = Number(form.value.nilai_pelunasan) || 0;
+
+  const totalDibayar = dpPaid + pelunasanPaid;
+
+  // Jika belum ada pembayaran sama sekali
+  if (totalDibayar === 0) {
+    return formatCurrency(nilaiTermin);
+  }
+
+  // Jika sudah lunas
+  if (dpPaid >= nilaiDP && pelunasanPaid >= nilaiPelunasan) {
+    return formatCurrency(0);
+  }
+
+  // Jika hanya DP sebagian/lengkap, tampilkan pelunasan
+  return formatCurrency(nilaiPelunasan - pelunasanPaid);
+});
+
+
+
 
 // --- Custom summary calculations for correct reactivity and business logic ---
 
@@ -801,7 +832,7 @@ const filteredTermins = computed(() => {
 });
 
 // Ambil summary dari API (field sudah diisi oleh backend, bukan hitung manual di frontend)
-const totalNilaiTermin = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_termin) || 0), 0));
+const totalNilaiTerminFiltered = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_termin) || 0), 0));
 const totalDP = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_dp) || 0), 0));
 const totalPelunasan = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.nilai_pelunasan) || 0), 0));
 const totalDpPaid = computed(() => filteredTermins.value.reduce((sum, t) => sum + (Number(t.total_dp_paid) || 0), 0));
@@ -816,6 +847,17 @@ const totalRemaining = computed(() => filteredTermins.value.reduce((sum, t) => s
 const selectedInvoiceObj = computed(() => {
   return invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
 });
+// Total DP dibayar untuk invoice saat ini (semua termin)
+const totalDpPaidForInvoice = computed(() => {
+  return termins.value
+    .filter(t =>
+      `${t.invoice_id}` === `${form.value.invoice_id}` &&
+      (t.status_termin === 'DP Dibayar' || t.status_termin === 'Lunas') &&
+      t.id !== editingId.value
+    )
+    .reduce((sum, t) => sum + (Number(t.nilai_dp) || 0), 0);
+});
+
 
 const totalInvoiceAmount = computed(() => {
   const inv = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
@@ -893,56 +935,62 @@ const formatDate = (date) => {
 };
 
 // Methods
-const handleNilaiTerminInput = (event) => {
-  const inputValue = event.target.value;
-  form.displayNilaiTermin = inputValue;
-  // Konversi ke angka (hilangkan karakter selain digit)
-  const cleanValue = Number(String(inputValue).replace(/[^\d]/g, '')) || 0;
-  form.value.nilai_termin = cleanValue;
+// const handleNilaiTerminInput = (event) => {
+//   const inputValue = event.target.value;
+//   form.displayNilaiTermin = inputValue;
+//   // Konversi ke angka (hilangkan karakter selain digit)
+//   const cleanValue = Number(String(inputValue).replace(/[^\d]/g, '')) || 0;
+//   form.value.nilai_termin = cleanValue;
 
-  // Adjust dynamically based on payment status
-  switch (form.status_termin) {
-    case 'Belum Dibayar':
-      form.displayNilaiTermin = formatCurrency(modalTotalInvoiceAmount);
-      form.value.nilai_termin = modalTotalInvoiceAmount;
-      break;
-    case 'DP Dibayar':
-      const dpVal = modalTotalInvoiceAmount - (form.persentase_dp / 100 * modalTotalInvoiceAmount);
-      form.displayNilaiTermin = formatCurrency(dpVal);
-      form.value.nilai_termin = dpVal;
-      break;
-    case 'Lunas':
-      form.displayNilaiTermin = formatCurrency(0);
-      form.value.nilai_termin = 0;
-      break;
-    default:
-      // Sudah di atas
-      break;
-  }
-};
+//   // Adjust dynamically based on payment status
+//   switch (form.status_termin) {
+//     case 'Belum Dibayar':
+//       form.displayNilaiTermin = formatCurrency(modalTotalInvoiceAmount);
+//       form.value.nilai_termin = modalTotalInvoiceAmount;
+//       break;
+//     case 'DP Dibayar':
+//       const dpVal = modalTotalInvoiceAmount - (form.persentase_dp / 100 * modalTotalInvoiceAmount);
+//       form.displayNilaiTermin = formatCurrency(dpVal);
+//       form.value.nilai_termin = dpVal;
+//       break;
+//     case 'Lunas':
+//       form.displayNilaiTermin = formatCurrency(0);
+//       form.value.nilai_termin = 0;
+//       break;
+//     default:
+//       // Sudah di atas
+//       break;
+//   }
+// };
 
-const handleNilaiDPInput = (event) => {
-  if (!manualNilaiDP.value) return;
-  const value = event.target.value.replace(/[^\d]/g, '');
-  const newValue = Number(value) || 0;
-  if (newValue > form.value.nilai_termin) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Peringatan',
-      text: 'Nilai DP tidak boleh melebihi nilai termin'
-    });
-    return;
-  }
-  form.value.nilai_dp = newValue;
-  form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
-  if (form.value.nilai_termin > 0) {
-    form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
-    if (!manualNilaiTermin.value) {
-      form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
-      form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
-    }
-  }
-};
+// const handleNilaiDPInput = (event) => {
+//   if (!manualNilaiDP.value) return;
+//   const value = event.target.value.replace(/[^\d]/g, '');
+//   const newValue = Number(value) || 0;
+//   if (newValue > form.value.nilai_termin) {
+//     Swal.fire({
+//       icon: 'warning',
+//       title: 'Peringatan',
+//       text: 'Nilai DP tidak boleh melebihi nilai termin'
+//     });
+//     return;
+//   }
+//   form.value.nilai_dp = newValue;
+//   form.value.displayNilaiDP = formatCurrency(form.value.nilai_dp);
+//   if (form.value.nilai_termin > 0) {
+//     form.value.persentase_dp = Math.round((form.value.nilai_dp / form.value.nilai_termin) * 100);
+//     if (!manualNilaiTermin.value) {
+//       form.value.nilai_pelunasan = form.value.nilai_termin - form.value.nilai_dp;
+//       form.value.displayNilaiPelunasan = formatCurrency(form.value.nilai_pelunasan);
+//     }
+//   }
+// };
+// const handleNilaiTerminInput = (event) => {
+//   if (!manualNilaiTermin.value) return;
+//   const inputValue = event.target.value;
+//   const cleanValue = Number(String(inputValue).replace(/[^\d]/g, '')) || 0;
+//   form.value.nilai_termin = cleanValue;
+// };
 
 
 // Perhitungan Nilai Pelunasan
@@ -962,31 +1010,28 @@ const displaySisaTerminBelumDibayar = computed(() => {
 // Computed property for Nilai Pelunasan (selalu sama dengan Sisa Termin)
 // Nilai Pelunasan selalu sama dengan Sisa Termin (remaining_total)
 const displayNilaiPelunasan = computed(() => {
-  return formatCurrency(form.value.remaining_total || 0);
+  return formatCurrency(form.value.nilai_pelunasan || 0);
 });
 
+// Perhitungan DP dan Pelunasan fleksibel sesuai sistem keuangan konstruksi swasta
 const calculateValues = () => {
-  // Gunakan nilai termin yang sedang diinput user
-  let nilaiTermin = Number(String(form.displayNilaiTermin || '').replace(/[^\d]/g, ''));
-  if (isNaN(nilaiTermin) || nilaiTermin <= 0) {
-    nilaiTermin = 0;
-  }
-  const percent = Number(form.persentase_dp) || 0;
-  const nilaiDP = (percent / 100) * nilaiTermin;
+  const nilaiTermin = Number(form.value.nilai_termin) || 0;
+  const persenDP = Number(form.value.persentase_dp) || 0;
+  const nilaiDP = (persenDP / 100) * nilaiTermin;
   const nilaiPelunasan = nilaiTermin - nilaiDP;
+
+  // Hitung langsung sesuai input user, tanpa batas 20%
+  form.value.nilai_dp = Math.max(nilaiDP, 0);
+  form.value.nilai_pelunasan = Math.max(nilaiPelunasan, 0);
+  form.value.remaining_dp = Math.max(nilaiDP, 0);
+  form.value.remaining_pelunasan = Math.max(nilaiPelunasan, 0);
+  form.value.remaining_total = Math.max(nilaiPelunasan, 0);
+
   form.value.displayNilaiDP = formatCurrency(nilaiDP);
   form.value.displayNilaiPelunasan = formatCurrency(nilaiPelunasan);
-  form.remaining_dp = nilaiTermin - nilaiDP;
-  form.remaining_total = nilaiTermin - nilaiDP;
+  form.value.displayNilaiTermin = formatCurrency(nilaiTermin);
 };
-// Tambahkan computed properties untuk menghitung nilai DP, pelunasan, dan sisa pembayaran secara dinamis
-// Sinkronisasi displayNilaiTermin ke nilai_termin jika user edit manual
-watch(() => form.displayNilaiTermin, (val) => {
-  const clean = Number(String(val).replace(/[^\d]/g, '')) || 0;
-  if (!manualNilaiTermin.value) {
-    form.value.nilai_termin = clean;
-  }
-});
+
 
 
 const nilaiPelunasan = computed(() => { // Ini variabel baru 'nilaiPelunasan' (computed)
@@ -1221,86 +1266,114 @@ const openModal = async (mode, termin = null) => {
       }
     }
     form.value = {
-      proyek_id: termin.proyek_id || selectedProject.value,
-      invoice_id: `${invoiceId || ""}`,
-      nama_termin: termin.nama_termin,
-      nilai_termin: nilaiAkhirSetelahPajak,
-      persentase_dp: termin.persentase_dp,
-      nilai_dp: termin.nilai_dp,
-      nilai_pelunasan: termin.nilai_pelunasan,
-      tanggal_dp: termin.tanggal_dp ? new Date(termin.tanggal_dp).toISOString().split('T')[0] : "",
-      tanggal_pelunasan: termin.tanggal_pelunasan ? new Date(termin.tanggal_pelunasan).toISOString().split('T')[0] : "",
-      tanggal_dp_dibayar: termin.tanggal_dp_dibayar ? new Date(termin.tanggal_dp_dibayar).toISOString().split('T')[0] : "",
-      tanggal_pelunasan_dibayar: termin.tanggal_pelunasan_dibayar ? new Date(termin.tanggal_pelunasan_dibayar).toISOString().split('T')[0] : "",
-      status_termin: termin.status_termin,
-      keterangan: termin.keterangan || "",
-      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
-      displayNilaiDP: formatCurrency(termin.nilai_dp),
-      displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan),
-      bukti_pembayaran: null,
-      bukti_pembayaran_url: termin.bukti_pembayaran_url || null,
-      remaining_dp: Math.max(totalDPdibayar - (Number(termin.nilai_dp) || 0), 0),
-      remaining_pelunasan: Math.max(totalPelunasanDibayar - (Number(termin.nilai_pelunasan) || 0), 0),
-      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
-    };
+  proyek_id: termin.proyek_id || selectedProject.value,
+  invoice_id: `${invoiceId || ""}`,
+  nama_termin: termin.nama_termin,
+  nilai_termin: termin.nilai_termin,
+  persentase_dp: termin.persentase_dp,
+  nilai_dp: termin.nilai_dp,
+  nilai_pelunasan: termin.nilai_pelunasan,
+  tanggal_dp: formatDate(termin.tanggal_dp),
+  tanggal_pelunasan: formatDate(termin.tanggal_pelunasan),
+  tanggal_dp_dibayar: formatDate(termin.tanggal_dp_dibayar),
+  tanggal_pelunasan_dibayar: formatDate(termin.tanggal_pelunasan_dibayar),
+  status_termin: termin.status_termin,
+  keterangan: termin.keterangan || "",
+  displayNilaiTermin: formatCurrency(termin.nilai_termin),
+  displayNilaiDP: formatCurrency(termin.nilai_dp),
+  displayNilaiPelunasan: formatCurrency(termin.nilai_pelunasan),
+  bukti_pembayaran: null,
+  bukti_pembayaran_url: termin.bukti_pembayaran_url || null,
+  remaining_dp: (termin.nilai_dp || 0) - (termin.total_dp_paid || 0),
+  remaining_pelunasan: (termin.nilai_pelunasan || 0) - (termin.total_pelunasan_paid || 0),
+  remaining_total: (termin.nilai_pelunasan || 0) - (termin.total_pelunasan_paid || 0),
+  total_dp_paid: termin.total_dp_paid || 0, // ✅ gunakan data dari termin yang diedit
+  total_pelunasan_paid: termin.total_pelunasan_paid || 0,
+};
+
+      calculateValues();
+
     editingId.value = termin.id;
     modalTitle.value = "Edit Termin";
     modalButtonText.value = "Update";
-  } else {
-    const selectedInvoiceObj = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
-    const today = new Date().toISOString().split('T')[0];
-    // Hitung sisa DP, pelunasan, total dari termin yang sudah dibayar pada invoice ini
-    const invoiceId = selectedInvoice.value;
-    const { dp: totalDPdibayar, pelunasan: totalPelunasanDibayar, total: totalTerminDibayar } =
-      hitungTerminDibayar(termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}`));
+} else {
+  const selectedInvoiceObj = invoices.value.find(inv => `${inv.id}` === `${selectedInvoice.value}`);
+  const today = new Date().toISOString().split('T')[0];
 
-    // Logic: jika ada pajak (ppn/pph), ambil dari finalAmount, jika tidak ada pajak ambil dari total_amount
-    let nilaiAkhirSetelahPajak = 0;
-    if (selectedInvoiceObj) {
-      const usePpn = selectedInvoiceObj.use_ppn;
-      const usePphNonFinal = selectedInvoiceObj.use_pph_non_final;
-      const usePphFinal = selectedInvoiceObj.use_pph_final;
-      if (usePpn || usePphNonFinal || usePphFinal) {
-        let total = Number(selectedInvoiceObj.total_amount) || 0;
-        if (usePpn) total += Number(selectedInvoiceObj.ppn_amount) || 0;
-        if (usePphNonFinal) total -= Number(selectedInvoiceObj.pph_non_final_amount) || 0;
-        if (usePphFinal) total -= Number(selectedInvoiceObj.pph_final_amount) || 0;
-        nilaiAkhirSetelahPajak = total;
-      } else {
-        nilaiAkhirSetelahPajak = Number(selectedInvoiceObj.total_amount) || 0;
-      }
-    }
-    form.value = {
-      proyek_id: selectedProject.value,
-      invoice_id: `${selectedInvoice.value || ""}`,
-      nama_termin: "",
-      nilai_termin: nilaiAkhirSetelahPajak,
-      persentase_dp: 0,
-      nilai_dp: 0,
-      nilai_pelunasan: 0,
-      tanggal_dp: today,
-      tanggal_pelunasan: "",
-      tanggal_dp_dibayar: "",
-      tanggal_pelunasan_dibayar: "",
-      status_termin: "Belum Dibayar",
-      keterangan: "",
-      displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
-      displayNilaiDP: formatCurrency(0),
-      displayNilaiPelunasan: formatCurrency(0),
-      bukti_pembayaran: null,
-      bukti_pembayaran_url: null,
-      remaining_dp: 0,
-      remaining_pelunasan: 0,
-      remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0)
-    };
-    editingId.value = null;
-    modalTitle.value = "Tambah Termin";
-    modalButtonText.value = "Simpan";
+  const invoiceId = selectedInvoice.value;
+  const filteredTermins = termins.value.filter(t => `${t.invoice_id}` === `${invoiceId}`);
+
+  // ✅ Hitung total DP, pelunasan, dan semua pembayaran sebelumnya
+  const totalDPdibayar = filteredTermins.reduce((sum, t) =>
+    (t.status_termin === 'DP Dibayar' || t.status_termin === 'Lunas')
+      ? sum + (Number(t.nilai_dp) || 0) : sum, 0);
+  const totalPelunasanDibayar = filteredTermins.reduce((sum, t) =>
+    t.status_termin === 'Lunas' ? sum + (Number(t.nilai_pelunasan) || 0) : sum, 0);
+  const totalTerminDibayar = totalDPdibayar + totalPelunasanDibayar;
+
+  // ✅ Hitung nilai akhir setelah pajak
+  let nilaiAkhirSetelahPajak = 0;
+  if (selectedInvoiceObj) {
+    let total = Number(selectedInvoiceObj.total_amount) || 0;
+    if (selectedInvoiceObj.use_ppn) total += Number(selectedInvoiceObj.ppn_amount) || 0;
+    if (selectedInvoiceObj.use_pph_non_final) total -= Number(selectedInvoiceObj.pph_non_final_amount) || 0;
+    if (selectedInvoiceObj.use_pph_final) total -= Number(selectedInvoiceObj.pph_final_amount) || 0;
+    nilaiAkhirSetelahPajak = total;
   }
-  // Selalu update tampilan DP & Pelunasan otomatis saat modal dibuka (tambah/edit)
+
+  // ✅ Set form untuk tambah termin
+  form.value = {
+    proyek_id: selectedProject.value,
+    invoice_id: `${selectedInvoice.value || ""}`,
+    nama_termin: "",
+    nilai_termin: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0),
+    persentase_dp: 0,
+    nilai_dp: 0,
+    nilai_pelunasan: 0,
+    tanggal_dp: today,
+    tanggal_pelunasan: "",
+    tanggal_dp_dibayar: "",
+    tanggal_pelunasan_dibayar: "",
+    status_termin: "Belum Dibayar",
+    keterangan: "",
+    displayNilaiTermin: formatCurrency(nilaiAkhirSetelahPajak),
+    displayNilaiDP: formatCurrency(0),
+    displayNilaiPelunasan: formatCurrency(0),
+    bukti_pembayaran: null,
+    bukti_pembayaran_url: null,
+    remaining_dp: 0,
+    remaining_pelunasan: 0,
+    remaining_total: Math.max(nilaiAkhirSetelahPajak - totalTerminDibayar, 0),
+    total_dp_paid: totalDPdibayar,
+    total_pelunasan_paid: totalPelunasanDibayar,
+  };
+
+  editingId.value = null;
+  modalTitle.value = "Tambah Termin";
+  modalButtonText.value = "Simpan";
+
   calculateValues();
+
+  if (totalDPdibayar >= nilaiAkhirSetelahPajak * 0.99) {
+    form.value.persentase_dp = 0;
+    calculateValues(); // hitung ulang
+  }
+}
+
   showModal.value = true;
 };
+const sudahAdaPembayaran = computed(() => {
+  return (form.value.total_dp_paid || 0) + (form.value.total_pelunasan_paid || 0) > 0
+})
+const displayTerminValue = computed(() => {
+  if (!sudahAdaPembayaran.value) {
+    return form.value.nilai_termin;
+  }
+  // Jika sudah ada pembayaran → hanya tunjukkan sisa pelunasan
+  const sisaPelunasan = form.value.nilai_pelunasan - (form.value.total_pelunasan_paid || 0);
+  return Math.max(sisaPelunasan, 0);
+});
+
 
 const openStatusModal = (termin) => {
   statusForm.value = {
@@ -1384,6 +1457,7 @@ const pelunasanValue = computed(() => {
       invoice_id: Number(form.value.invoice_id),
       nama_termin: form.value.nama_termin.trim(),
       jenis_termin: form.value.jenis_termin,
+      target_progress: form.value.target_progress || 0,
       termin_ke: form.value.termin_ke ? Number(form.value.termin_ke) : null,
       nilai_termin: Number(form.value.nilai_termin),
       persentase_dp: Number(form.value.persentase_dp),
@@ -1518,6 +1592,7 @@ const handleStatusSubmit = async () => {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
+
       }
     });
     Swal.fire('Berhasil', 'Status termin berhasil diperbarui', 'success');
@@ -1528,6 +1603,21 @@ const handleStatusSubmit = async () => {
   } catch (err) {
     Swal.fire('Error', err.response?.data?.message || 'Gagal memperbarui status termin', 'error');
   }
+};
+/**
+ * Mengecek apakah tanggal pelunasan yang dipilih bertabrakan dengan termin lain.
+ * @param {string} date - tanggal dalam format YYYY-MM-DD
+ * @returns {boolean} true jika tanggal sudah dipakai termin lain
+ */
+const isDateDisabled = (date) => {
+  if (!date || !selectedInvoice.value) return false;
+
+  return termins.value.some(t => {
+    const isSameInvoice = `${t.invoice_id}` === `${selectedInvoice.value}`;
+    const isSameDate = t.tanggal_pelunasan === date;
+    const isDifferentId = editingId.value ? t.id !== editingId.value : true;
+    return isSameInvoice && isSameDate && isDifferentId;
+  });
 };
 
 const handleBuktiPembayaran = (event) => {
@@ -1576,9 +1666,39 @@ watch(selectedProject, async (newValue) => {
   }
 });
 watch(() => form.value.persentase_dp, (newVal) => {
-  form.value.nilai_dp = nilaiDP.value;
-  form.value.nilai_pelunasan = nilaiPelunasan.value;
+  if (newVal === null || newVal === undefined) return;
+
+  const nilaiAwal = modalTotalInvoiceAmount.value;
+
+  // Pastikan nilai_termin selalu dikunci pada sisa nilai invoice (finalAmount - total termin existing)
+  const invoice = invoices.value.find(inv => `${inv.id}` === `${form.value.invoice_id}`);
+  let nilaiAkhir = Number(invoice?.total_amount) || 0;
+  if (invoice?.use_ppn) nilaiAkhir += Number(invoice.ppn_amount || 0);
+  if (invoice?.use_pph_non_final) nilaiAkhir -= Number(invoice.pph_non_final_amount || 0);
+  if (invoice?.use_pph_final) nilaiAkhir -= Number(invoice.pph_final_amount || 0);
+
+  const sisaTermin = nilaiAkhir - totalPaid.value;
+
+  // Tetapkan nilai_termin = sisaTermin dan hitung ulang DP dan pelunasan
+  form.value.nilai_termin = Math.max(sisaTermin, 0);
+
+  const dp = (newVal / 100) * form.value.nilai_termin;
+  const pelunasan = form.value.nilai_termin - dp;
+
+  form.value.nilai_dp = Math.max(dp, 0);
+  form.value.nilai_pelunasan = Math.max(pelunasan, 0);
+
+  form.value.remaining_dp = Math.max(dp - (form.value.total_dp_paid || 0), 0);
+  form.value.remaining_pelunasan = Math.max(pelunasan - (form.value.total_pelunasan_paid || 0), 0);
+  form.value.remaining_total = Math.max(pelunasan - (form.value.total_pelunasan_paid || 0), 0);
+
+  form.value.displayNilaiTermin = formatCurrency(form.value.nilai_termin);
+  form.value.displayNilaiDP = formatCurrency(dp);
+  form.value.displayNilaiPelunasan = formatCurrency(pelunasan);
 });
+
+
+
 // Watch for invoice selection changes
 watch(selectedInvoice, async (newValue) => {
   if (newValue && selectedProject.value) {
@@ -1710,7 +1830,7 @@ const updateTerminApproval = async (item, status) => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'multipart/form-data'
       }
-             });
+    });
     Swal.fire('Berhasil', `Status termin diubah menjadi ${status}`, 'success');
     await fetchTermins();
   } catch (err) {

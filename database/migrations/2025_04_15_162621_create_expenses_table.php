@@ -20,7 +20,7 @@ return new class extends Migration
         $table->decimal('amount', 15, 2);
         $table->text('description')->nullable();
         $table->date('transaction_date')->index();
-        $table->enum('status', ['pending', 'DP Dibayar', 'Belum Dibayar', 'Lunas','approved', 'rejected'])->default('pending')->index();
+       $table->enum('status', ['pending', 'DP Sebagian', 'DP Dibayar', 'Pelunasan Sebagian', 'Belum Dibayar', 'Lunas', 'approved', 'rejected'])->default('pending')->index();
         $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete(); // instead of string
         $table->decimal('prepared_fund', 15, 2)->default(0);
         $table->string('kode_transaksi')->nullable();

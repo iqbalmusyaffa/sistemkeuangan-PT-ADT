@@ -23,7 +23,7 @@ class CreateIncomesTable extends Migration
     $table->decimal('jumlah', 15, 2);
     $table->text('deskripsi')->nullable();
     $table->date('tanggal');
-        $table->enum('status', ['pending', 'DP Dibayar', 'Belum Dibayar', 'Lunas','approved', 'rejected'])->default('pending')->index();
+        $table->enum('status', ['pending', 'DP Sebagian', 'DP Dibayar', 'Pelunasan Sebagian', 'Belum Dibayar', 'Lunas', 'approved', 'rejected'])->default('pending')->index();
     $table->string('bukti_pembayaran')->nullable();
     $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
     $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
