@@ -8,6 +8,7 @@ use App\Models\ProfitLossReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ProfitLossExport; 
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ProfitLossReportController extends Controller
@@ -36,79 +37,94 @@ class ProfitLossReportController extends Controller
         ]);
     }
 
-    public function generateReport(Request $request)
-    {
-        $request->validate([
-            'proyek_id' => 'nullable|exists:proyeks,id',
-            'period_type' => 'required|in:weekly,monthly,yearly',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date'
+public function generateReport(Request $request)
+{
+    $request->validate([
+        'proyek_id' => 'nullable|exists:proyeks,id',
+        'period_type' => 'required|in:weekly,monthly,yearly',
+        'start_date' => 'required|date',
+        'end_date' => 'required|date|after:start_date'
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        // Income Query
+        $incomeQuery = DB::table('incomes')
+            ->whereNotNull('termin_id')
+            ->where('status_approval', 'approved')
+            ->whereIn('status', ['DP Dibayar', 'Lunas'])
+            ->whereBetween('tanggal', [$request->start_date, $request->end_date])
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('termins')
+                    ->whereColumn('termins.id', 'incomes.termin_id')
+                    ->whereIn('termins.status_termin', ['DP Dibayar', 'Lunas']);
+            });
+
+        // Expense Query
+        $expenseQuery = DB::table('expenses')
+            ->where('status_approval', 'approved')
+            ->whereIn('status', ['DP Dibayar', 'Lunas'])
+            ->whereBetween('transaction_date', [$request->start_date, $request->end_date]);
+
+        // Filter by proyek jika ada
+        if ($request->proyek_id) {
+            $incomeQuery->where('proyek_id', $request->proyek_id);
+            $expenseQuery->where('proyek_id', $request->proyek_id);
+        }
+
+        $incomes = $incomeQuery->get();
+        $expenses = $expenseQuery->get();
+
+        $totalIncome = $incomes->sum('jumlah');
+        $totalExpense = $expenses->sum('amount');
+        $netProfit = $totalIncome - $totalExpense;
+
+        $incomeDetails = $incomes->map(fn($i) => [
+            'id' => $i->id,
+            'description' => $i->deskripsi ?? '',
+            'amount' => $i->jumlah,
+            'date' => $i->tanggal
+        ])->values();
+
+        $expenseDetails = $expenses->map(fn($e) => [
+            'id' => $e->id,
+            'description' => $e->description ?? '',
+            'amount' => $e->amount,
+            'date' => $e->transaction_date
+        ])->values();
+
+        // Simpan laporan
+        $report = ProfitLossReport::create([
+            'proyek_id' => $request->proyek_id,
+            'period_type' => $request->period_type,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'total_income' => $totalIncome,
+            'total_expense' => $totalExpense,
+            'net_profit' => $netProfit,
+            'income_details' => $incomeDetails,
+            'expense_details' => $expenseDetails
         ]);
 
-        try {
-            DB::beginTransaction();
+        DB::commit();
 
-            // Ambil pendapatan dari tabel `incomes`
-            $incomeQuery = DB::table('incomes')
-                ->whereBetween('tanggal', [$request->start_date, $request->end_date]);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Laporan berhasil dibuat',
+            'report' => $report
+        ]);
 
-            // Ambil pengeluaran dari tabel `expenses`
-            $expenseQuery = DB::table('expenses')
-                ->whereBetween('transaction_date', [$request->start_date, $request->end_date]);
-
-            if ($request->proyek_id) {
-                $incomeQuery->where('proyek_id', $request->proyek_id);
-                $expenseQuery->where('proyek_id', $request->proyek_id);
-            }
-
-            $incomes = $incomeQuery->get();
-            $expenses = $expenseQuery->get();
-
-            $totalIncome = $incomes->sum('jumlah');
-            $totalExpense = $expenses->sum('amount');
-            $netProfit = $totalIncome - $totalExpense;
-
-            $incomeDetails = $incomes->map(fn($i) => [
-                'id' => $i->id,
-                'description' => $i->deskripsi ?? '',
-                'amount' => $i->jumlah,
-                'date' => $i->tanggal
-            ])->values();
-
-            $expenseDetails = $expenses->map(fn($e) => [
-                'id' => $e->id,
-                'description' => $e->description ?? '',
-                'amount' => $e->amount,
-                'date' => $e->transaction_date
-            ])->values();
-
-            // Simpan ke tabel profit_loss_reports
-            $report = ProfitLossReport::create([
-                'proyek_id' => $request->proyek_id,
-                'period_type' => $request->period_type,
-                'start_date' => $request->start_date,
-                'end_date' => $request->end_date,
-                'total_income' => $totalIncome,
-                'total_expense' => $totalExpense,
-                'net_profit' => $netProfit,
-                'income_details' => $incomeDetails,
-                'expense_details' => $expenseDetails
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'message' => 'Laporan berhasil dibuat',
-                'report' => $report
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Error generating profit-loss report: ' . $e->getMessage(), [
-                'stack' => $e->getTraceAsString()
-            ]);
-            return response()->json(['message' => 'Gagal membuat laporan'], 500);
-        }
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error generating profit-loss report: ' . $e->getMessage(), [
+            'stack' => $e->getTraceAsString()
+        ]);
+        return response()->json(['message' => 'Gagal membuat laporan'], 500);
     }
+}
+
 
 
     public function show(ProfitLossReport $report)
@@ -271,4 +287,28 @@ class ProfitLossReportController extends Controller
         echo $pdf->output();
     }, 'laporan_laba_rugi.pdf');
 }
+public function exportToExcel(array $filters)
+{
+    $incomeQuery = DB::table('incomes')
+        ->select('tanggal as date', DB::raw("'Income' as type"), 'deskripsi as description', 'jumlah as amount')
+        ->whereBetween('tanggal', [$filters['start_date'], $filters['end_date']]);
+
+    $expenseQuery = DB::table('expenses')
+        ->select('transaction_date as date', DB::raw("'Expense' as type"), 'description', 'amount')
+        ->whereBetween('transaction_date', [$filters['start_date'], $filters['end_date']]);
+
+    if (!empty($filters['proyek_id'])) {
+        $incomeQuery->where('proyek_id', $filters['proyek_id']);
+        $expenseQuery->where('proyek_id', $filters['proyek_id']);
+    }
+
+    $incomes = $incomeQuery->get();
+    $expenses = $expenseQuery->get();
+
+    // Gabungkan dan urutkan berdasarkan tanggal
+    $data = $incomes->merge($expenses)->sortBy('date')->values();
+
+    return Excel::download(new ProfitLossExport($data), 'laporan_laba_rugi.xlsx');
+}
+
 }

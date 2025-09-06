@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Expense;
 use App\Models\Proyek;
-use App\Models\Purchasematerial;
+use App\Models\PurchaseMaterial;
 use App\Models\Termin;
 use App\Models\ServiceCategory;
 use Illuminate\Support\Facades\DB;
@@ -186,7 +186,7 @@ class ExpenseController extends Controller
                             $expense->setRelation('source', Termin::find($expense->source_id));
                             break;
                         case 'purchase':
-                            $expense->setRelation('source', Purchasematerial::find($expense->source_id));
+                            $expense->setRelation('source', PurchaseMaterial::find($expense->source_id));
                             break;
                     }
                 } catch (\Exception $e) {
@@ -261,7 +261,7 @@ class ExpenseController extends Controller
                         ], 422);
                     }
                 } elseif ($validated['source_type'] === 'purchase') {
-                    $purchase = \App\Models\Purchasematerial::find($validated['source_id']);
+                    $purchase = \App\Models\PurchaseMaterial::find($validated['source_id']);
                     if (!$purchase) {
                         return response()->json([
                             'status' => 'error',
@@ -371,17 +371,23 @@ class ExpenseController extends Controller
         }
     }
 
-    public function datatables(Request $request)
-    {
-        $query = Expense::with(['proyek', 'category', 'serviceCategory', 'paymentMethod']); // Eager load paymentMethod
+public function datatables(Request $request)
+{
+    try {
+        $query = Expense::with(['proyek', 'category', 'serviceCategory', 'paymentMethod']);
+
         if ($request->has('proyek_id')) {
             $query->where('proyek_id', $request->proyek_id);
         }
-        // Add more filters as needed
 
-        // Use Yajra DataTables if installed
         return \DataTables::of($query)->make(true);
+    } catch (\Exception $e) {
+        Log::error('Datatables error: ' . $e->getMessage());
+        return response()->json([
+            'error' => 'Terjadi kesalahan saat memuat data.'
+        ], 500);
     }
+}
 
     protected function calculateProjectSummaries($proyekId)
     {
@@ -413,7 +419,8 @@ class ExpenseController extends Controller
             'project_budget' => $proyek->anggaran_kontrak,
             'budget_percentage' => $proyek->anggaran_kontrak > 0
                 ? ($totalExpenses / $proyek->anggaran_kontrak) * 100
-                : 0
+                : 0,
+                'bukti_pembayaran' => $expense->bukti_pembayaran,
         ];
     }
 
@@ -527,4 +534,50 @@ class ExpenseController extends Controller
             ], 500);
         }
     }
+public function uploadBukti(Request $request, $id)
+{
+    try {
+        $expense = Expense::findOrFail($id);
+
+        // Validasi file
+        $request->validate([
+            'bukti_pembayaran' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048'
+        ]);
+
+        // Hapus file lama jika ada
+        if ($expense->bukti_pembayaran && Storage::disk('public')->exists($expense->bukti_pembayaran)) {
+            Storage::disk('public')->delete($expense->bukti_pembayaran);
+        }
+
+        // Simpan bukti baru
+        $file = $request->file('bukti_pembayaran');
+        $path = $file->store('bukti_pengeluaran', 'public');
+
+        $expense->bukti_pembayaran = $path;
+        $expense->save();
+
+        // Tambahkan url jika ingin ditampilkan di frontend
+        $expense->url_bukti = asset('storage/' . $path);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Bukti pembayaran berhasil diupload.',
+            'data' => $expense
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validasi gagal',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        Log::error('Gagal upload bukti: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Terjadi kesalahan saat upload bukti.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

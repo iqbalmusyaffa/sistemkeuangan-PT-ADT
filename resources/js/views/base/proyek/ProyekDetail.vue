@@ -300,7 +300,7 @@ const fetchPurchases = async () => {
   try {
     const token = sessionStorage.getItem('token');
     console.log('Fetching purchases for project:', route.params.id);
-    const response = await axios.get('/api/purchasematerials', {
+    const response = await axios.get('/api/purchase-materials', {
       headers: { Authorization: `Bearer ${token}` },
       params: { proyek_id: route.params.id }
     });
@@ -347,7 +347,6 @@ const fetchTermins = async () => {
     error.value = 'Gagal memuat data termin';
   }
 };
-
 
 // Fetch invoices
 const fetchInvoices = async () => {

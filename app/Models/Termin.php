@@ -7,6 +7,7 @@ use App\Traits\Trackable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -18,6 +19,7 @@ class Termin extends Model
     protected $fillable = [
         'proyek_id',
         'invoice_id',
+        'kode_termin',
         'nama_termin',
         'target_progress',
         'jenis_termin',
@@ -92,11 +94,11 @@ class Termin extends Model
     {
         return $this->hasMany(PurchaseMaterial::class);
     }
+public function incomes()
+{
+    return $this->hasMany(Income::class);
+}
 
-    public function incomes(): HasMany
-    {
-        return $this->hasMany(Income::class);
-    }
 
     public function expense(): BelongsTo
     {
@@ -602,9 +604,15 @@ class Termin extends Model
     {
         parent::boot();
 
-        static::creating(function ($termin) {
-            try {
-                Log::info('Creating new termin:', $termin->toArray());
+      static::creating(function ($termin) {
+    try {
+        // ✅ Tambahkan ini untuk generate kode_termin otomatis
+        if (empty($termin->kode_termin)) {
+            $prefix = strtoupper(substr($termin->jenis_termin ?? 'TERM', 0, 3)); // bisa jadi 'DP', 'PEL', 'TER'
+            $termin->kode_termin = $prefix . '-' . now()->format('Ymd') . '-' . strtoupper(\Str::random(4));
+        }
+
+        Log::info('Creating new termin:', $termin->toArray());
 
                 // Set nilai DP and pelunasan if not set
                 if (is_null($termin->nilai_dp) && $termin->persentase_dp) {
@@ -898,7 +906,10 @@ class Termin extends Model
             $incomeStatus = 'pending';
             $incomeApproval = 'pending';
             $buktiPath = null;
-
+// 👇 Tambahkan ini untuk fallback bukti dari termin jika $buktiFile kosong
+if (!$buktiPath && $this->bukti_pembayaran) {
+    $buktiPath = $this->bukti_pembayaran;
+}
             // Handle upload file bukti jika ada
             if ($buktiFile instanceof \Illuminate\Http\UploadedFile) {
                 if ($buktiFile->getSize() > 2048 * 1024) {
@@ -918,7 +929,6 @@ class Termin extends Model
                 }
                 $buktiPath = $path;
             }
-
             $incomeData = [
                 'jumlah' => $amount,
                 'status' => $incomeStatus,
@@ -980,11 +990,17 @@ class Termin extends Model
                 if (!Storage::exists('uploads/bukti_pembayaran')) {
                     Storage::makeDirectory('uploads/bukti_pembayaran');
                 }
-                if (!$buktiFile->storeAs('uploads/bukti_pembayaran', $filename)) {
-                    throw new \Exception('Failed to store file');
-                }
-                $buktiPath = $path;
-            }
+                // Setelah upload file:
+if (!$buktiFile->storeAs('uploads/bukti_pembayaran', $filename)) {
+    throw new \Exception('Failed to store file');
+}
+$buktiPath = $path;
+}
+
+if (!$buktiPath && $this->bukti_pembayaran) {
+    $buktiPath = $this->bukti_pembayaran;
+}
+
 
             $expenseData = [
                 'user_id' => auth()->id() ?? $this->created_by,
@@ -1139,21 +1155,21 @@ class Termin extends Model
                 $this->approved_at = now();
                 $this->save();
             }
+// Buat income sesuai jenis termin
+if ($this->jenis_termin === 'DP' && $this->nilai_dp > 0 && !$this->incomes()->where('type', 'dp')->exists()) {
+    $this->recordIncome('dp', $this->nilai_dp, $this->tanggal_dp ?? now(), 'Auto income DP (transparansi)', $this->bukti_pembayaran);
+} elseif ($this->jenis_termin === 'Pelunasan' && $this->nilai_pelunasan > 0 && !$this->incomes()->where('type', 'pelunasan')->exists()) {
+    $this->recordIncome('pelunasan', $this->nilai_pelunasan, $this->tanggal_pelunasan ?? now(), 'Auto income pelunasan by Termin approval', $this->bukti_pembayaran);
+} elseif ($this->jenis_termin === 'Termin Bertahap') {
+    // Untuk termin bertahap, buat income dp/pelunasan jika belum ada
+    if ($this->nilai_dp > 0 && !$this->incomes()->where('type', 'dp')->exists()) {
+        $this->recordIncome('dp', $this->nilai_dp, $this->tanggal_dp ?? now(), 'Auto income DP by Termin approval', $this->bukti_pembayaran);
+    }
+    if ($this->nilai_pelunasan > 0 && !$this->incomes()->where('type', 'pelunasan')->exists()) {
+        $this->recordIncome('pelunasan', $this->nilai_pelunasan, $this->tanggal_pelunasan ?? now(), 'Auto income pelunasan by Termin approval', $this->bukti_pembayaran);
+    }
+}
 
-            // Buat income sesuai jenis termin
-            if ($this->jenis_termin === 'DP' && $this->nilai_dp > 0 && !$this->incomes()->where('type', 'dp')->exists()) {
-                $this->recordIncome('dp', $this->nilai_dp, $this->tanggal_dp ?? now(), 'Auto income DP by Termin approval');
-            } elseif ($this->jenis_termin === 'Pelunasan' && $this->nilai_pelunasan > 0 && !$this->incomes()->where('type', 'pelunasan')->exists()) {
-                $this->recordIncome('pelunasan', $this->nilai_pelunasan, $this->tanggal_pelunasan ?? now(), 'Auto income pelunasan by Termin approval');
-            } elseif ($this->jenis_termin === 'Termin Bertahap') {
-                // Untuk termin bertahap, buat income dp/pelunasan jika belum ada
-                if ($this->nilai_dp > 0 && !$this->incomes()->where('type', 'dp')->exists()) {
-                    $this->recordIncome('dp', $this->nilai_dp, $this->tanggal_dp ?? now(), 'Auto income DP by Termin approval');
-                }
-                if ($this->nilai_pelunasan > 0 && !$this->incomes()->where('type', 'pelunasan')->exists()) {
-                    $this->recordIncome('pelunasan', $this->nilai_pelunasan, $this->tanggal_pelunasan ?? now(), 'Auto income pelunasan by Termin approval');
-                }
-            }
 
             // Approve all related incomes that are still pending
             foreach ($this->incomes as $income) {
@@ -1206,4 +1222,19 @@ class Termin extends Model
 }
         });
     }
+    public function getBuktiPembayaranUrlAttribute()
+{
+    if (!$this->bukti_pembayaran) {
+        return null;
+    }
+
+    // Jika sudah berupa URL penuh (http...), langsung return
+    if (str_starts_with($this->bukti_pembayaran, 'http')) {
+        return $this->bukti_pembayaran;
+    }
+
+    // Anggap path relatif dan arahkan ke folder public
+    return asset($this->bukti_pembayaran);
+}
+
 }

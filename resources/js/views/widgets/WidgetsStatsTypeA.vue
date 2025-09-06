@@ -143,34 +143,6 @@ onMounted(async () => {
     <CCol :sm="4">
       <CCard>
         <CCardBody>
-          <div class="fs-2 fw-bold">{{ jumlahPiutang }}</div>
-          <div class="text-body-secondary">Piutang</div>
-          <CChart
-            type="line"
-            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Piutang', backgroundColor: 'rgba(108,117,125,0.1)', borderColor: '#636f83', data: chartPiutang, fill: true, tension: 0.4 }] }"
-            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
-            style="height: 60px"
-          />
-        </CCardBody>
-      </CCard>
-    </CCol>
-    <CCol :sm="4">
-      <CCard>
-        <CCardBody>
-          <div class="fs-2 fw-bold">{{ jumlahKasbon }}</div>
-          <div class="text-body-secondary">Kasbon</div>
-          <CChart
-            type="line"
-            :data="{ labels: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], datasets: [{ label: 'Kasbon', backgroundColor: 'rgba(33,37,41,0.1)', borderColor: '#23282c', data: chartKasbon, fill: true, tension: 0.4 }] }"
-            :options="{ plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } }, elements: { point: { radius: 0 } } }"
-            style="height: 60px"
-          />
-        </CCardBody>
-      </CCard>
-    </CCol>
-    <CCol :sm="4">
-      <CCard>
-        <CCardBody>
           <div class="fs-2 fw-bold">{{ jumlahInvoice }}</div>
           <div class="text-body-secondary">Invoice</div>
           <CChart

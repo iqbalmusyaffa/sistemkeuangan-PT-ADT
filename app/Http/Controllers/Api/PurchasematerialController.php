@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\Purchasematerial;
+use App\Models\PurchaseMaterial;
 use App\Models\Kategori;
 use App\Models\ServiceCategory;
 use App\Models\Merek;
@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\Invoice;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
+
 use Illuminate\Support\Facades\Auth;
 
 class PurchasematerialController extends Controller
@@ -40,7 +42,7 @@ class PurchasematerialController extends Controller
                 ], 404);
             }
 
-            $purchases = Purchasematerial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek'])
+            $purchases = PurchaseMaterial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek'])
                 ->where('proyek_id', $proyekId)
                 ->get()
                 ->map(function ($purchase) {
@@ -65,7 +67,7 @@ public function datatables(Request $request)
 {
     try {
         // Ambil data relasi yang dibutuhkan
-        $query = Purchasematerial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek']);
+        $query = PurchaseMaterial::with(['unit', 'merek', 'category', 'serviceCategory', 'proyek']);
 
         // Logging proyek_id untuk debug
         \Log::info('Request proyek_id: ' . $request->proyek_id);
@@ -128,7 +130,7 @@ public function datatables(Request $request)
 public function show($id)
 {
     try {
-        $purchase = Purchasematerial::with([
+        $purchase = PurchaseMaterial::with([
             'unit',
             'merek',
             'category',
@@ -149,17 +151,330 @@ public function show($id)
     /**
      * Store a newly created resource in storage.
      */
-   public function store(Request $request)
+//    public function store(Request $request)
+// {
+//     try {
+//         // Validasi awal supaya unit_id, proyek_id, dsb. valid dulu
+//         $validated = $request->validate([
+//             'item' => 'required|string|max:255',
+//             'type' => 'required|string|max:255',
+//             'spesifikasi' => 'nullable|string',
+//             'unit_id' => 'required|exists:units,id',
+//             'qty' => 'required|integer|min:1',
+//             'harga' => 'required|numeric|min:0',
+//             'deskripsi' => 'nullable|string',
+//             'proyek_id' => 'required|exists:proyeks,id',
+//             'invoice_id' => 'nullable|exists:invoices,id',
+//         ]);
+
+//         DB::beginTransaction();
+
+//         $unit = Unit::findOrFail($validated['unit_id']);
+//         $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
+
+//         // Validasi tambahan
+//         $additional = $isService
+//             ? $request->validate([
+//                 'service_category_id' => 'required|exists:service_categories,id',
+//                 'merek_id' => 'nullable|exists:mereks,id'
+//             ])
+//             : $request->validate([
+//                 'category_id' => 'required|exists:kategoris,id',
+//                 'merek_id' => 'required|exists:mereks,id'
+//             ]);
+
+//         $validated += $additional;
+
+//         $total_harga = $validated['qty'] * $validated['harga'];
+
+//         $data = [
+//             'item' => $validated['item'],
+//             'type' => $validated['type'],
+//             'spesifikasi' => $validated['spesifikasi'] ?? null,
+//             'unit_id' => $validated['unit_id'],
+//             'qty' => $validated['qty'],
+//             'harga' => $validated['harga'],
+//             'total_harga' => $total_harga,
+//             'deskripsi' => $validated['deskripsi'] ?? null,
+//             'proyek_id' => $validated['proyek_id'],
+//             'is_service' => $isService,
+//             'invoice_id' => $validated['invoice_id'] ?? null,
+//         ];
+
+//         if ($isService) {
+//             $data['service_category_id'] = $validated['service_category_id'];
+//             $data['category_id'] = null;
+//             $data['merek_id'] = $validated['merek_id'] ?? Merek::firstOrCreate(
+//                 ['name' => '-'],
+//                 ['description' => 'Default merek for services']
+//             )->id;
+//         } else {
+//             $data['category_id'] = $validated['category_id'];
+//             $data['service_category_id'] = null;
+//             $data['merek_id'] = $validated['merek_id'];
+//         }
+
+//         $purchase = PurchaseMaterial::create($data);
+
+//         $expense = new \App\Models\Expense([
+//             'user_id' => auth()->id(),
+//             'proyek_id' => $purchase->proyek_id,
+//             'category_id' => $isService ? null : $purchase->category_id,
+//             'service_category_id' => $isService ? $purchase->service_category_id : null,
+//             'amount' => $purchase->total_harga,
+//             'description' => "Pembelian " . $purchase->item . " - " . $purchase->deskripsi,
+//             'transaction_date' => now(),
+//             'status' => 'Pending',
+//             'payment_method' => null,
+//             'prepared_fund' => $purchase->total_harga,
+//             'source_type' => 'purchase',
+//             'source_id' => $purchase->id
+//         ]);
+//         $expense->save();
+
+//         $purchase->expense_id = $expense->id;
+//         $purchase->save();
+
+//         DB::commit();
+
+//         return response()->json([
+//             'status' => 'success',
+//             'data' => $purchase
+//         ], 201);
+//     } catch (ValidationException $e) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Validasi gagal.',
+//             'errors' => $e->errors()
+//         ], 422);
+//     } catch (ModelNotFoundException $e) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Data tidak ditemukan.',
+//             'error' => $e->getMessage()
+//         ], 404);
+//     } catch (\Exception $e) {
+//         DB::rollBack();
+//         \Log::error('Error in PurchasematerialController@store: ' . $e->getMessage());
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Gagal menambahkan pembelian material.',
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// }
+public function store(Request $request)
 {
     try {
+        $validated = $request->validate([
+            'item' => 'required|string|max:255',
+            'type' => 'required|string|max:255',
+            'spesifikasi' => 'nullable|string',
+            'unit_id' => 'required|exists:units,id',
+            'qty' => 'required|integer|min:1',
+            'harga' => 'required|numeric|min:0',
+            'deskripsi' => 'nullable|string',
+            'proyek_id' => 'required|exists:proyeks,id',
+            'invoice_id' => 'nullable|exists:invoices,id',
+        ]);
+
         DB::beginTransaction();
 
-        // Cek Unit & Tipe Layanan
-        $unit = Unit::findOrFail($request->unit_id);
+        $unit = Unit::findOrFail($validated['unit_id']);
         $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
 
-        // Validasi dinamis tergantung tipe item
-        $rules = [
+        $additional = $isService
+            ? $request->validate([
+                'service_category_id' => 'required|exists:service_categories,id',
+                'merek_id' => 'nullable|exists:mereks,id'
+            ])
+            : $request->validate([
+                'category_id' => 'required|exists:kategoris,id',
+                'merek_id' => 'required|exists:mereks,id'
+            ]);
+
+        $validated += $additional;
+
+        $data = [
+            'item' => $validated['item'],
+            'type' => $validated['type'],
+            'spesifikasi' => $validated['spesifikasi'] ?? null,
+            'unit_id' => $validated['unit_id'],
+            'qty' => $validated['qty'],
+            'harga' => $validated['harga'],
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'proyek_id' => $validated['proyek_id'],
+            'is_service' => $isService,
+            'invoice_id' => $validated['invoice_id'] ?? null,
+        ];
+
+        if ($isService) {
+            $data['service_category_id'] = $validated['service_category_id'];
+            $data['category_id'] = null;
+            $data['merek_id'] = $validated['merek_id'] ?? Merek::firstOrCreate(
+                ['name' => '-'],
+                ['description' => 'Default merek for services']
+            )->id;
+        } else {
+            $data['category_id'] = $validated['category_id'];
+            $data['service_category_id'] = null;
+            $data['merek_id'] = $validated['merek_id'];
+        }
+
+        $purchase = PurchaseMaterial::create($data); // Otomatis trigger expense dari model
+
+        DB::commit();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $purchase
+        ], 201);
+    } catch (ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validasi gagal.',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error in PurchasematerialController@store: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal menambahkan pembelian material.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+    /**
+     * Update the specified resource in storage.
+     */
+//     public function update(Request $request, string $id)
+// {
+//     try {
+//         // Validasi awal agar unit_id, proyek_id, dll diperiksa dulu
+//         $baseRules = [
+//             'item' => 'required|string|max:255',
+//             'type' => 'required|string|max:255',
+//             'spesifikasi' => 'nullable|string',
+//             'unit_id' => 'required|exists:units,id',
+//             'qty' => 'required|integer|min:1',
+//             'harga' => 'required|numeric|min:0',
+//             'deskripsi' => 'nullable|string',
+//             'proyek_id' => 'required|exists:proyeks,id',
+//             'invoice_id' => 'nullable|exists:invoices,id'
+//         ];
+
+//         $validated = $request->validate($baseRules);
+
+//         DB::beginTransaction();
+
+//         $purchasematerial = PurchaseMaterial::findOrFail($id);
+
+//         $unit = Unit::findOrFail($validated['unit_id']);
+//         $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
+
+//         // Validasi tambahan tergantung jenis unit
+//         $additional = $isService
+//             ? $request->validate([
+//                 'service_category_id' => 'required|exists:service_categories,id',
+//                 'merek_id' => 'nullable|exists:mereks,id'
+//             ])
+//             : $request->validate([
+//                 'category_id' => 'required|exists:kategoris,id',
+//                 'merek_id' => 'required|exists:mereks,id'
+//             ]);
+
+//         $validated += $additional;
+
+//         $total_harga = $validated['qty'] * $validated['harga'];
+
+//         $data = [
+//             'item' => $validated['item'],
+//             'type' => $validated['type'],
+//             'spesifikasi' => $validated['spesifikasi'] ?? null,
+//             'unit_id' => $validated['unit_id'],
+//             'qty' => $validated['qty'],
+//             'harga' => $validated['harga'],
+//             'total_harga' => $total_harga,
+//             'deskripsi' => $validated['deskripsi'] ?? null,
+//             'proyek_id' => $validated['proyek_id'],
+//             'is_service' => $isService,
+//             'invoice_id' => $validated['invoice_id'] ?? null,
+//         ];
+
+//         if ($isService) {
+//             $data['service_category_id'] = $validated['service_category_id'];
+//             $data['category_id'] = null;
+//             $data['merek_id'] = $validated['merek_id'] ?? Merek::firstOrCreate(
+//                 ['name' => '-'],
+//                 ['description' => 'Default merek for services']
+//             )->id;
+//         } else {
+//             $data['category_id'] = $validated['category_id'];
+//             $data['service_category_id'] = null;
+//             $data['merek_id'] = $validated['merek_id'];
+//         }
+
+//         $purchasematerial->update($data);
+
+//         // Update atau buat expense
+//         if ($purchasematerial->expense_id) {
+//             $expense = \App\Models\Expense::find($purchasematerial->expense_id);
+//             if ($expense) {
+//                 $expense->update([
+//                     'proyek_id' => $purchasematerial->proyek_id,
+//                     'category_id' => $isService ? null : $purchasematerial->category_id,
+//                     'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
+//                     'amount' => $purchasematerial->total_harga,
+//                     'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
+//                     'prepared_fund' => $purchasematerial->total_harga
+//                 ]);
+//             } else {
+//                 $expense = \App\Models\Expense::create([
+//                     'user_id' => auth()->id(),
+//                     'proyek_id' => $purchasematerial->proyek_id,
+//                     'category_id' => $isService ? null : $purchasematerial->category_id,
+//                     'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
+//                     'amount' => $purchasematerial->total_harga,
+//                     'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
+//                     'transaction_date' => now(),
+//                     'status' => 'Pending',
+//                     'payment_method' => null,
+//                     'prepared_fund' => $purchasematerial->total_harga,
+//                     'source_type' => 'purchase',
+//                     'source_id' => $purchasematerial->id
+//                 ]);
+//                 $purchasematerial->expense_id = $expense->id;
+//                 $purchasematerial->save();
+//             }
+//         }
+
+//         DB::commit();
+//         return response()->json([
+//             'status' => 'success',
+//             'data' => $purchasematerial
+//         ]);
+//     } catch (ValidationException $e) {
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Validasi gagal.',
+//             'errors' => $e->errors()
+//         ], 422);
+//     } catch (\Exception $e) {
+//         DB::rollBack();
+//         \Log::error('Error in PurchasematerialController@update: ' . $e->getMessage());
+//         return response()->json([
+//             'status' => 'error',
+//             'message' => 'Gagal mengupdate pembelian material.',
+//             'error' => $e->getMessage()
+//         ], 500);
+//     }
+// }
+public function update(Request $request, string $id)
+{
+    try {
+        $baseRules = [
             'item' => 'required|string|max:255',
             'type' => 'required|string|max:255',
             'spesifikasi' => 'nullable|string',
@@ -171,232 +486,99 @@ public function show($id)
             'invoice_id' => 'nullable|exists:invoices,id'
         ];
 
-        if ($isService) {
-            $rules['service_category_id'] = 'required|exists:service_categories,id';
-            $rules['merek_id'] = 'nullable|exists:mereks,id';
-        } else {
-            $rules['category_id'] = 'required|exists:kategoris,id';
-            $rules['merek_id'] = 'required|exists:mereks,id';
-        }
+        $validated = $request->validate($baseRules);
 
-        $validatedData = $request->validate($rules);
+        DB::beginTransaction();
 
-        // Hitung total
-        $total_harga = $validatedData['qty'] * $validatedData['harga'];
+        $purchasematerial = PurchaseMaterial::findOrFail($id);
+        $unit = Unit::findOrFail($validated['unit_id']);
+        $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
 
-        // Susun data untuk insert
+        $additional = $isService
+            ? $request->validate([
+                'service_category_id' => 'required|exists:service_categories,id',
+                'merek_id' => 'nullable|exists:mereks,id'
+            ])
+            : $request->validate([
+                'category_id' => 'required|exists:kategoris,id',
+                'merek_id' => 'required|exists:mereks,id'
+            ]);
+
+        $validated += $additional;
+
         $data = [
-            'item' => $validatedData['item'],
-            'type' => $validatedData['type'],
-            'spesifikasi' => $validatedData['spesifikasi'] ?? null,
-            'unit_id' => $validatedData['unit_id'],
-            'qty' => $validatedData['qty'],
-            'harga' => $validatedData['harga'],
-            'total_harga' => $total_harga,
-            'deskripsi' => $validatedData['deskripsi'] ?? null,
-            'proyek_id' => $validatedData['proyek_id'],
+            'item' => $validated['item'],
+            'type' => $validated['type'],
+            'spesifikasi' => $validated['spesifikasi'] ?? null,
+            'unit_id' => $validated['unit_id'],
+            'qty' => $validated['qty'],
+            'harga' => $validated['harga'],
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'proyek_id' => $validated['proyek_id'],
             'is_service' => $isService,
-            'invoice_id' => $validatedData['invoice_id'] ?? null
+            'invoice_id' => $validated['invoice_id'] ?? null,
         ];
 
-        // Handle kategori dan merek
         if ($isService) {
-            $data['service_category_id'] = $validatedData['service_category_id'];
+            $data['service_category_id'] = $validated['service_category_id'];
             $data['category_id'] = null;
-
-            // Jika merek_id tidak dikirim, gunakan default '-'
-            $data['merek_id'] = $validatedData['merek_id'] ?? Merek::firstOrCreate(
+            $data['merek_id'] = $validated['merek_id'] ?? Merek::firstOrCreate(
                 ['name' => '-'],
                 ['description' => 'Default merek for services']
             )->id;
         } else {
-            $data['category_id'] = $validatedData['category_id'];
+            $data['category_id'] = $validated['category_id'];
             $data['service_category_id'] = null;
-            $data['merek_id'] = $validatedData['merek_id'];
+            $data['merek_id'] = $validated['merek_id'];
         }
 
-        // Simpan pembelian
-        $purchasematerial = Purchasematerial::create($data);
-
-        // Buat expense terkait
-        $expense = new \App\Models\Expense([
-            'user_id' => auth()->id(),
-            'proyek_id' => $purchasematerial->proyek_id,
-            'category_id' => $isService ? null : $purchasematerial->category_id,
-            'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
-            'amount' => $purchasematerial->total_harga,
-            'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
-            'transaction_date' => now(),
-            'status' => 'Pending',
-            'payment_method' => null,
-            'prepared_fund' => $purchasematerial->total_harga,
-            'source_type' => 'purchase',
-            'source_id' => $purchasematerial->id
-        ]);
-        $expense->save();
-
-        // Update expense_id di pembelian
-        $purchasematerial->expense_id = $expense->id;
-        $purchasematerial->save();
+        $purchasematerial->update($data); // Akan memicu update expense dari model
 
         DB::commit();
-        return response()->json($purchasematerial, 201);
-
+        return response()->json([
+            'status' => 'success',
+            'data' => $purchasematerial
+        ]);
+    } catch (ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validasi gagal.',
+            'errors' => $e->errors()
+        ], 422);
     } catch (\Exception $e) {
         DB::rollBack();
-        Log::error('Error in PurchasematerialController@store: ' . $e->getMessage());
+        \Log::error('Error in PurchasematerialController@update: ' . $e->getMessage());
         return response()->json([
-            'error' => 'Gagal menambahkan Pembelian material. ' . $e->getMessage()
+            'status' => 'error',
+            'message' => 'Gagal mengupdate pembelian material.',
+            'error' => $e->getMessage()
         ], 500);
     }
 }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $purchasematerial = Purchasematerial::findOrFail($id);
-
-            // Check if the unit is a service type
-            $unit = Unit::findOrFail($request->unit_id);
-            $isService = in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
-
-            // Define validation rules
-            $rules = [
-                'item' => 'required|string|max:255',
-                'type' => 'required|string|max:255',
-                'spesifikasi' => 'nullable|string',
-                'unit_id' => 'required|exists:units,id',
-                'qty' => 'required|integer|min:1',
-                'harga' => 'required|numeric|min:0',
-                'deskripsi' => 'nullable|string',
-                'proyek_id' => 'required|exists:proyeks,id',
-                'invoice_id' => 'nullable|exists:invoices,id'
-            ];
-
-            // Add category validation based on type
-            if ($isService) {
-                $rules['service_category_id'] = 'required|exists:service_categories,id';
-                $rules['merek_id'] = 'nullable|exists:mereks,id';
-            } else {
-                $rules['category_id'] = 'required|exists:kategoris,id';
-                $rules['merek_id'] = 'required|exists:mereks,id';
-            }
-
-            $validatedData = $request->validate($rules);
-
-            // Calculate total_harga
-            $total_harga = $validatedData['qty'] * $validatedData['harga'];
-
-            // Prepare base data
-            $data = [
-                'item' => $validatedData['item'],
-                'type' => $validatedData['type'],
-                'spesifikasi' => $validatedData['spesifikasi'] ?? null,
-                'unit_id' => $validatedData['unit_id'],
-                'qty' => $validatedData['qty'],
-                'harga' => $validatedData['harga'],
-                'total_harga' => $total_harga,
-                'deskripsi' => $validatedData['deskripsi'] ?? null,
-                'proyek_id' => $validatedData['proyek_id'],
-                'is_service' => $isService,
-                'invoice_id' => $validatedData['invoice_id'] ?? null
-            ];
-
-            if ($isService) {
-                $data['service_category_id'] = $validatedData['service_category_id'];
-                $data['category_id'] = null;
-                // Handle merek for service (use default '-' merek or null)
-                $defaultMerek = Merek::firstOrCreate(
-                    ['name' => '-'],
-                    ['description' => 'Default merek for services']
-                );
-                $data['merek_id'] = $defaultMerek->id;
-            } else {
-                $data['category_id'] = $validatedData['category_id'];
-                $data['service_category_id'] = null;
-                $data['merek_id'] = $validatedData['merek_id'];
-            }
-
-            $purchasematerial->update($data);
-
-            // Update or create corresponding expense record
-            if ($purchasematerial->expense_id) {
-                $expense = \App\Models\Expense::find($purchasematerial->expense_id);
-                if ($expense) {
-                    $expense->update([
-                        'proyek_id' => $purchasematerial->proyek_id,
-                        'category_id' => $isService ? null : $purchasematerial->category_id,
-                        'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
-                        'amount' => $purchasematerial->total_harga,
-                        'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
-                        'prepared_fund' => $purchasematerial->total_harga
-                    ]);
-                } else {
-                    // Create new expense if the previous one was deleted
-                    $expense = new \App\Models\Expense([
-                        'user_id' => auth()->id(),
-                        'proyek_id' => $purchasematerial->proyek_id,
-                        'category_id' => $isService ? null : $purchasematerial->category_id,
-                        'service_category_id' => $isService ? $purchasematerial->service_category_id : null,
-                        'amount' => $purchasematerial->total_harga,
-                        'description' => "Pembelian " . $purchasematerial->item . " - " . $purchasematerial->deskripsi,
-                        'transaction_date' => now(),
-                        'status' => 'Pending',
-                        'payment_method' => null,
-                        'prepared_fund' => $purchasematerial->total_harga,
-                        'source_type' => 'purchase',
-                        'source_id' => $purchasematerial->id
-                    ]);
-                    $expense->save();
-                    $purchasematerial->expense_id = $expense->id;
-                    $purchasematerial->save();
-                }
-            }
-
-            DB::commit();
-            return response()->json($purchasematerial);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error in PurchasematerialController@update: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Gagal mengupdate Pembelian material. ' . $e->getMessage()
-            ], 500);
-        }
-    }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
-    {
-        try {
-            DB::beginTransaction();
+   public function destroy(string $id)
+{
+    try {
+        $purchasematerial = PurchaseMaterial::findOrFail($id);
+        $purchasematerial->delete();
 
-            $purchasematerial = Purchasematerial::findOrFail($id);
-
-            // Delete associated expense if exists
-            if ($purchasematerial->expense_id) {
-                \App\Models\Expense::where('id', $purchasematerial->expense_id)->delete();
-            }
-
-            $purchasematerial->delete();
-
-            DB::commit();
-            return response()->json(null, 204);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error in PurchasematerialController@destroy: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Gagal menghapus Pembelian material. Silakan coba lagi nanti.',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data berhasil dihapus.'
+        ], 200);
+    } catch (\Exception $e) {
+        Log::error('Error in PurchasematerialController@destroy: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal menghapus data.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function getProyeks(Request $request)
     {
@@ -406,7 +588,7 @@ public function show($id)
 
     public function getByProyek($proyekId)
     {
-        $purchases = Purchasematerial::with(['proyek', 'invoice'])
+        $purchases = PurchasMaterial::with(['proyek', 'invoice'])
             ->where('proyek_id', $proyekId)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -419,7 +601,7 @@ public function show($id)
 
     public function getByInvoice($invoiceId)
     {
-        $purchases = Purchasematerial::with(['proyek', 'invoice'])
+        $purchases = PurchaseMaterial::with(['proyek', 'invoice'])
             ->where('invoice_id', $invoiceId)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -429,4 +611,20 @@ public function show($id)
             'data' => $purchases
         ]);
     }
+     public function getServiceCategory($id)
+{
+    $purchase = PurchaseMaterial::with('serviceCategory')->find($id);
+
+    if (!$purchase) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Data tidak ditemukan'
+        ], 404);
+    }
+
+    return response()->json([
+        'service_category_id' => $purchase->service_category_id,
+        'nama_kategori' => $purchase->serviceCategory->nama_kategori,
+    ]);
+}
 }

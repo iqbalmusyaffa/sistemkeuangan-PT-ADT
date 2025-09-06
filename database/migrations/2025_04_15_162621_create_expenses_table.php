@@ -24,7 +24,7 @@ return new class extends Migration
         $table->foreignId('payment_method_id')->nullable()->constrained('payment_methods')->nullOnDelete(); // instead of string
         $table->decimal('prepared_fund', 15, 2)->default(0);
         $table->string('kode_transaksi')->nullable();
-        $table->string('bukti')->nullable();
+        $table->string('bukti_pembayaran')->nullable();
         $table->string('source_type')->nullable();
         $table->unsignedBigInteger('source_id')->nullable();
         $table->foreignId('invoice_id')->nullable()->constrained('invoices')->nullOnDelete();

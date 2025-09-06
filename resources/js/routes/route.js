@@ -35,8 +35,8 @@ const routes = [
       },
       {
         path: 'activitylog',
-        name: 'ActivityLog',
-        component: () => import('@/views/activitylog/ActivityLog.vue'),
+        name: 'Activitylog',
+        component: () => import('@/views/activitylog/Activitylog.vue'),
         meta: { requiresAuth: true },
       },
       {
@@ -145,12 +145,6 @@ const routes = [
         path: 'base/kasbon',
         name: 'Kasbon',
         component: () => import('@/views/base/kasbon/Kasbon.vue'),
-        meta: { requiresAuth: true },
-      },
-      {
-        path: 'charts',
-        name: 'Charts',
-        component: () => import('@/views/charts/Charts.vue'),
         meta: { requiresAuth: true },
       },
       {

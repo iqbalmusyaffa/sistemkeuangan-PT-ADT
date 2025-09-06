@@ -157,42 +157,60 @@
               </CCol>
             </CRow>
             <CRow class="mb-3">
-              <CCol md="12">
-                <CFormLabel for="category_id">Kategori</CFormLabel>
-                <CFormSelect
-                  v-model="form.category_id"
-                  id="category_id"
-                  required
-                  :disabled="!form.unit_id"
-                >
-                  <option value="">Pilih Kategori</option>
-                  <template v-if="isServiceUnit">
-                    <option
-                      v-for="category in serviceCategories"
-                      :key="category.id"
-                      :value="category.id"
-                    >
-                      {{ category.nama_kategori }}
-                    </option>
-                  </template>
-                  <template v-else>
-                    <option
-                      v-for="category in normalCategories"
-                      :key="category.id"
-                      :value="category.id"
-                    >
-                      {{ category.nama_kategori }}
-                    </option>
-                  </template>
-                </CFormSelect>
-                <div v-if="form.unit_id && isServiceUnit && serviceCategories.length === 0" class="text-danger mt-1">
-                  Tidak ada kategori jasa untuk unit ini
-                </div>
-                <div v-if="form.unit_id && !isServiceUnit && normalCategories.length === 0" class="text-danger mt-1">
-                  Tidak ada kategori material
-                </div>
-              </CCol>
-            </CRow>
+  <CCol md="12">
+    <CFormLabel>Kategori</CFormLabel>
+
+    <!-- Jika JASA -->
+    <CFormSelect
+      v-if="isServiceUnit"
+      v-model="form.service_category_id"
+      id="service_category_id"
+      required
+      :disabled="!form.unit_id"
+    >
+      <option value="">Pilih Kategori Jasa</option>
+      <option
+        v-for="category in serviceCategories"
+        :key="category.id"
+        :value="category.id"
+      >
+        {{ category.nama_kategori }}
+      </option>
+    </CFormSelect>
+
+    <!-- Jika MATERIAL -->
+    <CFormSelect
+      v-else
+      v-model="form.category_id"
+      id="category_id"
+      required
+      :disabled="!form.unit_id"
+    >
+      <option value="">Pilih Kategori Material</option>
+      <option
+        v-for="category in normalCategories"
+        :key="category.id"
+        :value="category.id"
+      >
+        {{ category.nama_kategori }}
+      </option>
+    </CFormSelect>
+
+    <div
+      v-if="form.unit_id && isServiceUnit && serviceCategories.length === 0"
+      class="text-danger mt-1"
+    >
+      Tidak ada kategori jasa untuk unit ini
+    </div>
+    <div
+      v-if="form.unit_id && !isServiceUnit && normalCategories.length === 0"
+      class="text-danger mt-1"
+    >
+      Tidak ada kategori material
+    </div>
+  </CCol>
+</CRow>
+
             <CRow class="mb-3">
               <CCol md="12">
                 <CFormLabel for="spesifikasi">Spesifikasi</CFormLabel>
@@ -448,7 +466,7 @@ const fetchPembelians = async (proyekId) => {
   try {
     const token = sessionStorage.getItem("token");
     // Hanya ambil data pembelian, tidak perlu ambil detail proyek
-    const purchaseResponse = await axios.get(`/api/purchasematerials`, {
+    const purchaseResponse = await axios.get(`/api/purchase-materials`, {
       headers: { Authorization: `Bearer ${token}` },
       params: {
         proyek_id: proyekId,
@@ -565,14 +583,7 @@ const initDataTable = () => {
       search: "Cari:",
       lengthMenu: "Tampilkan _MENU_ data per halaman",
       zeroRecords: "Tidak ada data ditemukan",
-      info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
       infoEmpty: "Tidak ada data tersedia",
-      paginate: {
-        first: "Pertama",
-        last: "Terakhir",
-        next: "Berikutnya",
-        previous: "Sebelumnya"
-      }
     }
   });
 
@@ -669,6 +680,19 @@ watch(
   { immediate: true }
 );
 
+// Untuk kategori JASA (service_category_id)
+watch(() => form.value.service_category_id, (newValue) => {
+  if (isServiceUnit.value && newValue) {
+    const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(newValue));
+    if (selectedCategory) {
+      form.value.harga = parseFloat(selectedCategory.harga);
+      form.value.displayHarga = formatCurrency(selectedCategory.harga);
+      form.value.total_harga = form.value.qty * form.value.harga;
+      form.value.displayTotalHarga = formatCurrency(form.value.total_harga);
+    }
+  }
+});
+
 
 // Update watch handler untuk category_id
 watch(
@@ -718,7 +742,7 @@ const openModal = async (mode, pembelian = null) => {
     const isService = pembelian.is_service;
 
     form.value = {
-      proyek_id: pembelian.proyek_id,
+      proyek_id: selectedProject.value || "", 
       item: pembelian.item,
       merek_id: isService ? null : pembelian.merek_id,
       type: pembelian.type,
@@ -797,93 +821,86 @@ const isServiceCategory = computed(() => {
   return selectedCategory?.nama_kategori?.toLowerCase().includes('jasa');
 });
 
-// Update the handleSubmit function
 const handleSubmit = async () => {
   try {
+    // Validasi form dasar
     if (!form.value.proyek_id) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Proyek harus dipilih"
-      });
+      Swal.fire({ icon: "error", title: "Error", text: "Proyek harus dipilih" });
       return;
     }
     if (!form.value.payment_method_id) {
-  Swal.fire({
-    icon: "error",
-    title: "Error",
-    text: "Metode pembayaran harus dipilih"
-  });
-  return;
-}
-
-    if (!form.value.unit_id) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Unit harus dipilih"
-      });
+      Swal.fire({ icon: "error", title: "Error", text: "Metode pembayaran harus dipilih" });
       return;
     }
-    // Pastikan kategori sesuai jenis unit
+    if (!form.value.unit_id) {
+      Swal.fire({ icon: "error", title: "Error", text: "Unit harus dipilih" });
+      return;
+    }
+
+    // Validasi kategori berdasarkan tipe unit
     if (isServiceUnit.value) {
-      if (!form.value.category_id) {
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Kategori jasa harus dipilih"
-        });
+      if (!form.value.service_category_id) {
+        Swal.fire({ icon: "error", title: "Error", text: "Kategori jasa harus dipilih" });
         return;
       }
     } else {
       if (!form.value.category_id) {
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Kategori material harus dipilih"
-        });
+        Swal.fire({ icon: "error", title: "Error", text: "Kategori material harus dipilih" });
         return;
       }
     }
-    // Pastikan invoice_id selalu ada
-    if (!form.value.invoice_id) {
-      try {
-        const token = sessionStorage.getItem('token');
-        const invoiceResponse = await axios.post("/api/invoices", {
-          proyek_id: form.value.proyek_id,
-          invoice_date: new Date().toISOString().split('T')[0],
-  payment_method_id: form.value.payment_method_id, // ✅ penting!
 
-          purchase_materials: [{
-            item: form.value.item,
-            type: form.value.type || '-',
-            spesifikasi: form.value.spesifikasi || '-',
-            unit_id: form.value.unit_id,
-            qty: Number(form.value.qty),
-            harga: Number(form.value.harga),
-            deskripsi: form.value.deskripsi || '-',
-            is_service: isServiceUnit.value,
-            category_id: isServiceUnit.value ? null : form.value.category_id,
-            service_category_id: isServiceUnit.value ? form.value.service_category_id : null,
-            merek_id: isServiceUnit.value ? null : form.value.merek_id
-          }]
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        form.value.invoice_id = invoiceResponse.data.id;
-      } catch (err) {
-        Swal.fire({
-          icon: "error",
-          title: "Error",
-          text: "Gagal membuat invoice: " + (err.response?.data?.message || err.message)
-        });
-        return;
+    // Pastikan invoice_id tersedia
+    if (!form.value.invoice_id) {
+      const existingInvoice = invoices.value.find(inv =>
+        inv.proyek_id === form.value.proyek_id &&
+        (inv.status === 'unpaid' || inv.status === 'partially_paid')
+      );
+
+      if (existingInvoice) {
+        form.value.invoice_id = existingInvoice.id; // Gunakan invoice yang masih aktif
+      } else {
+        try {
+          const token = sessionStorage.getItem('token');
+          const invoiceResponse = await axios.post("/api/invoices", {
+            proyek_id: form.value.proyek_id,
+            invoice_date: new Date().toISOString().split('T')[0],
+            payment_method_id: form.value.payment_method_id,
+            purchase_materials: [{
+              item: form.value.item,
+              type: form.value.type || '-',
+              spesifikasi: form.value.spesifikasi || '-',
+              unit_id: form.value.unit_id,
+              qty: Number(form.value.qty),
+              harga: Number(form.value.harga),
+              deskripsi: form.value.deskripsi || '-',
+              is_service: isServiceUnit.value,
+              category_id: isServiceUnit.value ? null : form.value.category_id,
+              service_category_id: isServiceUnit.value ? form.value.service_category_id : null,
+              merek_id: isServiceUnit.value ? null : form.value.merek_id
+            }]
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          form.value.invoice_id = invoiceResponse.data.id;
+          invoices.value.push(invoiceResponse.data); // update local cache
+        } catch (err) {
+          Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: "Gagal membuat invoice: " + (err.response?.data?.message || err.message)
+          });
+          return;
+        }
       }
     }
+
+    // Siapkan payload pembelian
     const token = sessionStorage.getItem('token');
     const selectedUnit = units.value.find(u => String(u.id) === String(form.value.unit_id));
     const isService = selectedUnit && SERVICE_UNIT_NAMES.includes(selectedUnit.unit_name.toLowerCase());
-    // Siapkan payload sesuai controller
+
     const payload = {
       proyek_id: form.value.proyek_id,
       invoice_id: form.value.invoice_id,
@@ -900,27 +917,26 @@ const handleSubmit = async () => {
       service_category_id: isService ? form.value.service_category_id : null,
       merek_id: isService ? null : form.value.merek_id
     };
+
+    // Simpan atau update data
     let response;
     if (modalMode.value === "edit") {
-      response = await axios.put(`/api/purchasematerials/${editingId.value}`, payload, {
+      response = await axios.put(`/api/purchase-materials/${editingId.value}`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil diupdate" });
+      Swal.fire({ icon: "success", title: "Berhasil", text: "Pembelian berhasil diupdate" });
     } else {
-      response = await axios.post("/api/purchasematerials", payload, {
+      response = await axios.post("/api/purchase-materials", payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      Swal.fire({ icon: "success", title: "Success", text: "Pembelian berhasil ditambahkan" });
+      Swal.fire({ icon: "success", title: "Berhasil", text: "Pembelian berhasil ditambahkan" });
     }
+
     closeModal();
-    await fetchPembelians(form.value.proyek_id);
+    await fetchPembelians(form.value.proyek_id); // Refresh data
   } catch (err) {
     const errorMessage = err.response?.data?.error || err.response?.data?.message || "Terjadi kesalahan saat menyimpan data";
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: errorMessage
-    });
+    Swal.fire({ icon: "error", title: "Error", text: errorMessage });
   }
 };
 
@@ -939,7 +955,7 @@ const handleDelete = async (id) => {
 
     if (result.isConfirmed) {
       const token = sessionStorage.getItem("token");
-      await axios.delete(`/api/purchasematerials/${id}`, {
+      await axios.delete(`/api/purchase-materials/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -972,40 +988,39 @@ const unformatCurrency = (value) => {
 
 // Update the calculateTotal function
 const calculateTotal = () => {
-  if (form.value.qty && form.value.harga) {
+  if (form.value.qty) {
     if (isServiceUnit.value) {
-      // Untuk service, gunakan harga dari service category
-      const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(form.value.category_id));
+      const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(form.value.service_category_id));
       if (selectedCategory) {
         form.value.harga = parseFloat(selectedCategory.harga);
+        form.value.displayHarga = formatCurrency(selectedCategory.harga);
         form.value.total_harga = form.value.qty * form.value.harga;
         form.value.displayTotalHarga = formatCurrency(form.value.total_harga);
       }
     } else {
-      // Untuk material, hitung seperti biasa
       form.value.total_harga = form.value.qty * form.value.harga;
       form.value.displayTotalHarga = formatCurrency(form.value.total_harga);
     }
   }
 };
 
+
 // Update handleHargaInput function
 const handleHargaInput = (event) => {
   if (isServiceUnit.value) {
-    // Untuk jasa, harga otomatis dari kategori
-    const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(form.value.category_id));
+    const selectedCategory = serviceCategories.value.find(cat => cat.id === parseInt(form.value.service_category_id));
     if (selectedCategory) {
       form.value.harga = parseFloat(selectedCategory.harga);
       form.value.displayHarga = formatCurrency(selectedCategory.harga);
     }
   } else {
-    // Untuk material, bisa diinput manual
     const unformattedValue = unformatCurrency(event.target.value);
     form.value.harga = unformattedValue;
     form.value.displayHarga = formatCurrency(unformattedValue);
   }
   calculateTotal();
 };
+
 
 const handleTotalHargaInput = (event) => {
   const unformattedValue = unformatCurrency(event.target.value);
@@ -1130,7 +1145,7 @@ onMounted(() => {
   window.editPurchase = async function (id) {
     try {
       const token = sessionStorage.getItem("token");
-      const response = await axios.get(`/api/purchasematerials/${id}`, {
+      const response = await axios.get(`/api/purchase-materials/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -1172,7 +1187,7 @@ onMounted(() => {
       if (!confirm.isConfirmed) return;
 
       const token = sessionStorage.getItem("token");
-      await axios.delete(`/api/purchasematerials/${id}`, {
+      await axios.delete(`/api/purchase-materials/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -1200,7 +1215,7 @@ const fetchPurchases = async (proyekId) => {
   if (!proyekId) return;
   try {
     const token = sessionStorage.getItem('token');
-    const response = await axios.get('/api/purchasematerials', {
+    const response = await axios.get('/api/purchase-materials', {
       headers: { Authorization: `Bearer ${token}` },
       params: { proyek_id: proyekId },
     });

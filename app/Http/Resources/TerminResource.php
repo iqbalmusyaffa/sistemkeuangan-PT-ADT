@@ -44,6 +44,7 @@ class TerminResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'kode_termin' => $this->kode_termin,
             'proyek_id' => $this->proyek_id,
             'invoice_id' => $this->invoice_id,
             'nama_termin' => $this->nama_termin,
@@ -90,9 +91,10 @@ class TerminResource extends JsonResource
             'financial_summary' => $summary,
             'invoice_status' => $this->invoice ? $this->invoice->status : null,
             'expense_status' => $this->expense ? $this->expense->status : null,
-            'income_status' => $this->incomes->isNotEmpty()
-                ? $this->incomes->pluck('status')->unique()->join(', ')
-                : null,
+      'income_status' => $this->relationLoaded('incomes') && $this->incomes->count()
+    ? $this->incomes->pluck('status')->unique()->join(', ')
+    : null,
+
         ];
     }
 }

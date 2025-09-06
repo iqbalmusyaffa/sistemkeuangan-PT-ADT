@@ -7,7 +7,6 @@
           <div class="float-end">
             <CButton color="success" @click="exportReport('excel')">Export Excel</CButton>
             <CButton color="danger" @click="exportReport('pdf')">Export PDF</CButton>
-            <CButton color="primary" @click="showGenerateModal = true">Generate</CButton>
           </div>
         </CCardHeader>
         <CCardBody>
@@ -189,8 +188,9 @@ const exportReport = async (format) => {
 
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx'; // FIX
     link.href = url;
-    link.setAttribute('download', `laporan_laba_rugi.${format}`);
+    link.setAttribute('download', `laporan_laba_rugi.${ext}`); // FIX
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -201,6 +201,7 @@ const exportReport = async (format) => {
     Swal.fire('Gagal', `Gagal mengekspor laporan ke ${format.toUpperCase()}`, 'error');
   }
 };
+
 
 const generateReport = async () => {
   if (!filter.value.period_type || !filter.value.start_date || !filter.value.end_date) {

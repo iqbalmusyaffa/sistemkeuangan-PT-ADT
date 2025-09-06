@@ -20,6 +20,8 @@ class Income extends Model
     use HasFactory, Trackable;
 
     protected $table = 'incomes';
+protected $appends = ['jumlah_pembayaran', 'bukti_pembayaran_url'];
+
 
     protected $fillable = [
         'jumlah',
@@ -112,6 +114,27 @@ const APPROVAL_REJECTED = 'rejected';
     {
         return $this->belongsTo(\App\Models\Invoice::class);
     }
+// protected static function booted()
+// {
+//     static::deleting(function ($income) {
+//         $termin = $income->termin;
+
+//         if (
+//             $termin &&
+//             strtolower($termin->status_approval) !== 'approved' &&
+//             !in_array(strtolower($termin->status_termin), ['dp dibayar', 'lunas']) &&
+//             $termin->incomes()->count() === 1
+//         ) {
+//             try {
+//                 $termin->delete();
+//             } catch (\Exception $e) {
+//                 \Log::error('[Income::deleting] Gagal hapus termin: ' . $e->getMessage());
+//             }
+//         }
+//     });
+// }
+
+
 
     // =====================
     // == CUSTOM ACCESSORS =
@@ -143,48 +166,64 @@ const APPROVAL_REJECTED = 'rejected';
     // =====================
     // == AUTO-GENERATE ====
     // =====================
-    protected static function boot()
-    {
-        parent::boot();
+   protected static function boot()
+{
+    parent::boot();
 
-        static::creating(function ($income) {
-            $income->kode_transaksi = 'INV-' . strtoupper(Str::random(8));
-        });
+    static::creating(function ($income) {
+        $income->kode_transaksi = 'INV-' . strtoupper(Str::random(8));
+    });
 
-        static::updated(function ($income) {
-            // Sync ke termin jika income terkait termin
-            if ($income->termin) {
-                $income->termin->updateStatusFromPayments();
-            }
-        });
+    static::updated(function ($income) {
+        if ($income->termin) {
+            $income->termin->updateStatusFromPayments();
+        }
+    });
 
-        static::saved(function ($income) {
-            // Update status termin jika ada
-            if ($income->termin_id) {
-                $termin = $income->termin;
-                if ($termin) {
-                    $termin->clearCache();
-                    $termin->updateStatusFromPayments();
-                    $termin->refresh(); // Pastikan status_termin terbaru
-                }
-            }
-            // Update status invoice jika ada
-            if ($income->invoice_id) {
-                $invoice = $income->invoice;
-                if ($invoice) {
-                    // Hitung ulang total paid
-                    $totalPaid = \App\Models\Income::where('invoice_id', $income->invoice_id)
-                        ->where('status', 'Diterima')
-                        ->sum('jumlah');
-                    $invoice->amount_paid = $totalPaid;
-                    $invoice->status = $invoice->determineStatus();
-                    $invoice->save();
-                    $invoice->refresh(); // Pastikan status terbaru
-                    $invoice->updateStatusFromTermins();
-                }
-            }
-        });
+   static::saved(function ($income) {
+    // 🔁 Fallback: Jika Termin belum ada bukti, warisi dari Income
+    if ($income->termin_id && $income->bukti_pembayaran) {
+        $termin = $income->termin;
+        if ($termin && !$termin->bukti_pembayaran) {
+            $termin->bukti_pembayaran = $income->bukti_pembayaran;
+            $termin->save();
+        }
     }
+
+    // ⏩ Lanjutkan proses normal
+    if ($income->termin_id) {
+        $termin = $income->termin;
+        if ($termin) {
+            $termin->clearCache();
+            $termin->updateStatusFromPayments();
+            $termin->refresh();
+        }
+    }
+
+    if ($income->invoice_id) {
+        $invoice = $income->invoice;
+        if ($invoice) {
+            $totalPaid = \App\Models\Income::where('invoice_id', $income->invoice_id)
+                ->where('status', 'Diterima')
+                ->sum('jumlah');
+            $invoice->amount_paid = $totalPaid;
+            $invoice->status = $invoice->determineStatus();
+            $invoice->save();
+            $invoice->refresh();
+            $invoice->updateStatusFromTermins();
+        }
+    }
+});
+
+
+    // ⛔ INI BAGIAN PENTING UNTUK HAPUS TERMIN
+    static::deleting(function ($income) {
+        if ($income->termin) {
+            $income->termin->delete();
+        }
+    });
+}
+
 public function createdBy()
 {
     return $this->belongsTo(User::class, 'created_by');
@@ -194,4 +233,27 @@ public function updatedBy(): BelongsTo
 {
     return $this->updater();
 }
+public function getJumlahPembayaranAttribute()
+{
+    if (!$this->termin) return 0;
+
+    $jenis = strtoupper($this->termin->jenis_termin);
+
+    if ($jenis === 'DP') {
+        return $this->termin->nilai_dp ?? 0;
+    } elseif ($jenis === 'PELUNASAN') {
+        return $this->termin->nilai_pelunasan ?? 0;
+    }
+
+    return $this->termin->nilai_termin ?? 0;
+}
+public function getBuktiPembayaranUrlAttribute()
+{
+    return $this->bukti_pembayaran
+        ? asset($this->bukti_pembayaran)
+        : null;
+}
+
+
+
 }
