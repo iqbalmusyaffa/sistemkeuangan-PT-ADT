@@ -1249,94 +1249,109 @@ watch([filterPpn, filterPphNonFinal, filterPphFinal, filteredInvoices], () => {
       };
     });
 
-    const handleSubmit = async () => {
-      if (!validateForm()) return;
-      if (anggaranProyek.value && totalInvoice.value > anggaranProyek.value) {
-        Swal.fire({
-          icon: 'warning',
-          title: 'Anggaran Melebihi Batas!',
-          text: 'Total invoice yang Anda input melebihi anggaran proyek. Silakan cek kembali.'
-        });
+  const handleSubmit = async () => {
+  if (!validateForm()) return;
+
+  if (anggaranProyek.value && totalInvoice.value > anggaranProyek.value) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Anggaran Melebihi Batas!',
+      text: 'Total invoice melebihi anggaran proyek. Silakan periksa kembali.'
+    });
+    return;
+  }
+
+  try {
+    const token = sessionStorage.getItem('token');
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+
+    try {
+      await axios.get('/api/user', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      if (error.response?.status === 401) {
+        sessionStorage.removeItem('token');
+        window.location.href = '/login';
         return;
       }
+    }
 
-      try {
-        const token = sessionStorage.getItem('token');
-        if (!token) {
-          window.location.href = '/login';
-          return;
-        }
-
-        try {
-          await axios.get('/api/user', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-        } catch (error) {
-          if (error.response?.status === 401) {
-            sessionStorage.removeItem('token');
-            window.location.href = '/login';
-            return;
-          }
-        }
-
-        const payload = {
-          ...form.value,
-          purchase_materials: form.value.purchase_materials.map(item => ({
-            ...item,
-            qty: Number(item.qty) || 0,
-            harga: typeof item.harga === 'string' ? Number(item.harga.replace(/\./g, '')) : Number(item.harga) || 0
-          })),
-          use_ppn: form.value.use_ppn,
-          use_pph_non_final: form.value.use_pph_non_final,
-          use_pph_final: form.value.use_pph_final
-        };
-
-        if (form.value.is_cash) {
-          delete payload.termins;
-        } else {
-          delete payload.termins;
-        }
-
-        // 1. Create invoice (this will also trigger PurchaseMaterial observers,
-        // which will create associated expenses and update invoice total_amount)
-        const response = await axios.post('/api/invoices', payload, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.data.status === 'error') {
-          throw new Error(response.data.message || 'Gagal membuat invoice');
-        }
-
-        const invoiceId = response.data.data.id || response.data.id; // Get the ID from the response
-        if (form.value.is_cash === false) {
-          // Redirect to termin page if it's a termin-based invoice
-          window.location.href = `/termin?invoice_id=${invoiceId}`;
-        } else {
-          Swal.fire({
-            icon: 'success',
-            title: 'Sukses',
-            text: 'Invoice berhasil ditambahkan'
-          });
-          closeModal();
-          loadInvoices(); // Reload the data table
-        }
-      } catch (error) {
-        if (error.response?.status === 401) {
-          sessionStorage.removeItem('token');
-          window.location.href = '/login';
-          return;
-        }
-        const errorMessage = error.response?.data?.message || error.message || 'Gagal membuat invoice';
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: errorMessage
-        });
-      }
+    const payload = {
+      ...form.value,
+      purchase_materials: form.value.purchase_materials.map(item => ({
+        ...item,
+        qty: Number(item.qty) || 0,
+        harga: typeof item.harga === 'string' ? Number(item.harga.replace(/\./g, '')) : Number(item.harga) || 0
+      })),
+      use_ppn: form.value.use_ppn,
+      use_pph_non_final: form.value.use_pph_non_final,
+      use_pph_final: form.value.use_pph_final
     };
+
+    if (form.value.is_cash) {
+      delete payload.termins;
+    } else {
+      delete payload.termins;
+    }
+
+    console.log('SUBMIT MODE:', modalMode.value, 'ID:', editingId.value);
+
+    let response;
+    if (modalMode.value?.toLowerCase() === 'edit' && editingId.value !== null && editingId.value !== undefined) {
+      response = await axios.put(`/api/invoices/${editingId.value}`, payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } else {
+      response = await axios.post('/api/invoices', payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
+    if (response.data.status === 'error') {
+      throw new Error(response.data.message || 'Gagal menyimpan invoice.');
+    }
+
+    const invoiceId = response.data.data?.id || response.data.id;
+    if (!invoiceId) {
+      throw new Error('ID invoice tidak ditemukan dari response backend.');
+    }
+
+    if (form.value.is_cash === false) {
+      window.location.href = `/termin?invoice_id=${invoiceId}`;
+    } else {
+      Swal.fire({
+        icon: 'success',
+        title: 'Sukses',
+        text: modalMode.value === 'edit' ? 'Invoice berhasil diperbarui.' : 'Invoice berhasil ditambahkan.'
+      });
+      closeModal();
+      await loadInvoices();
+    }
+  } catch (error) {
+    if (error.response?.status === 401) {
+      sessionStorage.removeItem('token');
+      window.location.href = '/login';
+      return;
+    }
+    const errorMessage = error.response?.data?.message || error.message || 'Terjadi kesalahan saat menyimpan invoice.';
+    Swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: errorMessage
+    });
+  }
+};
+
 
     const loadInvoice = async (id) => {
       try {

@@ -4,16 +4,18 @@
         <CCard>
           <CCardHeader class="d-flex justify-content-between align-items-center">
             <h4 class="mb-0">Profil Pengguna</h4>
-            <CButton color="primary" size="sm" @click="openEditModal">
-              <CIcon icon="cil-pencil" class="me-2" />
-              Edit Profil
-            </CButton>
+           <CButton color="primary" size="sm" @click="openEditModal">
+  <font-awesome-icon icon="pencil-alt" class="me-2" />
+  Edit Profil
+</CButton>
+
+            
           </CCardHeader>
 
           <!-- Loading -->
           <CCardBody v-if="loading">
             <div class="text-center py-4">
-              <CSpinner color="primary" />
+    <font-awesome-icon icon="spinner" spin size="2x" class="text-primary" />
             </div>
           </CCardBody>
 
@@ -26,13 +28,14 @@
 
           <!-- Data User -->
           <CCardBody v-else>
-            <div class="text-center mb-4">
+            <!-- <div class="text-center mb-4">
               <div class="position-relative d-inline-block mb-3">
                 <CAvatar :src="profilePictureUrl" size="xl" class="profile-avatar" />
                 <div class="position-absolute bottom-0 end-0">
-                  <label for="profile-upload" class="btn btn-sm btn-primary rounded-circle" style="width: 32px; height: 32px">
-                    <CIcon icon="cil-pencil" size="sm" />
-                  </label>
+                 <label for="profile-upload" class="btn btn-sm btn-primary rounded-circle" style="width: 32px; height: 32px">
+  <font-awesome-icon icon="pencil-alt" size="sm" />
+</label>
+
                   <input
                     type="file"
                     id="profile-upload"
@@ -47,7 +50,31 @@
               <CBadge :color="user.role === 'superadmin' ? 'danger' : 'primary'" class="text-uppercase">
                 {{ user.role }}
               </CBadge>
-            </div>
+            </div> -->
+<div class="text-center mb-4">
+  <div class="profile-avatar-wrapper mb-3">
+    <CAvatar :src="profilePictureUrl" size="xl" class="profile-avatar" />
+    <label for="profile-upload" class="avatar-overlay" title="Ubah foto">
+      <font-awesome-icon icon="pencil-alt" size="sm" />
+    </label>
+    <input
+      type="file"
+      id="profile-upload"
+      class="d-none"
+      accept="image/*"
+      @change="handleQuickImageUpload"
+    />
+  </div>
+    <!-- Tambahkan ini -->
+  <p v-if="selectedFileName" class="text-muted small mt-2">
+    File dipilih: {{ selectedFileName }}
+  </p>
+  <h4 class="mb-1">{{ user.name }}</h4>
+  <p class="text-muted mb-1">{{ user.email }}</p>
+  <CBadge :color="user.role === 'superadmin' ? 'danger' : 'primary'" class="text-uppercase">
+    {{ user.role }}
+  </CBadge>
+</div>
 
             <div class="profile-info mt-4">
               <h5 class="mb-3">Informasi Profil</h5>
@@ -191,7 +218,7 @@
           Batal
         </CButton>
         <CButton color="primary" @click="handleQuickUpdate" :disabled="loading">
-          <CSpinner v-if="loading" size="sm" class="me-1" />
+   <font-awesome-icon v-if="loading" icon="spinner" spin class="me-1" />
           Simpan Perubahan
         </CButton>
       </CModalFooter>
@@ -211,7 +238,7 @@
   const validationErrors = ref({});
   const auth = useAuthStore();
   const showEditModal = ref(false);
-
+const selectedFileName = ref("");
   const baseStorageUrl = import.meta.env.VITE_API_BASE_URL + "/storage/profile_pictures/";
 
   // Quick edit form untuk update langsung
@@ -334,65 +361,126 @@
     }
   };
 
-  const handleQuickImageUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  // const handleQuickImageUpload = async (event) => {
+  //   const file = event.target.files[0];
+  //   if (!file) return;
 
-    // Validate file
-    if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
-      Swal.fire({
-        icon: "error",
-        title: "Format file tidak valid",
-        text: "Hanya file JPEG, PNG, atau JPG yang diizinkan",
-      });
-      event.target.value = "";
-      return;
-    }
+  //   // Validate file
+  //   if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
+  //     Swal.fire({
+  //       icon: "error",
+  //       title: "Format file tidak valid",
+  //       text: "Hanya file JPEG, PNG, atau JPG yang diizinkan",
+  //     });
+  //     event.target.value = "";
+  //     return;
+  //   }
 
-    if (file.size > 2 * 1024 * 1024) {
-      Swal.fire({
-        icon: "error",
-        title: "Ukuran file terlalu besar",
-        text: "Maksimal ukuran file 2MB",
-      });
-      event.target.value = "";
-      return;
-    }
+  //   if (file.size > 2 * 1024 * 1024) {
+  //     Swal.fire({
+  //       icon: "error",
+  //       title: "Ukuran file terlalu besar",
+  //       text: "Maksimal ukuran file 2MB",
+  //     });
+  //     event.target.value = "";
+  //     return;
+  //   }
 
-    loading.value = true;
-    try {
-      const token = sessionStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("profile_picture", file);
+  //   loading.value = true;
+  //   try {
+  //     const token = sessionStorage.getItem("token");
+  //     const formData = new FormData();
+  //     formData.append("profile_picture", file);
 
-      await axios.post(`/api/users/${user.value.id}?_method=PUT`, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
+  //     await axios.post(`/api/users/${user.value.id}?_method=PUT`, formData, {
+  //       headers: {
+  //         Authorization: `Bearer ${token}`,
+  //         "Content-Type": "multipart/form-data",
+  //       },
+  //     });
 
-      Swal.fire({
-        icon: "success",
-        title: "Berhasil!",
-        text: "Foto profil berhasil diperbarui.",
-      });
+  //     Swal.fire({
+  //       icon: "success",
+  //       title: "Berhasil!",
+  //       text: "Foto profil berhasil diperbarui.",
+  //     });
 
-      // Refresh profile data
-      await fetchUserProfile();
-      // Update auth store
-      await auth.fetchUser();
-    } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Gagal!",
-        text: "Terjadi kesalahan saat memperbarui foto profil.",
-      });
-    } finally {
-      loading.value = false;
-      event.target.value = ""; // Reset input file
-    }
-  };
+  //     // Refresh profile data
+  //     await fetchUserProfile();
+  //     // Update auth store
+  //     await auth.fetchUser();
+  //   } catch (err) {
+  //     Swal.fire({
+  //       icon: "error",
+  //       title: "Gagal!",
+  //       text: "Terjadi kesalahan saat memperbarui foto profil.",
+  //     });
+  //   } finally {
+  //     loading.value = false;
+  //     event.target.value = ""; // Reset input file
+  //   }
+  // };
+const handleQuickImageUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  selectedFileName.value = file.name; // <- ini untuk tampilkan preview
+
+  // Validasi format
+  if (!file.type.match(/^image\/(jpeg|png|jpg)$/)) {
+    Swal.fire({
+      icon: "error",
+      title: "Format file tidak valid",
+      text: "Hanya file JPEG, PNG, atau JPG yang diizinkan",
+    });
+    event.target.value = "";
+    selectedFileName.value = "";
+    return;
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    Swal.fire({
+      icon: "error",
+      title: "Ukuran file terlalu besar",
+      text: "Maksimal ukuran file 2MB",
+    });
+    event.target.value = "";
+    selectedFileName.value = "";
+    return;
+  }
+
+  loading.value = true;
+  try {
+    const token = sessionStorage.getItem("token");
+    const formData = new FormData();
+    formData.append("profile_picture", file);
+
+    await axios.post(`/api/users/${user.value.id}?_method=PUT`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    Swal.fire({
+      icon: "success",
+      title: "Berhasil!",
+      text: "Foto profil berhasil diperbarui.",
+    });
+
+    await fetchUserProfile();
+    await auth.fetchUser();
+  } catch (err) {
+    Swal.fire({
+      icon: "error",
+      title: "Gagal!",
+      text: "Terjadi kesalahan saat memperbarui foto profil.",
+    });
+  } finally {
+    loading.value = false;
+    event.target.value = ""; // reset input
+  }
+};
 
   const resetForm = () => {
     quickEditForm.value = {
@@ -419,6 +507,31 @@
     border: 3px solid #fff;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
+.profile-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.profile-avatar-wrapper:hover .avatar-overlay {
+  opacity: 1;
+}
+
+.avatar-overlay {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: #0d6efd;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+  opacity: 0;
+  cursor: pointer;
+}
 
   .btn-sm.rounded-circle {
     padding: 0;

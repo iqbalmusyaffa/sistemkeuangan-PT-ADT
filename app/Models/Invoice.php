@@ -71,7 +71,7 @@ class Invoice extends Model
 
     public function purchaseMaterials()
     {
-        return $this->hasMany(PurchaseMaterial::class, 'invoice_id');
+        return $this->hasMany(Purchasematerial::class, 'invoice_id');
     }
 
     public function termins()

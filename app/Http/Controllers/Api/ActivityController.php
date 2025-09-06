@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 
 use Illuminate\Http\Request;
-use App\Models\Activitylog;
+use App\Models\ActivityLog;
 
 class ActivityController extends Controller
 {
     public function index(Request $request)
     {
 
-        $activityLogs = Activitylog::latest()->paginate(10);
+        $activityLogs = ActivityLog::latest()->paginate(10);
 
         return response()->json($activityLogs);
     }

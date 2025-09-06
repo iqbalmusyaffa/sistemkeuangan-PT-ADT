@@ -24,9 +24,16 @@
             >
           </div>
 
-          <CButton color="primary" @click="openModal('tambah')" class="float-end" :disabled="!selectedProject || !selectedInvoice">
-            Tambah Termin
-          </CButton>
+         <CButton
+  color="primary"
+  @click="openModal('tambah')"
+  class="float-end"
+  :disabled="!selectedProject || !selectedInvoice || totalPaid >= finalAmount"
+>
+  Tambah Termin
+</CButton>
+
+
         </CCardHeader>
 
         <CCardBody>
@@ -273,7 +280,9 @@
           </CRow>
           <CRow class="mb-3">
 <CCol md="6">
-  <CFormLabel for="nilai_termin">Nilai Termin</CFormLabel>
+ <CFormLabel for="nilai_termin">Total Nilai Termin (DP + Pelunasan)</CFormLabel>
+
+
 
   <!-- Jika BELUM ada pembayaran -->
   <div class="input-group align-items-center" v-if="!sudahAdaPembayaran">
@@ -321,41 +330,50 @@
             </CCol>
           </CRow>
 
-          <!-- Summary Card Pembayaran (Atas Saja, Style sesuai permintaan) -->
-          <CRow class="mb-3">
-            <CCol md="6">
-           <!-- Nilai DP (Card) -->
-<div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
-  <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
-    Nilai DP ({{ form.persentase_dp }}%)
-  </div>
-  <template v-if="form.persentase_dp > 0">
-    <div>Nilai DP: <span style="font-weight:600">{{ formatCurrency(form.nilai_dp) }}</span></div>
-    <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_dp_paid || 0) }}</span></div>
-    <div>
-      Sisa DP:
-      <span :class="{ 'text-danger': form.remaining_dp < 0 }" style="font-weight:600">
-        {{ formatCurrency(form.remaining_dp || 0) }}
-      </span>
+       <!-- Ringkasan Pembayaran Termin -->
+<CRow class="mb-3">
+  <CCol md="6">
+    <div class="alert alert-info mb-3" style="font-size: 0.95rem;">
+      <strong class="d-block mb-1">📄 Ringkasan Invoice:</strong>
+      <div><strong>Nomor Invoice:</strong> {{ modalInvoiceObj?.invoice_number || '-' }}</div>
+      <div><strong>Total Setelah Pajak:</strong> {{ formatCurrency(modalTotalInvoiceAmount) }}</div>
+      <div><strong>Total Termin Dibuat:</strong> {{ formatCurrency(totalNilaiTerminFiltered) }}</div>
+      <div><strong>Total Sudah Dibayar:</strong> {{ formatCurrency(totalPaid) }}</div>
+      <div>
+        <strong class="text-danger">Sisa Termin Belum Dibayar:</strong>
+        <span style="font-weight: 600;">{{ formatCurrency(modalTotalInvoiceAmount - totalPaid) }}</span>
+      </div>
     </div>
-  </template>
-  <template v-else>
-    <div class="text-muted">Tidak ada DP pada termin ini.</div>
-  </template>
-</div>
+  </CCol>
 
-            </CCol>
-            <CCol md="6">
-              <div style="border:1px solid #e0e0e0; border-radius:10px; padding:18px 20px; background:#fff;">
-                <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px;">
-                  Nilai Termin ({{ 100 - Number(form.persentase_dp) }}%)
-                </div>
-                <div>Nilai Termin: <span style="font-weight:600">{{ formatCurrency(form.nilai_pelunasan) }}</span></div>
-                <div>Sudah dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_pelunasan_paid || 0) }}</span></div>
-                <div>Sisa Termin: <span style="font-weight:600">{{ formatCurrency(form.remaining_pelunasan || 0) }}</span></div>
-              </div>
-            </CCol>
-          </CRow>
+  <CCol md="6">
+    <!-- Ringkasan Termin Saat Ini -->
+    <div class="border rounded p-3 bg-white shadow-sm">
+      <div style="font-weight:700; font-size:1.05rem;" class="mb-2">
+        💰 Rencana Pembayaran Termin Ini
+      </div>
+
+      <div class="mb-1">
+        <strong>Nilai Pelunasan ({{ 100 - Number(form.persentase_dp) }}%)</strong><br />
+        Nilai: <span style="font-weight:600">{{ formatCurrency(form.nilai_pelunasan) }}</span>
+      </div>
+      <div class="mb-1">
+        Sudah Dibayar: <span style="font-weight:600">{{ formatCurrency(form.total_pelunasan_paid || 0) }}</span>
+      </div>
+      <div>
+        <span>Sisa Pelunasan: </span>
+        <span
+          :class="{ 'text-danger': (form.remaining_pelunasan || 0) < 0 }"
+          style="font-weight:600"
+        >
+          {{ formatCurrency(form.remaining_pelunasan || 0) }}
+        </span>
+      </div>
+    </div>
+  </CCol>
+</CRow>
+
+
           <CRow class="mb-3">
             <CCol md="6">
               <CFormLabel for="remaining_total">Sisa Termin Belum Dibayar</CFormLabel>
@@ -518,6 +536,48 @@
         </CForm>
       </CModalBody>
     </CModal>
+<!-- Modal Preview Bukti Pembayaran -->
+<!-- Modal Preview Bukti Pembayaran -->
+<CModal :visible="previewModal.visible" @close="previewModal.visible = false" title="Preview Bukti Pembayaran" size="xl">
+  <CModalBody>
+    <div v-if="previewModal.url">
+      <div class="mb-3 text-end">
+        <a :href="previewModal.url" download target="_blank" class="btn btn-sm btn-success">
+          <i class="bi bi-download"></i> Download
+        </a>
+      </div>
+
+      <template v-if="isPDF(previewModal.url)">
+        <iframe
+          :src="previewModal.url"
+          style="width: 100%; height: 600px; border: none;"
+          @error="handlePreviewError"
+        ></iframe>
+      </template>
+
+      <template v-else>
+        <img
+          :src="previewModal.url"
+          alt="Bukti Pembayaran"
+          style="max-width: 100%; max-height: 600px;"
+          @error="handlePreviewError"
+        />
+      </template>
+    </div>
+
+    <div v-else class="text-muted">Tidak ada file untuk ditampilkan</div>
+  </CModalBody>
+</CModal>
+
+<CButton
+  color="info"
+  class="btn-floating-help"
+  @click="showTerminHelp"
+>
+<i class="fas fa-question-circle"></i>
+</CButton>
+
+
   </CRow>
 </template>
 
@@ -603,14 +663,31 @@ function initDataTable() {
         { data: 'remaining_total', title: 'Sisa Termin Belum Dibayar', render: d => d ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(d) : '-' },
         { data: 'tanggal_dp', title: 'Tanggal DP', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
         { data: 'tanggal_pelunasan', title: 'Deadline Pembayaran', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
-        { data: 'status_termin', title: 'Status', render: d => d || '-' },
-        { data: 'status_approval', title: 'Status Approval', render: d => d || '-' },
+       { data: 'status_termin', title: 'Status Termin', render: d => {
+  const color = d === 'Lunas' ? 'success' : d === 'DP Dibayar' ? 'info' : 'warning';
+  return `<span class="badge bg-${color}">${d}</span>`;
+}},
+{ data: 'status_approval', title: 'Approval', render: d => {
+  const color = d === 'Approved' ? 'success' : d === 'Rejected' ? 'danger' : 'warning';
+  return `<span class="badge bg-${color}">${d}</span>`;
+}},
+
         { data: 'approved_by_name', title: 'Disetujui Oleh', render: d => d || '-' },
         { data: 'approved_at', title: 'Waktu Disetujui', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
         { data: 'tanggal_dp_dibayar', title: 'Tgl DP Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
         { data: 'tanggal_pelunasan_dibayar', title: 'Tgl Pelunasan Dibayar', render: d => d ? new Date(d).toLocaleDateString('id-ID') : '-' },
         { data: 'keterangan', title: 'Keterangan', render: d => d || '-' },
-        { data: 'bukti_pembayaran_url', title: 'Bukti Pembayaran', render: d => d ? `<a href="${d}" target="_blank">Lihat</a>` : '-' },
+{
+  data: 'bukti_pembayaran_url',
+  title: 'Bukti Pembayaran',
+  render: function (data, type, row) {
+    if (data) {
+      return `<button class="btn btn-sm btn-outline-primary view-bukti-btn" data-url="${data}">Lihat</button>`;
+    }
+    return '-';
+  }
+}
+,
         { data: 'created_at', title: 'Dibuat', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
         { data: 'updated_at', title: 'Diupdate', render: d => d ? new Date(d).toLocaleString('id-ID') : '-' },
         {
@@ -668,17 +745,21 @@ function initDataTable() {
         cancelButtonText: 'Batal',
       });
       if (result.isConfirmed) {
-        try {
-          const token = sessionStorage.getItem('token');
-          await axios.delete(`/api/termins/${rowData.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          Swal.fire('Berhasil', 'Termin berhasil dihapus', 'success');
-          await fetchTermins();
-        } catch (err) {
-          Swal.fire('Gagal', err.response?.data?.message || 'Tidak dapat menghapus termin', 'error');
-        }
-      }
+  try {
+    const token = sessionStorage.getItem('token');
+    await axios.delete(`/api/termins/${rowData.id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    Swal.fire('Berhasil', 'Termin berhasil dihapus', 'success');
+    await fetchTermins();
+    if (dataTableInstance) {
+      dataTableInstance.ajax.reload(); // tambahkan ini
+    }
+  } catch (err) {
+    Swal.fire('Gagal', err.response?.data?.message || 'Tidak dapat menghapus termin', 'error');
+  }
+}
+
     });
     $('#terminTable').off('click', '.status-btn').on('click', '.status-btn', function () {
       const rowData = dataTableInstance.row($(this).parents('tr')).data();
@@ -703,7 +784,23 @@ function initDataTable() {
       await updateTerminApproval(rowData, 'Pending');
       dataTableInstance.ajax.reload();
     });
+   $('#terminTable').off('click', '.view-bukti-btn').on('click', '.view-bukti-btn', function () {
+  const url = $(this).data('url'); // Pastikan ini berasal dari bukti_pembayaran_url
+  if (url) {
+    previewModal.value.url = url;
+    previewModal.value.visible = true;
+  }
+});
+
+
   });
+}
+
+function handlePreviewError(e) {
+  console.error('Preview error:', e);
+  previewModal.value.url = '';
+  previewModal.value.visible = false;
+  alert('Gagal memuat file. Pastikan file masih tersedia atau tidak rusak.');
 }
 
 // State declarations
@@ -748,6 +845,14 @@ const statusForm = ref({
   approved_at: ''
 });
 
+const previewModal = ref({
+  visible: false,
+  url: ''
+});
+
+const isPDF = (url) => {
+  return url.toLowerCase().endsWith('.pdf');
+};
 
 const projects = ref([]);
 const projectOptions = ref([]);
@@ -1788,11 +1893,27 @@ const getApprovalColor = (status) => {
 
 const handleProjectChange = async () => {
   selectedInvoice.value = '';
+  invoiceOptions.value = [];
+  invoices.value = [];
+  termins.value = [];
+  summary.value = { ...defaultSummary };
   await fetchInvoices(selectedProject.value);
 };
 
+
 const handleInvoiceChange = async () => {
-  await fetchTermins();
+  if (selectedInvoice.value) {
+    await fetchTermins();
+    await fetchSummary();
+    if (dataTableInstance) {
+      dataTableInstance.ajax.reload();
+    } else {
+      nextTick(() => initDataTable());
+    }
+  } else {
+    termins.value = [];
+    summary.value = { ...defaultSummary };
+  }
 };
 
 const approveTermin = async (item) => {
@@ -1803,6 +1924,20 @@ const rejectTermin = async (item) => {
 };
 const pendingTermin = async (item) => {
   await updateTerminApproval(item, 'Pending');
+};
+const showTerminHelp = () => {
+  Swal.fire({
+    title: 'Apa itu Termin?',
+    html: `
+      <p><strong>Termin</strong> adalah sistem pembayaran proyek secara bertahap.</p>
+      <ul>
+        <li><strong>DP</strong> (Down Payment): Pembayaran awal proyek.</li>
+        <li><strong>Pelunasan</strong>: Sisa pembayaran setelah DP.</li>
+      </ul>
+      <p>Anda dapat menentukan persentase DP untuk otomatis membagi termin.</p>
+    `,
+    icon: 'info'
+  });
 };
 
 const updateTerminApproval = async (item, status) => {
@@ -1956,15 +2091,25 @@ const fetchTotalDpSudahDibayar = async () => {
   }
 };
 
-watch([selectedProject, selectedInvoice], ([newProject, newInvoice]) => {
-  if (dataTableInstance) {
-    dataTableInstance.ajax.reload();
+watch([selectedProject, selectedInvoice], async ([newProject, newInvoice]) => {
+  if (newProject) {
+    await fetchInvoices(newProject); // refresh invoice saat proyek berubah
+  }
+
+  if (newProject && newInvoice) {
+    await fetchTermins();            // ambil data termin sesuai proyek + invoice
+    await fetchSummary();            // ambil ringkasan
+    if (dataTableInstance) {
+      dataTableInstance.ajax.reload(); // reload DataTable jika sudah ada
+    } else {
+      nextTick(() => initDataTable()); // inisialisasi DataTable jika belum
+    }
   } else {
-    nextTick(() => {
-      initDataTable();
-    });
+    termins.value = [];
+    summary.value = { ...defaultSummary };
   }
 });
+
 
 const fetchDashboardSummary = async () => {
   try {
@@ -2259,6 +2404,19 @@ table.dataTable tbody td {
   pointer-events: none;
   background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0.1));
 }
+.btn-floating-help {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1050;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
 </style>
-
-

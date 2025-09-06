@@ -12,14 +12,23 @@
       >
         Settings
       </CDropdownHeader>
-      <CDropdownItem @click="goToProfile" class="d-flex align-items-center px-3 py-2">
+      <CDropdownItem
+        @click="goToProfile"
+        class="d-flex align-items-center px-3 py-2"
+      >
         <FontAwesomeIcon :icon="['fas', 'user']" class="me-2" /> Profile
       </CDropdownItem>
-      <CDropdownItem @click="goToSettings" class="d-flex align-items-center px-3 py-2">
+      <CDropdownItem
+        @click="goToSettings"
+        class="d-flex align-items-center px-3 py-2"
+      >
         <FontAwesomeIcon :icon="['fas', 'cog']" class="me-2" /> Settings
       </CDropdownItem>
       <CDropdownDivider class="my-1" />
-      <CDropdownItem @click="logout" class="d-flex align-items-center px-3 py-2">
+      <CDropdownItem
+        @click="logout"
+        class="d-flex align-items-center px-3 py-2"
+      >
         <FontAwesomeIcon :icon="['fas', 'lock']" class="me-2" /> Logout
       </CDropdownItem>
     </CDropdownMenu>
@@ -27,39 +36,44 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
-import avatar from '@/assets/images/avatars/8.jpg'
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 
 const router = useRouter()
 const auth = useAuthStore()
-const itemsCount = 42
-// Navigasi ke halaman profil
+
+// Computed avatar dengan fallback
+const avatar = computed(() =>
+  auth.profilePictureUrl || new URL('@/assets/images/avatars/2.jpg', import.meta.url).href
+)
+
 const goToProfile = () => {
   router.push('/profile')
 }
+
 const goToSettings = () => {
   router.push('/settings')
 }
+
 const logout = async () => {
   try {
     const token = sessionStorage.getItem('token')
     if (token) {
-      await axios.post('/api/logout', {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      await axios.post(
+        '/api/logout',
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
     }
-
-    // Gunakan auth store untuk logout
     auth.logout()
-
-    // Redirect ke halaman login
     router.push('/login')
   } catch (error) {
     console.error('Logout gagal:', error)
-    // Tetap lakukan logout client-side jika server error
     auth.logout()
     router.push('/login')
   }

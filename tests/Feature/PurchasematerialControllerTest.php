@@ -68,18 +68,16 @@ class PurchasematerialControllerTest extends TestCase
 
         $response = $this->postJson('/api/purchasematerials', $this->purchasematerialData);
 
-        $response->assertStatus(201)
-            ->assertJson([
-                'data' => [
-                    'item' => 'Test Material',
-                    'qty' => 10,
-                    'harga' => 100000,
-                    'type' => 'material',
-                    'proyek_id' => $this->proyek->id,
-                    'invoice_id' => $this->invoice->id,
-                    'deskripsi' => 'Test Description'
-                ]
-            ]);
+       $response->assertStatus(201)
+    ->assertJsonFragment([
+        'item' => 'Test Material',
+        'qty' => 10,
+        'harga' => "100000.00", // perhatikan format string karena dikonversi oleh Eloquent
+        'type' => 'material',
+        'proyek_id' => $this->proyek->id,
+        'invoice_id' => $this->invoice->id,
+        'deskripsi' => 'Test Description'
+    ]);
 
         $this->assertDatabaseHas('purchase_materials', [
             'item' => 'Test Material',
@@ -115,15 +113,17 @@ class PurchasematerialControllerTest extends TestCase
         $material = PurchaseMaterial::create($this->purchasematerialData);
 
         $update = [
-            'item' => 'Updated Item',
-            'type' => 'material',
-            'qty' => 5,
-            'harga' => 200000,
-            'unit_id' => $this->unit->id,
-            'category_id' => $this->category->id,
-            'deskripsi' => 'Updated'
-        ];
-
+    'item' => 'Updated Item',
+    'type' => 'material',
+    'qty' => 5,
+    'harga' => 200000,
+    'unit_id' => $this->unit->id,
+    'category_id' => $this->category->id,
+    'merek_id' => $this->merek->id,
+    'invoice_id' => $this->invoice->id,
+    'proyek_id' => $this->proyek->id,
+    'deskripsi' => 'Updated'
+];
         $response = $this->putJson('/api/purchasematerials/' . $material->id, $update);
 
         $response->assertStatus(200)

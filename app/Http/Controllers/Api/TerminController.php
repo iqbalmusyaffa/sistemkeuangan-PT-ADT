@@ -21,72 +21,72 @@ use Illuminate\Support\Facades\Auth;
 class TerminController extends Controller
 {
     // Ambil semua termin, bisa filter berdasarkan invoice_id
-    public function index(Request $request)
-    {
-        try {
-            $columns = [
-                'nama_termin', 'jenis_termin', 'termin_ke', 'nilai_termin', 'persentase_dp',
-                'nilai_dp', 'nilai_pelunasan', 'tanggal_dp', 'tanggal_pelunasan',
-                'status_termin', 'status_approval', 'approved_by_name', 'approved_at',
-                'tanggal_dp_dibayar', 'tanggal_pelunasan_dibayar', 'keterangan', 'created_at', 'updated_at'
-            ];
+  public function index(Request $request)
+{
+    try {
+        $columns = [
+            'nama_termin', 'jenis_termin', 'termin_ke', 'nilai_termin', 'persentase_dp',
+            'nilai_dp', 'nilai_pelunasan', 'tanggal_dp', 'tanggal_pelunasan',
+            'status_termin', 'status_approval', 'approved_by_name', 'approved_at',
+            'tanggal_dp_dibayar', 'tanggal_pelunasan_dibayar', 'keterangan', 'created_at', 'updated_at'
+        ];
 
-            try {
-                $query = Termin::with('proyek');
-            } catch (\Exception $e) {
-                Log::error('Error in TerminController@index query execution: ' . $e->getMessage());
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Terjadi kesalahan saat mengambil data termin',
-                    'details' => $e->getMessage()
-                ], 500);
-            }
+        $query = Termin::with(['proyek', 'invoice']);
 
-            // Filter by project_id and invoice_id if provided
-            if ($request->has('proyek_id')) {
-                $query->where('proyek_id', $request->proyek_id);
-            }
-            if ($request->has('invoice_id')) {
-                $query->where('invoice_id', $request->invoice_id);
-            }
-
-            // Search filter
-            if ($request->has('search') && $request->search['value']) {
-                $search = $request->search['value'];
-                $query->where(function ($q) use ($search, $columns) {
-                    foreach ($columns as $column) {
-                        $q->orWhere($column, 'like', "%$search%");
-                    }
-                });
-            }
-
-            // Sorting
-            if ($request->has('order')) {
-                $orderColumn = $columns[$request->order[0]['column']];
-                $orderDir = $request->order[0]['dir'];
-                $query->orderBy($orderColumn, $orderDir);
-            }
-
-            // Pagination
-            $start = $request->start ?? 0;
-            $length = $request->length ?? 10;
-            $totalRecords = $query->count();
-            $data = $query->offset($start)->limit($length)->get();
-
-            return response()->json([
-                'draw' => $request->draw,
-                'recordsTotal' => $totalRecords,
-                'recordsFiltered' => $totalRecords,
-                'data' => $data
-            ]);
-        } catch (\Exception $e) {
-            \Log::error('Error in TerminController@index: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengambil data termin'
-            ], 500);
+        // Filter by project_id and invoice_id if provided
+        if ($request->has('proyek_id')) {
+            $query->where('proyek_id', $request->proyek_id);
         }
+        if ($request->has('invoice_id')) {
+            $query->where('invoice_id', $request->invoice_id);
+        }
+
+        // Search filter
+        if ($request->has('search') && $request->search['value']) {
+            $search = $request->search['value'];
+            $query->where(function ($q) use ($search, $columns) {
+                foreach ($columns as $column) {
+                    $q->orWhere($column, 'like', "%$search%");
+                }
+            });
+        }
+
+        // Sorting
+        if ($request->has('order')) {
+            $orderColumn = $columns[$request->order[0]['column']];
+            $orderDir = $request->order[0]['dir'];
+            $query->orderBy($orderColumn, $orderDir);
+        }
+
+        // Pagination
+        $start = $request->start ?? 0;
+        $length = $request->length ?? 10;
+        $totalRecords = $query->count();
+        $data = $query->offset($start)->limit($length)->get();
+
+        // 💡 Tambahkan kolom URL bukti pembayaran
+        $data->transform(function ($termin) {
+            $termin->bukti_pembayaran_url = $termin->bukti_pembayaran
+                ? asset('storage/' . $termin->bukti_pembayaran)
+                : null;
+            return $termin;
+        });
+
+        return response()->json([
+            'draw' => $request->draw,
+            'recordsTotal' => $totalRecords,
+            'recordsFiltered' => $totalRecords,
+            'data' => $data
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Error in TerminController@index: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Terjadi kesalahan saat mengambil data termin'
+        ], 500);
     }
+}
+
 
     // Simpan termin baru dengan validasi dan cek anggaran
     public function store(Request $request)
@@ -223,20 +223,23 @@ if (!empty($validated['tanggal_dp']) && $validated['jenis_termin'] === 'DP') {
             $termin = Termin::create($validated);
 
             // Handle file upload if present
-            if ($request->hasFile('bukti_pembayaran')) {
-                $file = $request->file('bukti_pembayaran');
-                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
-                $path = 'uploads/bukti_pembayaran/' . $filename;
+if ($request->hasFile('bukti_pembayaran')) {
+    $file = $request->file('bukti_pembayaran');
+    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
 
-                if (!Storage::exists('uploads/bukti_pembayaran')) {
-                    Storage::makeDirectory('uploads/bukti_pembayaran');
-                }
+    $destination = public_path('uploads/bukti_pembayaran');
+    if (!file_exists($destination)) {
+        mkdir($destination, 0755, true);
+    }
 
-                if ($file->storeAs('uploads/bukti_pembayaran', $filename)) {
-                    $termin->bukti_pembayaran = $path;
-                    $termin->saveQuietly(); // Use saveQuietly to prevent re-triggering hooks
-                }
-            }
+    $file->move($destination, $filename);
+    $relativePath = 'uploads/bukti_pembayaran/' . $filename;
+
+    $termin->bukti_pembayaran = $relativePath;
+    $buktiBaru = $relativePath;
+    $termin->saveQuietly();
+}
+
 
             // Update invoice status (this will trigger cascading updates to project via Invoice observer)
             if ($termin->invoice) {
@@ -375,23 +378,20 @@ if (!empty($validated['tanggal_dp']) && $validated['jenis_termin'] === 'DP') {
 
             // Handle file bukti pembayaran saat update
             $uploadingBukti = false;
-            if ($request->hasFile('bukti_pembayaran')) {
-                $file = $request->file('bukti_pembayaran');
-                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
-                $path = 'uploads/bukti_pembayaran/' . $filename;
-                if (!Storage::exists('uploads/bukti_pembayaran')) {
-                    Storage::makeDirectory('uploads/bukti_pembayaran');
-                }
-                if ($file->storeAs('uploads/bukti_pembayaran', $filename)) {
-                    // Delete old file if exists
-                    if ($termin->bukti_pembayaran) {
-                        Storage::delete($termin->bukti_pembayaran);
-                    }
-                    $validated['bukti_pembayaran'] = $path;
-                    $uploadingBukti = true;
-                } else {
-                    throw new \Exception('Failed to store bukti_pembayaran file');
-                }
+          if ($request->hasFile('bukti_pembayaran')) {
+    $file = $request->file('bukti_pembayaran');
+    $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
+    $destination = public_path('uploads/bukti_pembayaran');
+    if (!file_exists($destination)) {
+        mkdir($destination, 0755, true);
+    }
+
+    if ($termin->bukti_pembayaran && file_exists(public_path($termin->bukti_pembayaran))) {
+        unlink(public_path($termin->bukti_pembayaran));
+    }
+
+    $file->move($destination, $filename);
+    $validated['bukti_pembayaran'] = 'uploads/bukti_pembayaran/' . $filename;
             } else {
                 // If no new file is uploaded, retain the old one, unless explicitly cleared
                 if (isset($request->bukti_pembayaran_cleared) && $request->bukti_pembayaran_cleared === true) {
@@ -497,42 +497,53 @@ if (!empty($validated['tanggal_dp']) && $validated['jenis_termin'] === 'DP') {
 
 
     // Hapus termin, update status invoice
-    public function destroy(Termin $termin)
-    {
-        $user = Auth::user();
-        if (!in_array($user->role, ['admin', 'superadmin'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
-            ], 403);
-        }
-        DB::beginTransaction();
-        try {
-            $invoice = $termin->invoice;
-
-            // Set the isUpdatingStatus flag before deleting to prevent recursion
-            $termin->isUpdatingStatus = true;
-            $termin->delete();
-            $termin->isUpdatingStatus = false;
-
-            if ($invoice) {
-                $invoice->updateStatusFromTermins();
-            }
-
-            DB::commit();
-            return response()->json(['message' => 'Termin berhasil dihapus']);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error deleting termin:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal menghapus termin: ' . $e->getMessage()
-            ], 500);
-        }
+ public function destroy(Termin $termin)
+{
+    $user = Auth::user();
+    if (!in_array($user->role, ['admin', 'superadmin'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+        ], 403);
     }
+
+    DB::beginTransaction();
+    try {
+        $invoice = $termin->invoice;
+
+        // 🔁 Hapus income yang terkait (jika ada)
+        if ($termin->income) {
+            // Hapus file bukti jika ada
+            if ($termin->income->bukti_pembayaran) {
+                Storage::disk('public')->delete($termin->income->bukti_pembayaran);
+            }
+            $termin->income->delete();
+        }
+
+        // Set flag untuk mencegah infinite loop saat hook termin
+        $termin->isUpdatingStatus = true;
+        $termin->delete();
+        $termin->isUpdatingStatus = false;
+
+        if ($invoice) {
+            $invoice->updateStatusFromTermins();
+        }
+
+        DB::commit();
+        return response()->json(['message' => 'Termin dan income terkait berhasil dihapus.']);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Error deleting termin:', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal menghapus termin: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 
     // Ambil termin berdasarkan proyek
     public function getByProject($proyekId)
@@ -545,155 +556,164 @@ if (!empty($validated['tanggal_dp']) && $validated['jenis_termin'] === 'DP') {
         return TerminResource::collection($termins);
     }
 
-    // Update status termin dan otomatis buat expense jika ada pembayaran DP atau Pelunasan
-    public function updateStatus(Request $request, Termin $termin)
-    {
-        // Cek apakah termin benar-benar ada di database
-        if (!$termin->exists) {
-            return response()->json([
-                'message' => 'Termin tidak ditemukan',
-                'errors' => ['termin_id' => ['Termin tidak valid atau tidak ditemukan']]
-            ], 404);
+public function updateStatus(Request $request, Termin $termin)
+{
+    if (!$termin->exists) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Termin tidak ditemukan.',
+            'errors' => ['termin_id' => ['Termin tidak valid atau tidak ditemukan']]
+        ], 404);
+    }
+
+    if (!$termin->proyek_id) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Termin tidak valid.',
+            'errors' => ['proyek_id' => ['Termin harus terkait dengan proyek yang valid']]
+        ], 422);
+    }
+
+    DB::beginTransaction();
+    $warnings = [];
+
+    try {
+        $validated = $request->all();
+
+        // Manual validation
+        $required = ['status_termin', 'status_approval', 'approved_by'];
+        foreach ($required as $field) {
+            if (empty($validated[$field]) && $validated[$field] !== '0') {
+                $warnings[$field][] = 'Field ' . $field . ' wajib diisi';
+            }
         }
 
-        // Cek apakah termin memiliki proyek_id yang valid
-        if (!$termin->proyek_id) {
-            return response()->json([
-                'message' => 'Termin tidak valid',
-                'errors' => ['proyek_id' => ['Termin harus terkait dengan proyek yang valid']]
-            ], 422);
+        $validStatuses = ['Belum Dibayar', 'DP Dibayar', 'Lunas'];
+        if (isset($validated['status_termin']) && !in_array($validated['status_termin'], $validStatuses)) {
+            $warnings['status_termin'][] = 'Status termin tidak valid';
         }
-        DB::beginTransaction();
-        $warnings = [];
-        try {
-            $validated = $request->all();
 
-            // Manual validation, collect warnings but allow update
-            $required = [
-                'status_termin', 'status_approval', 'approved_by'
-            ];
-            foreach ($required as $field) {
-                if (empty($validated[$field]) && $validated[$field] !== 0 && $validated[$field] !== '0') {
-                    $warnings[$field][] = 'Field ' . $field . ' wajib diisi';
-                }
+        $validApprovals = ['Pending', 'Approved', 'Rejected'];
+        if (isset($validated['status_approval']) && !in_array($validated['status_approval'], $validApprovals)) {
+            $warnings['status_approval'][] = 'Status approval tidak valid';
+        }
+
+        // Tanggal validation
+        foreach (['tanggal_dp', 'tanggal_dp_dibayar', 'tanggal_pelunasan_dibayar'] as $field) {
+            if (!empty($validated[$field]) && !strtotime($validated[$field])) {
+                $warnings[$field][] = 'Format tanggal tidak valid';
             }
-            $status = ['Belum Dibayar', 'DP Dibayar', 'Lunas'];
-            if (isset($validated['status_termin']) && !in_array($validated['status_termin'], $status)) {
-                $warnings['status_termin'][] = 'Status termin tidak valid';
-            }
-            $approval = ['Pending', 'Approved', 'Rejected'];
-            if (isset($validated['status_approval']) && !in_array($validated['status_approval'], $approval)) {
-                $warnings['status_approval'][] = 'Status approval tidak valid';
-            }
-            if (!empty($validated['tanggal_dp']) && !strtotime($validated['tanggal_dp'])) {
-                $warnings['tanggal_dp'][] = 'Format tanggal DP tidak valid';
-            }
-            if (!empty($validated['tanggal_dp_dibayar']) && !strtotime($validated['tanggal_dp_dibayar'])) {
-                $warnings['tanggal_dp_dibayar'][] = 'Format tanggal DP dibayar tidak valid';
-            }
-            if (!empty($validated['tanggal_pelunasan_dibayar']) && !strtotime($validated['tanggal_pelunasan_dibayar'])) {
-                $warnings['tanggal_pelunasan_dibayar'][] = 'Format tanggal pelunasan dibayar tidak valid';
+        }
+
+        // Upload bukti pembayaran
+        $buktiBaru = $termin->bukti_pembayaran;
+        if ($request->hasFile('bukti_pembayaran')) {
+            $file = $request->file('bukti_pembayaran');
+            $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
+            $destination = public_path('uploads/bukti_pembayaran');
+
+            if (!file_exists($destination)) {
+                mkdir($destination, 0755, true);
             }
 
-            // Handle file bukti pembayaran
-            if ($request->hasFile('bukti_pembayaran')) {
-                $file = $request->file('bukti_pembayaran');
-                $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9.]/', '_', $file->getClientOriginalName());
-                $path = 'uploads/bukti_pembayaran/' . $filename;
-                if (!Storage::exists('uploads/bukti_pembayaran')) {
-                    Storage::makeDirectory('uploads/bukti_pembayaran');
-                }
-                if ($file->storeAs('uploads/bukti_pembayaran', $filename)) {
-                    // Hapus file lama jika ada
-                    if ($termin->bukti_pembayaran) {
-                        Storage::delete($termin->bukti_pembayaran);
-                    }
-                    $termin->bukti_pembayaran = $path;
-                } else {
-                    $warnings['bukti_pembayaran'][] = 'Gagal upload file';
-                }
+            if ($termin->bukti_pembayaran && file_exists(public_path($termin->bukti_pembayaran))) {
+                unlink(public_path($termin->bukti_pembayaran));
             }
 
-            $oldStatus = $termin->status_termin;
-            $newStatus = $validated['status_termin'] ?? $termin->status_termin;
+            $file->move($destination, $filename);
+            $buktiBaru = 'uploads/bukti_pembayaran/' . $filename;
+        }
 
-            // Normalisasi approved_by to ensure it's an integer or null
-            $approvedBy = $validated['approved_by'] ?? $termin->approved_by;
-            if (
-                !isset($approvedBy) || $approvedBy === '' || strtolower((string)$approvedBy) === 'undefined' || strtolower((string)$approvedBy) === 'null' || !is_numeric($approvedBy)
-            ) {
-                $approvedBy = null;
+        // Normalisasi approved_by
+        $approvedBy = $validated['approved_by'] ?? $termin->approved_by;
+        $approvedBy = (!isset($approvedBy) || $approvedBy === '' || !is_numeric($approvedBy)) ? null : (int) $approvedBy;
+
+        $newStatus = $validated['status_termin'] ?? $termin->status_termin;
+
+        $updateData = [
+            'status_termin' => $request->has('status_termin') ? $validated['status_termin'] : $termin->status_termin,
+            'status_approval' => $request->has('status_approval') ? $validated['status_approval'] : $termin->status_approval,
+            'approved_by' => $request->has('approved_by') ? $approvedBy : $termin->approved_by,
+            'approved_at' => $request->has('status_approval') && in_array($validated['status_approval'], ['Approved', 'Rejected'])
+                ? ($validated['approved_at'] ?? now())
+                : $termin->approved_at,
+            'keterangan' => array_key_exists('keterangan', $validated) ? $validated['keterangan'] : $termin->keterangan,
+            'bukti_pembayaran' => $buktiBaru,
+        ];
+
+        // Cek income terkait
+        $isIncomeDPExist = $termin->incomes()->where('type', 'dp')->exists();
+        $isIncomePelunasanExist = $termin->incomes()->where('type', 'pelunasan')->exists();
+
+        if ($newStatus === 'DP Dibayar') {
+            $date = $validated['tanggal_dp_dibayar'] ?? $termin->tanggal_dp_dibayar ?? now();
+            $updateData['tanggal_dp_dibayar'] = $date;
+            $updateData['tanggal_pelunasan_dibayar'] = null;
+
+            if (!$isIncomeDPExist) {
+                $termin->recordIncome('dp', $termin->nilai_dp, $date, 'Auto income from status update', $buktiBaru);
             } else {
-                $approvedBy = (int)$approvedBy;
+                $incomeDP = $termin->incomes()->where('type', 'dp')->first();
+                if ($incomeDP && $buktiBaru !== $incomeDP->bukti_pembayaran) {
+                    $incomeDP->bukti_pembayaran = $buktiBaru;
+                    $incomeDP->save();
+                }
             }
+        } elseif ($newStatus === 'Lunas') {
+            $tanggalPelunasan = $validated['tanggal_pelunasan_dibayar'] ?? $termin->tanggal_pelunasan_dibayar ?? now();
+            $tanggalDp = $termin->tanggal_dp_dibayar ?: $termin->tanggal_dp ?: now();
 
-            $updateData = [
-                'status_termin' => $newStatus,
-                'status_approval' => $validated['status_approval'] ?? $termin->status_approval ?? 'Pending',
-                'approved_by' => $approvedBy,
-                'approved_at' => ($validated['status_approval'] === 'Approved' || $validated['status_approval'] === 'Rejected') ? ($validated['approved_at'] ?? now()) : null, // Set approved_at only if approved/rejected
-                'keterangan' => array_key_exists('keterangan', $validated) ? $validated['keterangan'] : $termin->keterangan,
-                'bukti_pembayaran' => $termin->bukti_pembayaran, // Keep the updated path
-            ];
+            $updateData['tanggal_dp_dibayar'] = $tanggalDp;
+            $updateData['tanggal_pelunasan_dibayar'] = $tanggalPelunasan;
 
-            // Set specific dates based on status
-if ($newStatus === 'DP Dibayar') {
-    $date = array_key_exists('tanggal_dp_dibayar', $validated)
-        ? $validated['tanggal_dp_dibayar']
-        : ($termin->tanggal_dp_dibayar ?: now());
+            if (!$isIncomePelunasanExist) {
+                $termin->recordIncome('pelunasan', $termin->nilai_pelunasan, $tanggalPelunasan, 'Auto income pelunasan from status update', $buktiBaru);
+            } else {
+                $incomePelunasan = $termin->incomes()->where('type', 'pelunasan')->first();
+                if ($incomePelunasan && $buktiBaru !== $incomePelunasan->bukti_pembayaran) {
+                    $incomePelunasan->bukti_pembayaran = $buktiBaru;
+                    $incomePelunasan->save();
+                }
+            }
+        } else {
+            $updateData['tanggal_dp_dibayar'] = null;
+            $updateData['tanggal_pelunasan_dibayar'] = null;
+        }
 
-    $updateData['tanggal_dp_dibayar'] = $date;
-    $updateData['tanggal_pelunasan_dibayar'] = null; // Clear pelunasan date if only DP is paid
+        // Simpan termin
+        $termin->fill($updateData);
+        $termin->save();
 
-    // Ambil nilai DP dari termin
-    $amount = $termin->nilai_dp;
-    $termin->recordIncome('dp', $amount, $date);
+        DB::commit();
 
-} elseif ($newStatus === 'Lunas') {
-    $tanggalPelunasan = array_key_exists('tanggal_pelunasan_dibayar', $validated)
-        ? $validated['tanggal_pelunasan_dibayar']
-        : ($termin->tanggal_pelunasan_dibayar ?: now());
+        $response = [
+            'status' => 'success',
+            'message' => empty($warnings)
+                ? 'Status termin berhasil diperbarui.'
+                : 'Status termin berhasil diperbarui dengan peringatan validasi.',
+            'data' => new TerminResource($termin->load(['proyek', 'invoice']))
+        ];
 
-    $tanggalDp = $termin->tanggal_dp_dibayar ?: $termin->tanggal_dp ?: now();
+        if (!empty($warnings)) {
+            $response['warnings'] = $warnings;
+        }
 
-    $updateData['tanggal_dp_dibayar'] = $tanggalDp;
-    $updateData['tanggal_pelunasan_dibayar'] = $tanggalPelunasan;
+        return response()->json($response, empty($warnings) ? 200 : 202);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Gagal update status termin: ' . $e->getMessage(), [
+            'termin_id' => $termin->id ?? null,
+            'trace' => $e->getTraceAsString()
+        ]);
 
-    // Ambil nilai pelunasan dari termin
-    $amount = $termin->nilai_pelunasan;
-    $termin->recordIncome('pelunasan', $amount, $tanggalPelunasan);
-
-} else { // Belum Dibayar
-    $updateData['tanggal_dp_dibayar'] = null;
-    $updateData['tanggal_pelunasan_dibayar'] = null;
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Terjadi kesalahan saat memperbarui status termin.',
+            'errors' => ['exception' => $e->getMessage()]
+        ], 500);
+    }
 }
 
-
-            // Fill and save (allow model hooks to handle status sync)
-            $termin->fill($updateData);
-            $termin->save();
-
-            // Update associated records (expense, income, invoice, project) after the termin has been saved
-            // These calls are now handled in the model's `updated` hook for consistency.
-            // However, if you explicitly want to call them here, ensure they are idempotent.
-  // Set status berdasarkan pembayaran
-        // Logic otomatis hanya dipanggil dalam konteks pembayaran, bukan update manual
-        // $termin->updateStatusFromPayments();
-            DB::commit();
-            $response = [
-                'message' => empty($warnings) ? 'Status termin berhasil diperbarui' : 'Status termin berhasil diperbarui dengan peringatan validasi',
-                'data' => new TerminResource($termin->load(['proyek', 'invoice'])) // Load relations for response
-            ];
-            if (!empty($warnings)) {
-                $response['warnings'] = $warnings;
-            }
-            return response()->json($response, empty($warnings) ? 200 : 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Update status termin error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['message' => 'Gagal memperbarui status termin', 'error' => $e->getMessage()], 500);
-        }
-    }
 
 
     // Export termin ke Excel
@@ -867,9 +887,12 @@ if ($newStatus === 'DP Dibayar') {
             ->addColumn('expense_status', function ($termin) {
                 return $termin->expense ? $termin->expense->status : null;
             })
-            ->addColumn('income_status', function ($termin) {
-                return $termin->incomes->isNotEmpty() ? $termin->incomes->pluck('status')->unique()->join(', ') : null;
-            })
+          ->addColumn('income_status', function ($termin) {
+    return $termin->relationLoaded('incomes') && $termin->incomes->count()
+        ? $termin->incomes->pluck('status')->unique()->join(', ')
+        : null;
+})
+
             ->toJson();
     }
 
@@ -997,4 +1020,53 @@ if ($newStatus === 'DP Dibayar') {
 
         return response()->json($usedDates);
     }
+    public function revokeApproval(int $id)
+{
+    $this->authorizeAdmin();
+
+    DB::beginTransaction();
+    try {
+        $termin = Termin::with('incomes')->findOrFail($id);
+
+        if (strtolower($termin->status_approval) !== 'approved') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Termin belum disetujui. Tidak perlu reset.'
+            ], 400);
+        }
+
+        // Reset approval status termin
+        $termin->status_approval = 'Pending';
+        $termin->save();
+
+        // Juga reset semua income yang terhubung ke termin ini
+        foreach ($termin->incomes as $income) {
+            if ($income->status === 'approved') {
+                $income->status = 'pending';
+                $income->save();
+                    // Tambahkan ini agar status_termin ikut berubah
+    $termin->clearCache();
+    $termin->updateStatusFromPayments(true);
+    $termin->updateRelatedRecordsAfterStatusChange();
+            }
+        }
+
+        DB::commit();
+        return response()->json([
+            'success' => true,
+            'message' => 'Approval termin dan pemasukan terkait berhasil di-reset.',
+            'data'    => $termin->load('incomes'),
+        ]);
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        \Log::error('Gagal revoke approval termin: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal mengubah status termin.',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

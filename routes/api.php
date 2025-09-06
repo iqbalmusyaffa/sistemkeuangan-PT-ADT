@@ -1,121 +1,156 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\KategoriTransaksiController;
-use App\Http\Controllers\Api\TransactionController;
-use App\Http\Controllers\Api\CompanyController;
-use App\Http\Controllers\Api\IncomeController;
-use App\Http\Controllers\Api\ExpenseController;
-use App\Http\Controllers\Api\MerekController;
-use App\Http\Controllers\Api\UnitsController;
-use App\Http\Controllers\Api\PurchasematerialController;
-use App\Http\Controllers\Api\ProyekController;
-use App\Http\Controllers\Api\TerminController;
-use App\Http\Controllers\Api\ServiceCategoryController;
-use App\Http\Controllers\Api\InvoiceController;
-
-use App\Http\Controllers\Api\ActivityController;
-use App\Http\Controllers\Api\PaymentMethodController;
-use App\Http\Controllers\Api\ProfitLossReportController;
-use App\Http\Controllers\Api\BudgetController;
-use App\Http\Controllers\Api\KasbonController;
-use App\Http\Controllers\Api\NotificationController;
-// use App\Http\Controllers\Api\KategoriController;
+use App\Http\Controllers\Api\{
+    DashboardController, TransactionController, CompanyController,
+    IncomeController, ExpenseController, ProyekController,
+    TerminController, InvoiceController, PaymentMethodController,
+    MerekController, UnitsController, PurchasematerialController,
+    ServiceCategoryController, ActivityController,
+    ProfitLossReportController, BudgetController,
+    KasbonController, NotificationController,
+    KategoriTransaksiController
+};
 
 /*
 |--------------------------------------------------------------------------
-| API Routes
+| Public Routes
 |--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider and all of them will
-| be assigned to the "api" middleware group. Make something great!
-|
 */
+Route::post('/login', [UserController::class, 'login']);
 
-Route::post ('/login', [UserController::class, 'login']);
+/*
+|--------------------------------------------------------------------------
+| Authenticated Routes (with Sanctum)
+|--------------------------------------------------------------------------
+*/
 Route::middleware('auth:sanctum')->group(function () {
-    // Route::get('/user', function (Request $request) {
-    //     return $request->user();
-    // });
-
-    Route::apiResource('users', UserController::class);
-
+    // Profile
+    Route::get('/profile', [UserController::class, 'profile']);
+    Route::post('/logout', [UserController::class, 'logout']);
+// Route::post('/login', [UserController::class, 'login']);
+    /*
+    |--------------------------------------------------------------------------
+    | Dashboard
+    |--------------------------------------------------------------------------
+    */
     Route::get('/dashboard', [DashboardController::class, 'index']);
-    Route::get('/dashboard/summary', [\App\Http\Controllers\Api\DashboardController::class, 'summary']);
-    Route::get('/dashboard/chart-summary', [\App\Http\Controllers\Api\DashboardController::class, 'chartSummary']);
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+    Route::get('/dashboard/chart-summary', [DashboardController::class, 'chartSummary']);
 
-    // Transaction routes
-    Route::apiResource('transactions', TransactionController::class);
-    // Company routes
-    Route::apiResource('companies', CompanyController::class);
-    // Income routes
-    Route::get('/incomes/total-dp-paid', [IncomeController::class, 'getTotalDpPaid']);
-    Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
-    Route::apiResource('incomes', IncomeController::class);
-    // Pengeluaran (Expense)
-     Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
-    Route::apiResource('expenses', ExpenseController::class);
-    Route::get('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
-    Route::post('/proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
-    Route::post('/expenses/{expense}/update-status', [ExpenseController::class, 'updateStatus']);
-    // DataTables server-side endpoint for pengeluaran
-    Route::post('/api/invoices/{id}/record-payment', [InvoiceController::class, 'recordPayment']);
+    /*
+    |--------------------------------------------------------------------------
+    | Master Data Resources
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResources([
+        'users'             => UserController::class,
+        'kategori'          => KategoriTransaksiController::class,
+        'payment-methods'   => PaymentMethodController::class,
+        'companies'         => CompanyController::class,
+        'transactions'      => TransactionController::class,
+        'mereks'            => MerekController::class,
+        'units'             => UnitsController::class,
+        'service-categories'=> ServiceCategoryController::class,
+    ]);
 
-    // Merek routes
-    Route::apiResource('mereks', MerekController::class);
     Route::post('/mereks/find-or-create', [MerekController::class, 'findOrCreate']);
-    // Unit routes
-    Route::apiResource('units', UnitsController::class);
-    // Purchasematerial routes
-    // Purchasematerial routes
-Route::get('/purchasematerials/datatables', [PurchasematerialController::class, 'datatables']);
-   Route::apiResource('purchasematerials', PurchasematerialController::class);
-// Proyek routes
-    Route::apiResource('proyeks', ProyekController::class);
-Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
-    // Termin routes
-    Route::apiResource('termins', TerminController::class);
-    Route::get('/proyeks/{proyekId}/termins', [TerminController::class, 'getByProject']);
-    Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']);
-    Route::post('/termins/{termin}/update-status', [TerminController::class, 'updateStatus']);
-    Route::get('/proyeks/{proyekId}/invoices', [TerminController::class, 'getInvoicesByProject']);
-    Route::get('/termins/export-excel/{projectId}', [TerminController::class, 'exportExcel']);
-    Route::get('/termins/export-pdf/{projectId}', [TerminController::class, 'exportPDF']);
-    Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
-    Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
-    Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
-    Route::get('termins-datatables', [App\Http\Controllers\Api\TerminController::class, 'datatables']);
 
-    // Additional proyek-related routes
+    /*
+    |--------------------------------------------------------------------------
+    | Proyek & Terkait
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('proyeks', ProyekController::class);
+    Route::get('proyeks/{id}/summary', [ProyekController::class, 'summary']);
     Route::get('proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
     Route::get('proyeks/{id}/purchase-materials', [ProyekController::class, 'getPurchaseMaterials']);
-    Route::get('/proyeks/{id}/summary', [\App\Http\Controllers\Api\ProyekController::class, 'summary']);
+    Route::get('proyeks/{proyekId}/expenses', [ExpenseController::class, 'getByProject']);
+    Route::post('proyeks/{proyekId}/expenses', [ExpenseController::class, 'storeForProject']);
+    Route::get('proyeks/{proyekId}/invoices', [TerminController::class, 'getInvoicesByProject']);
+    Route::get('/proyeks/{id}/termins', [ProyekController::class, 'getTermins']);
 
-    Route::post('/logout', [UserController::class, 'logout']);
+    /*
+    |--------------------------------------------------------------------------
+    | Income
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('incomes', IncomeController::class);
+    Route::post('/incomes/{id}/approve', [IncomeController::class, 'approve']);
+    Route::patch('/incomes/{id}/status', [IncomeController::class, 'patchStatus']);
+    Route::get('/incomes/total-dp-paid', [IncomeController::class, 'getTotalDpPaid']);
+Route::post('/incomes/{id}/revoke', [IncomeController::class, 'revokeApproval']);
 
-    Route::apiResource('invoices', InvoiceController::class);
-    Route::apiResource('service-categories', ServiceCategoryController::class);
-    Route::get('/activity-log', [ActivityController::class, 'index']);
+    /*
+    |--------------------------------------------------------------------------
+    | Expenses
+    |--------------------------------------------------------------------------
+    */
+// ✅ Harus di atas!
+    Route::get('/expenses/datatables', [ExpenseController::class, 'datatables']);
 
-    // Payment Method Routes
-    Route::apiResource('payment-methods', PaymentMethodController::class);
+    // Baru resource di bawah
+    Route::apiResource('expenses', ExpenseController::class);
+    Route::post('/expenses/{expense}/update-status', [ExpenseController::class, 'updateStatus']);
+    Route::post('/expenses/{expense}/upload-bukti', [ExpenseController::class, 'uploadBukti']);
 
-    // Profit Loss Report Routes
-    Route::get('/profit-loss-reports', [ProfitLossReportController::class, 'index']);
-    //generate report
-    // routes/api.php
-Route::get('profit-loss-reports/export/{format}', [ProfitLossReportController::class, 'export']);
 
-    Route::post('/profit-loss-reports/generate', [ProfitLossReportController::class, 'generateReport']);
-    //get report by id
-    Route::get('/profit-loss-reports/{report}', [ProfitLossReportController::class, 'show']);
-    Route::get('/profit-loss', [\App\Http\Controllers\Api\ProfitLossReportController::class, 'summary']);
-    Route::get('/profit-loss/recap', [\App\Http\Controllers\Api\ProfitLossReportController::class, 'recap']);
+    /*
+    |--------------------------------------------------------------------------
+    | Termins
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('termins', TerminController::class);
+    Route::get('/termins/summary', [TerminController::class, 'getTerminSummary']);
+    Route::get('/termins/{id}/invoice', [TerminController::class, 'getInvoice']); // untuk Vue
+    Route::post('/termins/import-excel', [TerminController::class, 'importExcel']);
+    Route::get('/termins/export-excel/{projectId}', [TerminController::class, 'exportExcel']);
+    Route::get('/termins/export-pdf/{projectId}', [TerminController::class, 'exportPDF']);
+    Route::get('/termins-datatables', [TerminController::class, 'datatables']);
+    Route::post('/termins/{termin}/approve-income/{income}', [TerminController::class, 'approveIncome']);
+    Route::post('/termins/{termin}/approve-expense/{expense}', [TerminController::class, 'approveExpense']);
+    Route::post('/termins/{termin}/record-payment', [TerminController::class, 'recordPayment']);
+    Route::post('/termins/{termin}/approve', [TerminController::class, 'approveStatus']);
+    Route::post('/termins/{termin}/reject', [TerminController::class, 'rejectStatus']);
+    Route::post('/termins/{termin}/update-status', [TerminController::class, 'updateStatus']);
+    Route::put('/termins/{termin}/status', [TerminController::class, 'updateStatus']); // alternatif PUT
+    Route::post('/termins/{id}/revoke-approval', [TerminController::class, 'revokeApproval']);
 
-    // Budget Routes
+    /*
+|--------------------------------------------------------------------------
+| Invoice
+|--------------------------------------------------------------------------
+*/
+Route::apiResource('invoices', InvoiceController::class);
+Route::get('/invoices/datatables', [InvoiceController::class, 'datatables']);
+
+// Update hanya amount_paid & payment_method
+Route::put('/invoices/{id}/payment', [InvoiceController::class, 'updatePayment']);
+
+// Catat pembayaran via Income (upload bukti, status pending)
+Route::post('/invoices/{id}/record-payment', [InvoiceController::class, 'recordPayment']);
+
+Route::get('/invoices/{id}/payment-status', [InvoiceController::class, 'getPaymentStatus']);
+Route::post('/invoices/{id}/update-status', [InvoiceController::class, 'updateStatus']);
+Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
+Route::get('/invoice/{id}/pdf', [InvoiceController::class, 'cetakPdf'])->name('invoice.cetakPdf');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Purchase Materials
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('purchase-materials', PurchasematerialController::class);
+    Route::get('/purchase-materials/{id}/service-category', [PurchasematerialController::class, 'getServiceCategory']);
+    Route::get('/purchasematerials/datatables', [PurchasematerialController::class, 'datatables']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Budget & Profit-Loss
+    |--------------------------------------------------------------------------
+    */
     Route::get('/budgets', [BudgetController::class, 'index']);
     Route::post('/budgets', [BudgetController::class, 'store']);
     Route::get('/budgets/{budget}', [BudgetController::class, 'show']);
@@ -124,14 +159,21 @@ Route::get('profit-loss-reports/export/{format}', [ProfitLossReportController::c
     Route::post('/budget-transactions/{transaction}/approve', [BudgetController::class, 'approveTransaction']);
     Route::post('/budget-transactions/{transaction}/reject', [BudgetController::class, 'rejectTransaction']);
 
-    // Kasbon Routes
+    Route::get('/profit-loss', [ProfitLossReportController::class, 'summary']);
+    Route::get('/profit-loss/recap', [ProfitLossReportController::class, 'recap']);
+    Route::get('/profit-loss-reports', [ProfitLossReportController::class, 'index']);
+    Route::get('/profit-loss-reports/{report}', [ProfitLossReportController::class, 'show']);
+    Route::post('/profit-loss-reports/generate', [ProfitLossReportController::class, 'generateReport']);
+    Route::get('/profit-loss-reports/export/{format}', [ProfitLossReportController::class, 'export']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Kasbon
+    |--------------------------------------------------------------------------
+    */
+    Route::apiResource('kasbons', KasbonController::class)->except('create', 'edit');
     Route::get('/kasbons/export-pdf', [KasbonController::class, 'exportPdf']);
     Route::get('/kasbons/export-excel', [KasbonController::class, 'exportExcel']);
-    Route::get('/kasbons', [KasbonController::class, 'index']);
-    Route::post('/kasbons', [KasbonController::class, 'store']);
-    Route::get('/kasbons/{kasbon}', [KasbonController::class, 'show']);
-    Route::put('/kasbons/{kasbon}', [KasbonController::class, 'update']);
-    Route::delete('/kasbons/{kasbon}', [KasbonController::class, 'destroy']);
     Route::post('/kasbons/{kasbon}/upload-attachment', [KasbonController::class, 'uploadAttachment']);
     Route::delete('/kasbons/{kasbon}/attachments/{attachment}', [KasbonController::class, 'deleteAttachment']);
     Route::post('/kasbons/{kasbon}/approve', [KasbonController::class, 'approve']);
@@ -139,44 +181,22 @@ Route::get('profit-loss-reports/export/{format}', [ProfitLossReportController::c
     Route::post('/kasbons/{kasbon}/payments', [KasbonController::class, 'addPayment']);
     Route::get('/kasbon-attachments/{attachment}/download', [KasbonController::class, 'downloadAttachment']);
 
-    // Notification Routes
+    /*
+    |--------------------------------------------------------------------------
+    | Notifications & Activity Logs
+    |--------------------------------------------------------------------------
+    */
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
-
-    // Invoice routes
-    Route::get('/invoices', [InvoiceController::class, 'index']);
-    Route::get('/invoices/{id}', [InvoiceController::class, 'show']);
-    Route::post('/invoices', [InvoiceController::class, 'store']);
-    Route::put('/invoices/{id}', [InvoiceController::class, 'update']);
-    Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy']);
-    Route::post('/invoices/{id}/update-status', [InvoiceController::class, 'updateStatus']);
-
-    // New routes for invoice payments and financials
-    Route::post('/invoices/{id}/payment', [InvoiceController::class, 'recordPayment']);
-    Route::get('/invoices/{id}/payment-status', [InvoiceController::class, 'getPaymentStatus']);
-    Route::get('/projects/{projectId}/financial-summary', [InvoiceController::class, 'getProjectFinancialSummary']);
-    Route::post('/termins/{termin}/record-payment', [TerminController::class, 'recordPayment']);
-
-    // Purchase Material Routes
-    Route::get('/purchase-materials', [PurchaseMaterialController::class, 'index']);
-    Route::get('/purchase-materials/{id}', [PurchaseMaterialController::class, 'show']);
-    Route::post('/purchase-materials', [PurchaseMaterialController::class, 'store']);
-    Route::put('/purchase-materials/{id}', [PurchaseMaterialController::class, 'update']);
-    Route::delete('/purchase-materials/{id}', [PurchaseMaterialController::class, 'destroy']);
-    Route::get('/invoices/{invoiceId}/purchase-materials', [PurchaseMaterialController::class, 'getByInvoice']);
-    Route::get('/projects/{proyekId}/purchase-materials', [PurchaseMaterialController::class, 'getByProject']);
-    Route::get('/purchase-materials/{id}/service-category', [PurchaseMaterialController::class, 'getServiceCategory']);
-    Route::get('/invoices/datatables', [InvoiceController::class, 'datatables']);
-Route::get('/invoice/{id}/pdf', [InvoiceController::class, 'cetakPdf'])->name('invoice.cetakPdf');
-    // Kategori routes
-    Route::apiResource('kategori', KategoriTransaksiController::class);
-     // Approval admin untuk income termin
-    Route::post('/termins/{termin}/approve-income/{income}', [TerminController::class, 'approveIncome']);
-    // Approval admin untuk expense termin
-    Route::post('/termins/{termin}/approve-expense/{expense}', [TerminController::class, 'approveExpense']);
+    Route::get('/activity-log', [ActivityController::class, 'index']);
 });
-Route::middleware('auth:sanctum')->get('/profile', [UserController::class, 'profile']);
+
+/*
+|--------------------------------------------------------------------------
+| Test & Debug Routes (remove in production)
+|--------------------------------------------------------------------------
+*/
 Route::get('/test-log', function() {
     \Log::error('Test error log from API');
     return response()->json(['message' => 'Logged!']);

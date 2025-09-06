@@ -227,91 +227,99 @@ class InvoiceController extends Controller
 
 
     // Mengupdate invoice (status dan pembayaran)
-    public function update(Request $request, $id)
-    {
-        $user = Auth::user();
-        if (!in_array($user->role, ['admin', 'superadmin'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
-            ], 403);
-        }
-        $validator = Validator::make($request->all(), [
-            // 'status' diabaikan, status invoice tidak boleh diubah manual
-            'amount_paid' => 'required|numeric|min:0',
-            'payment_method_id' => 'nullable|exists:payment_methods,id',
+  public function update(Request $request, $id)
+{
+    $user = Auth::user();
+    if (!in_array($user->role, ['admin', 'superadmin'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+        ], 403);
+    }
+
+    $validated = $request->validate([
+        'invoice_date' => 'required|date',
+        'payment_method_id' => 'required|exists:payment_methods,id',
+        'purchase_materials' => 'required|array|min:1',
+        'purchase_materials.*.item' => 'required|string',
+        'purchase_materials.*.type' => 'required|string',
+        'purchase_materials.*.qty' => 'required|numeric|min:0',
+        'purchase_materials.*.harga' => 'required|numeric|min:0',
+        'purchase_materials.*.unit_id' => 'required|exists:units,id',
+        'purchase_materials.*.category_id' => 'nullable|exists:kategoris,id',
+        'purchase_materials.*.service_category_id' => 'nullable|exists:service_categories,id',
+        'purchase_materials.*.merek_id' => 'nullable|exists:mereks,id',
+        'use_ppn' => 'boolean',
+        'use_pph_non_final' => 'boolean',
+        'use_pph_final' => 'boolean',
+        'notes' => 'nullable|string',
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        $invoice = Invoice::findOrFail($id);
+
+        $invoice->update([
+            'invoice_date' => $validated['invoice_date'],
+            'payment_method_id' => $validated['payment_method_id'],
+            'notes' => $validated['notes'] ?? null,
+            'use_ppn' => $validated['use_ppn'] ?? false,
+            'use_pph_non_final' => $validated['use_pph_non_final'] ?? false,
+            'use_pph_final' => $validated['use_pph_final'] ?? false,
         ]);
 
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
-        }
+        // Reset data lama
+        $invoice->purchaseMaterials()->delete();
+        $invoice->expenses()->delete();
 
-        try {
-            DB::beginTransaction();
-            $invoice = Invoice::findOrFail($id);
+        foreach ($validated['purchase_materials'] as $material) {
+            $unit = \App\Models\Unit::find($material['unit_id']);
+            $isService = $unit && in_array(strtolower($unit->unit_name), ['jasa', 'set', 'transaksi']);
 
-            // Update only allowed fields
-            $invoice->amount_paid = $request->amount_paid;
-            if ($request->has('payment_method_id')) {
-                $invoice->payment_method_id = $request->payment_method_id;
-            }
-            $invoice->save(); // ← Tambahkan ini di sini
-
-            // Status invoice harus otomatis, tidak boleh diubah manual
-            // Panggil updateStatusFromTermins atau determineStatus sesuai logic model
-            if (method_exists($invoice, 'updateStatusFromTermins')) {
-                $invoice->updateStatusFromTermins();
-            } else {
-                $invoice->status = $invoice->determineStatus();
-                $invoice->save();
-            }
-
-            // After updating the payment, recalculate all financial values
-            $invoice->calculateAllFinancialValues();
-
-            // Update statuses of associated expenses based on the new invoice status
-            $newExpenseStatus = Expense::STATUS_PENDING;
-            if ($invoice->status === Invoice::STATUS_PAID) {
-                $newExpenseStatus = Expense::STATUS_LUNAS;
-            } else if ($invoice->status === Invoice::STATUS_PARTIALLY_PAID) {
-                $newExpenseStatus = Expense::STATUS_PENDING;
-            } else if ($invoice->status === Invoice::STATUS_UNPAID) {
-                $newExpenseStatus = Expense::STATUS_PENDING;
-            }
-
-            // Update expenses linked via purchase materials
-            $invoice->purchaseMaterials->each(function ($purchaseMaterial) use ($newExpenseStatus, $invoice) {
-                if ($purchaseMaterial->expense) {
-                    $purchaseMaterial->expense->update([
-                        'status' => $newExpenseStatus,
-                        'payment_method_id' => $invoice->payment_method_id
-                    ]);
-                }
-            });
-
-            // Update direct expenses linked to this invoice
-            $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $invoice) {
-                $expense->update([
-                    'status' => $newExpenseStatus,
-                    'payment_method_id' => $invoice->payment_method_id
-                ]);
-            });
-
-            DB::commit();
-
-            return new InvoiceResource($invoice->fresh());
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Error updating invoice: ' . $e->getMessage(), [
-                'invoice_id' => $id,
-                'trace' => $e->getTraceAsString(),
+            PurchaseMaterial::create([
+                'invoice_id' => $invoice->id,
+                'proyek_id' => $invoice->proyek_id,
+                'item' => $material['item'],
+                'type' => $material['type'],
+                'qty' => $material['qty'],
+                'harga' => $material['harga'],
+                'unit_id' => $material['unit_id'],
+                'category_id' => $material['category_id'] ?? null,
+                'service_category_id' => $material['service_category_id'] ?? null,
+                'merek_id' => $material['merek_id'] ?? null,
+                'spesifikasi' => $material['spesifikasi'] ?? null,
+                'deskripsi' => $material['deskripsi'] ?? null,
+                'total_harga' => $material['qty'] * $material['harga'],
+                'is_service' => $isService,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to update invoice. ' . $e->getMessage(),
-            ], 500);
         }
+
+        $invoice->refresh();
+        $invoice->calculateAllFinancialValues();
+
+        DB::commit();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Invoice berhasil diperbarui',
+            'data' => new InvoiceResource($invoice)
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error updating invoice:', [
+            'invoice_id' => $id,
+            'error' => $e->getMessage()
+        ]);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal memperbarui invoice: ' . $e->getMessage()
+        ], 500);
     }
+}
+
 
     // Menghapus invoice
     public function destroy($id)
@@ -541,4 +549,81 @@ class InvoiceController extends Controller
             ], 500);
         }
     }
+    public function updatePayment(Request $request, $id)
+{
+    $user = Auth::user();
+    if (!in_array($user->role, ['admin', 'superadmin'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Akses ditolak. Hanya admin atau super admin yang dapat melakukan aksi ini.'
+        ], 403);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'amount_paid' => 'required|numeric|min:0',
+        'payment_method_id' => 'nullable|exists:payment_methods,id',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json($validator->errors(), 400);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        $invoice = Invoice::findOrFail($id);
+        $invoice->amount_paid = $request->amount_paid;
+
+        if ($request->has('payment_method_id')) {
+            $invoice->payment_method_id = $request->payment_method_id;
+        }
+
+        $invoice->save();
+
+        if (method_exists($invoice, 'updateStatusFromTermins')) {
+            $invoice->updateStatusFromTermins();
+        } else {
+            $invoice->status = $invoice->determineStatus();
+            $invoice->save();
+        }
+
+        $invoice->calculateAllFinancialValues();
+
+        $newExpenseStatus = Expense::STATUS_PENDING;
+        if ($invoice->status === Invoice::STATUS_PAID) {
+            $newExpenseStatus = Expense::STATUS_LUNAS;
+        }
+
+        $invoice->purchaseMaterials->each(function ($pm) use ($newExpenseStatus, $invoice) {
+            if ($pm->expense) {
+                $pm->expense->update([
+                    'status' => $newExpenseStatus,
+                    'payment_method_id' => $invoice->payment_method_id
+                ]);
+            }
+        });
+
+        $invoice->expenses->each(function ($expense) use ($newExpenseStatus, $invoice) {
+            $expense->update([
+                'status' => $newExpenseStatus,
+                'payment_method_id' => $invoice->payment_method_id
+            ]);
+        });
+
+        DB::commit();
+
+        return new InvoiceResource($invoice->fresh());
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Error updating invoice payment: ' . $e->getMessage(), [
+            'invoice_id' => $id,
+            'trace' => $e->getTraceAsString(),
+        ]);
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to update invoice payment: ' . $e->getMessage(),
+        ], 500);
+    }
+}
+
 }

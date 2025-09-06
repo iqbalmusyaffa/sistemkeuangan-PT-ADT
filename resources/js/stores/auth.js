@@ -9,7 +9,19 @@ export const useAuthStore = defineStore('auth', {
     tokenExpiry: sessionStorage.getItem('token_expiry') || null,
     user: null,
   }),
+getters: {
+  profilePictureUrl(state) {
+    const baseStorageUrl = import.meta.env.VITE_API_BASE_URL + '/storage/profile_pictures/'
 
+    if (!state.user || !state.user.profile_picture) {
+      return new URL('@/assets/images/avatars/2.jpg', import.meta.url).href
+    }
+
+    return state.user.profile_picture.startsWith('http')
+      ? state.user.profile_picture
+      : `${baseStorageUrl}${state.user.profile_picture}`
+  },
+},
   actions: {
     setToken(token, expiry) {
       this.token = token

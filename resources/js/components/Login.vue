@@ -13,7 +13,7 @@
               <!-- Judul -->
               <h2 class="text-center mb-2">Login</h2>
               <p class="text-center text-muted mb-4" style="font-size: 0.95rem;">
-                Masuk ke akun Anda untuk melanjutkan ke FinanceHub.
+                Masuk ke akun Anda untuk melanjutkan ke finara.
               </p>
 
               <!-- Form Login -->

@@ -37,7 +37,7 @@ class Expense extends Model
         'source_type',
         'source_id',
         'prepared_fund',
-        'bukti',
+        'bukti_pembayaran',
         'invoice_id'
     ];
 
@@ -50,6 +50,7 @@ class Expense extends Model
     ];
 
     protected $with = ['proyek', 'category', 'serviceCategory'];
+protected $appends = ['url_bukti'];
 
     // Status yang diizinkan untuk income/expense/termin
     const STATUS_PENDING = 'pending';
@@ -323,4 +324,8 @@ class Expense extends Model
     {
         return $this->belongsTo(Termin::class, 'source_id');
     }
+    public function getUrlBuktiAttribute()
+{
+    return $this->bukti ? asset('storage/' . $this->bukti) : null;
+}
 }

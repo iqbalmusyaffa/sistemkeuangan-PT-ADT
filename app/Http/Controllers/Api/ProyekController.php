@@ -89,7 +89,9 @@ class ProyekController extends Controller
     {
         try {
             $proyek = Proyek::with('expenses')->findOrFail($id);
-            $proyek->total_expenses = $proyek->expenses()->sum('amount');
+            // $proyek->total_expenses = $proyek->expenses()->sum('amount');
+            $proyek->total_expenses = $proyek->expenses->sum('amount');
+
             $proyek->budget_percentage = $proyek->anggaran_kontrak > 0
                 ? round(($proyek->total_expenses / $proyek->anggaran_kontrak) * 100, 2)
                 : 0;
@@ -296,4 +298,28 @@ public function reduceBudget(Request $request, $id)
         ], 500);
     }
 }
+public function getTermins($id)
+{
+    try {
+        $proyek = Proyek::with('termins')->findOrFail($id);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $proyek->termins
+        ], 200);
+    } catch (ModelNotFoundException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Proyek tidak ditemukan.',
+            'details' => $e->getMessage()
+        ], 404);
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Gagal mengambil data termin.',
+            'details' => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

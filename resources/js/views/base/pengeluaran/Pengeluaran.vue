@@ -281,6 +281,43 @@
         </CForm>
       </CModalBody>
     </CModal>
+    <CModal :visible="showUploadModal" @close="showUploadModal = false" title="Upload Bukti Pembayaran">
+  <CModalBody>
+    <CForm @submit.prevent="submitUploadBukti">
+      <CFormLabel for="upload_bukti">Pilih File (PDF/JPG/PNG)</CFormLabel>
+      <CFormInput
+        id="upload_bukti"
+        type="file"
+        accept="image/png,image/jpeg,application/pdf"
+        @change="handleUploadBuktiChange"
+        required
+      />
+      <div class="text-muted mt-2">Ukuran maksimal 2MB</div>
+      <div class="mt-3 d-flex justify-content-end">
+        <CButton color="secondary" @click="showUploadModal = false">Batal</CButton>
+        <CButton type="submit" color="primary">Upload</CButton>
+      </div>
+    </CForm>
+  </CModalBody>
+</CModal>
+
+<!-- Modal Preview Bukti -->
+<CModal :visible="showPreviewModal" @close="showPreviewModal = false" title="Preview Bukti Pembayaran" size="xl">
+  <CModalBody>
+    <div v-if="previewFileUrl">
+      <template v-if="isImageFile(previewFileUrl)">
+        <img :src="previewFileUrl" alt="Bukti Pembayaran" class="img-fluid w-100" />
+      </template>
+      <template v-else-if="isPdfFile(previewFileUrl)">
+        <iframe :src="previewFileUrl" width="100%" height="600px" frameborder="0"></iframe>
+      </template>
+      <template v-else>
+        <p>Format file tidak bisa ditampilkan. <a :href="previewFileUrl" target="_blank">Klik di sini untuk membuka file</a>.</p>
+      </template>
+    </div>
+  </CModalBody>
+</CModal>
+
   </CRow>
 </template>
 
@@ -297,6 +334,16 @@ import "datatables.net-responsive-dt"
 
   const router = useRouter()
   const dataTableRef = ref(null)
+const showPreviewModal = ref(false);
+const previewFileUrl = ref('');
+
+const isImageFile = (url) => /\.(jpg|jpeg|png)$/i.test(url);
+const isPdfFile = (url) => /\.pdf$/i.test(url);
+
+const openPreviewModal = (filePath) => {
+  previewFileUrl.value = `/storage/${filePath}`;
+  showPreviewModal.value = true;
+};
 
 // --- Status Modal State and Logic ---
 const showStatusModal = ref(false)
@@ -308,6 +355,9 @@ const statusForm = ref({
   purchase_material_id: ''
 })
 const updatingStatusId = ref(null)
+const showUploadModal = ref(false);
+const selectedExpenseIdForUpload = ref(null);
+const selectedUploadFile = ref(null);
 
 
 const openStatusModal = async (expenseOrId) => {
@@ -336,6 +386,30 @@ const openStatusModal = async (expenseOrId) => {
 const closeStatusModal = () => {
   showStatusModal.value = false
 }
+const handleUploadBuktiChange = (e) => {
+  selectedUploadFile.value = e.target.files[0];
+};
+const submitUploadBukti = async () => {
+  if (!selectedExpenseIdForUpload.value || !selectedUploadFile.value) {
+    return Swal.fire('Error', 'ID atau file tidak valid', 'error');
+  }
+
+  const formData = new FormData();
+  formData.append('bukti_pembayaran', selectedUploadFile.value);
+
+  try {
+    const token = sessionStorage.getItem('token');
+    await axios.post(`/api/expenses/${selectedExpenseIdForUpload.value}/upload-bukti`, formData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    Swal.fire('Sukses', 'Bukti pembayaran berhasil diupload', 'success');
+    showUploadModal.value = false;
+    await fetchData();
+  } catch (err) {
+    Swal.fire('Error', err.response?.data?.message || 'Upload gagal', 'error');
+  }
+};
 
 const handleStatusBuktiChange = (e) => {
   const file = e.target.files[0]
@@ -634,35 +708,51 @@ const handleStatusSubmit = async () => {
             return `<span class="${statusClass}">${data ? data.charAt(0).toUpperCase() + data.slice(1).toLowerCase() : '-'}</span>`;
           }
         },
-        {
-          title: '<span class="fw-bold">Aksi</span>',
-          data: null,
-          className: 'text-center align-middle',
-          orderable: false,
-         render: (data, type, row) => {
-  return `
-    <div class="btn-group">
-      <button class="btn btn-sm btn-warning edit-btn me-1" data-bs-toggle="tooltip" title="Edit" data-id="${row.id}">
-        <i class="bi bi-pencil"></i> Edit
-      </button>
-      <button class="btn btn-sm btn-info status-btn me-1" data-bs-toggle="tooltip" title="Update Status" data-id="${row.id}">
-        <i class="bi bi-arrow-repeat"></i> Status
-      </button>
-      <button class="btn btn-sm btn-danger delete-btn me-1" data-bs-toggle="tooltip" title="Hapus" data-id="${row.id}">
-        <i class="bi bi-trash"></i> Hapus
-      </button>
-      <button class="btn btn-sm btn-secondary view-btn" data-bs-toggle="tooltip" title="Detail" data-id="${row.id}">
-        <i class="bi bi-eye"></i> Detail
-      </button>
-    </div>
-  `;
-}
+      {
+  title: '<span class="fw-bold">Aksi</span>',
+  data: null,
+  className: 'text-center align-middle',
+  orderable: false,
+  render: (data, type, row) => {
+    const buktiIcon = row.bukti_pembayaran ? 'bi-check-circle text-success' : 'bi-upload';
+    const buktiLabel = row.bukti_pembayaran ? 'Ganti Bukti' : 'Upload Bukti';
+    const previewBtn = row.bukti
+      ? `<button class="btn btn-sm btn-info preview-bukti-btn me-1" data-bs-toggle="tooltip" title="Lihat Bukti" data-file="${row.bukti}">
+          <i class="bi bi-eye-fill"></i>
+        </button>`
+      : '';
+
+    const downloadBtn = row.bukti
+      ? `<a href="/storage/${row.bukti}" download target="_blank" class="btn btn-sm btn-success me-1" data-bs-toggle="tooltip" title="Download Bukti">
+          <i class="bi bi-download"></i>
+        </a>`
+      : '';
+   return `
+  <div class="btn-group">
+    <button class="btn btn-sm btn-warning edit-btn me-1" data-bs-toggle="tooltip" title="Edit" data-id="${row.id}">
+      <i class="bi bi-pencil"></i> Edit
+    </button>
+    <button class="btn btn-sm btn-danger delete-btn me-1" data-bs-toggle="tooltip" title="Hapus" data-id="${row.id}">
+      <i class="bi bi-trash"></i> Hapus
+    </button>
+    <button class="btn btn-sm btn-secondary view-btn me-1" data-bs-toggle="tooltip" title="Detail" data-id="${row.id}">
+      <i class="bi bi-eye"></i> Detail
+    </button>
+    <button class="btn btn-sm btn-secondary upload-bukti-btn me-1" data-bs-toggle="tooltip" title="${buktiLabel}" data-id="${row.id}">
+      <i class="bi ${buktiIcon}"></i> ${buktiLabel}
+    </button>
+    ${previewBtn}
+    ${downloadBtn}
+  </div>
+`;
+
+  }
 
         },
       ],
       order: [[1, 'desc']],
-      responsive: true,
-      // scrollX: true, // Hapus agar tabel tidak melar
+       responsive: false,
+      scrollX: true, 
       autoWidth: false,
       language: {
         "emptyTable": "Tidak ada data yang tersedia",
@@ -684,6 +774,7 @@ const handleStatusSubmit = async () => {
     //   dom: '<"d-flex justify-content-between align-items-center mb-3"<"d-flex align-items-center"l><"d-flex"f>>rtip',
       drawCallback: function() {
         // Attach event listeners for action buttons
+        
         $(dataTableRef.value).off('click', '.edit-btn');
         $(dataTableRef.value).off('click', '.delete-btn');
         $(dataTableRef.value).off('click', '.view-btn');
@@ -716,6 +807,16 @@ const handleStatusSubmit = async () => {
           const id = $(this).data('id');
           openStatusModal(id);
         });
+$(dataTableRef.value).on('click', '.upload-bukti-btn', function () {
+  const id = $(this).data('id');
+  selectedExpenseIdForUpload.value = id;
+  selectedUploadFile.value = null;
+  showUploadModal.value = true;
+});
+$(dataTableRef.value).on('click', '.preview-bukti-btn', function () {
+  const file = $(this).data('file');
+  if (file) openPreviewModal(file);
+});
 
         // Enable Bootstrap tooltip if available
         if (window.bootstrap && window.bootstrap.Tooltip) {
@@ -937,6 +1038,15 @@ onMounted(async () => {
   table.display {
     width: 100% !important;
   }
+  .scroll-wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+table.dataTable {
+  white-space: nowrap;
+  width: 100% !important;
+}
+
   /* Membatasi lebar kolom agar tabel tetap ramping */
   /* .badge, .btn { font-size: 0.75rem; padding: 0.25em 0.5em; } */
   </style>
